@@ -149,7 +149,7 @@ static state_id deterministic_state_for_subset(struct subset_table *table,
         (*next_state)++;
     }
     return table->subset_states[idx];
-};
+}
 
 // This is Brzozowski's algorithm.
 void determinize_minimize(struct automaton *input, struct automaton *result)

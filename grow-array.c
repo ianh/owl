@@ -13,7 +13,7 @@ void *grow_array_using_realloc(void *a, uint32_t *size, uint32_t target_size)
         else
             n = m;
     }
-    void *next_array = realloc(a, n);
+    char *next_array = realloc(a, n);
     if (!next_array)
         abort();
     memset(next_array + *size, 0, n - *size);
