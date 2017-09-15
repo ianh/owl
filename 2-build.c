@@ -1,5 +1,6 @@
 #include "2-build.h"
 
+#include "5-determinize.h"
 #include "grow-array.h"
 
 #include <stdio.h>
@@ -105,15 +106,14 @@ static rule_id add_rule(struct context *ctx, enum rule_type type,
      grammar->number_of_rules * sizeof(struct rule));
     grammar->rules[i].type = type;
     grammar->rules[i].name = name;
-    grammar->rules[i].automaton = calloc(1, sizeof(struct automaton));
-    struct boundary_states boundary = {
-        .entry = 0,
-        .exit = 1,
-    };
+    struct boundary_states boundary = { .entry = 0, .exit = 1 };
     state_id next_state_id = 2;
+    struct automaton nfa = { .start_state = boundary.entry };
+    automaton_mark_accepting_state(&nfa, boundary.exit);
+    grammar->rules[i].automaton = &nfa;
     build_body_expression(ctx, i, expr, boundary, &next_state_id);
-    grammar->rules[i].automaton->start_state = boundary.entry;
-    automaton_mark_accepting_state(grammar->rules[i].automaton, boundary.exit);
+    grammar->rules[i].automaton = calloc(1, sizeof(struct automaton));
+    determinize_minimize(&nfa, grammar->rules[i].automaton);
     return i;
 }
 
