@@ -279,6 +279,8 @@ static uint32_t parse_ident_raw(struct bluebird_tree *ctx)
 static parsed_id parse_ident(struct bluebird_tree *ctx, parsed_id next_ident)
 {
     uint32_t id = parse_ident_raw(ctx);
+    if (!id)
+        return 0;
     return parsed_ident_add(next_ident, 0, 0, id, ctx);
 }
 
@@ -336,6 +338,8 @@ static parsed_id parse_expr_item(struct bluebird_tree *ctx, parsed_id next_expr)
          0, 0, ctx);
     }
     parsed_id ident = parse_ident(ctx, 0);
+    if (!ident)
+        return 0;
     parse_whitespace(ctx);
     if (parse_character(ctx, '@')) {
         parsed_id named_ident = parse_ident(ctx, 0);
@@ -351,12 +355,12 @@ static parsed_id parse_expr_term(struct bluebird_tree *ctx, parsed_id next_expr)
     parsed_id expr = parse_expr_item(ctx, next_expr);
     bool concatenation = false;
     while (true) {
-        parse_whitespace(ctx);
-        if (ctx->offset >= ctx->length || !is_identifier_character(ctx->string[ctx->offset]))
+        parsed_id next_item = parse_expr_item(ctx, expr);
+        if (!next_item)
             break;
         if (!concatenation)
             zero_tree(ctx, expr);
-        expr = parse_expr_item(ctx, expr);
+        expr = next_item;
         concatenation = true;
     }
     if (concatenation) {
