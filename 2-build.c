@@ -1,6 +1,6 @@
 #include "2-build.h"
 
-#include "5-determinize.h"
+#include "4-determinize.h"
 #include "grow-array.h"
 
 #include <stdio.h>
