@@ -7,7 +7,7 @@
 
 int main()
 {
-    const char *string = "a = b @ c b = x";
+    const char *string = "a = b@x b@y b = c";
     struct bluebird_tree *tree = bluebird_tree_create_from_string(string,
      strlen(string));
     print_grammar(tree, bluebird_tree_root(tree), 0);

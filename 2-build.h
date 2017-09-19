@@ -25,6 +25,9 @@ struct grammar {
 typedef uint16_t rule_id;
 #define MAX_NUMBER_OF_RULES 0x8000
 
+// Renames must also be encoded as actions.
+#define MAX_NUMBER_OF_RENAMES 0x4000
+
 enum fixity { PREFIX, POSTFIX, INFIX };
 enum associativity { FLAT, LEFT, RIGHT, NONASSOC };
 enum rule_type { NAMED_RULE, CHOICE_RULE, OPERATOR_RULE, BRACKETED_RULE };
@@ -69,7 +72,7 @@ struct rule {
     // These are "renames" of the form rule@name.
     struct rename *renames;
     uint32_t renames_allocated_bytes;
-    uint32_t number_of_renames;
+    uint16_t number_of_renames;
 
     // This automaton matches only the contents of the rule.  It may contain
     // transitions referencing other rules, renames, bracketed rules, and so on.

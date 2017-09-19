@@ -2,8 +2,8 @@
 
 static void substitute(struct automaton *into, symbol_id symbol, rule_id rule,
  struct automaton *substitute);
-
-// TODO: Renames
+static void apply_renames(struct automaton *a, struct rename *renames,
+ uint32_t number_of_renames);
 
 void combine(struct combined_grammar *result, struct grammar *grammar)
 {
@@ -17,6 +17,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
              bracket_accepting_state, rule->end_token, 0);
             automaton_add_transition(bracket_automaton,
              bracket_automaton->start_state, start, rule->start_token);
+            apply_renames(bracket_automaton, rule->renames,
+             rule->number_of_renames);
         }
     }
 
@@ -30,6 +32,10 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
              rule->automaton);
             substitute(&result->bracket_automaton, rule->identifier, i,
              rule->automaton);
+            apply_renames(&result->automaton, rule->renames,
+             rule->number_of_renames);
+            apply_renames(&result->bracket_automaton, rule->renames,
+             rule->number_of_renames);
         }
     }
 }
@@ -51,6 +57,27 @@ static void substitute(struct automaton *into, symbol_id symbol, rule_id rule,
             into->states[i].transitions[j].symbol = SYMBOL_EPSILON;
             into->states[i].transitions[j].action = ACTION_BEGIN;
             offset += m;
+        }
+    }
+}
+
+static void apply_renames(struct automaton *a, struct rename *renames,
+ uint32_t number_of_renames)
+{
+    state_id next_state = a->number_of_states;
+    for (uint32_t i = 0; i < a->number_of_states; ++i) {
+        for (state_id j = 0; j < a->states[i].number_of_transitions; ++j) {
+            for (uint32_t k = 0; k < number_of_renames; ++k) {
+                if (renames[k].name != a->states[i].transitions[j].symbol)
+                    continue;
+                automaton_add_transition_with_action(a, next_state,
+                 a->states[i].transitions[j].target, SYMBOL_EPSILON,
+                 ACTION_RENAME | k);
+                a->states[i].transitions[j].symbol = renames[k].original_name;
+                a->states[i].transitions[j].target = next_state;
+                next_state++;
+                break;
+            }
         }
     }
 }

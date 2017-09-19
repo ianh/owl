@@ -20,6 +20,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar);
 //  0x8xxx  end of rule
 
 #define ACTION_BEGIN 0x0001
+#define ACTION_RENAME 0x4000
 #define ACTION_END_RULE 0x8000
 
 #endif

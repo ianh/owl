@@ -256,6 +256,12 @@ static void build_body_expression(struct context *ctx, rule_id rule,
         symbol_id symbol = ident.identifier;
         if (!name.empty) {
             struct rule *r = &ctx->grammar->rules[rule];
+            if (r->number_of_renames >= MAX_NUMBER_OF_RENAMES) {
+                fprintf(stderr, "error: rules with more than %u references of "
+                 "the form 'rule@name' are currently unsupported.\n",
+                 MAX_NUMBER_OF_RENAMES);
+                exit(-1);
+            }
             uint32_t rename_index = r->number_of_renames++;
             r->renames = grow_array(r->renames, &r->renames_allocated_bytes,
              r->number_of_renames);
