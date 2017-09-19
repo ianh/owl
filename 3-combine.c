@@ -8,13 +8,17 @@ static void apply_renames(struct automaton *a, struct rename *renames,
 void combine(struct combined_grammar *result, struct grammar *grammar)
 {
     struct automaton *bracket_automaton = &result->bracket_automaton;
-    state_id bracket_accepting_state = 1;
-    automaton_mark_accepting_state(bracket_automaton, bracket_accepting_state);
     for (rule_id i = 0; i < grammar->number_of_rules; ++i) {
         struct rule *rule = &grammar->rules[i];
         if (rule->type == BRACKETED_RULE) {
-            rule_id start = automaton_embed(bracket_automaton, rule->automaton,
-             bracket_accepting_state, rule->end_token, 0);
+            state_id end = bracket_automaton->number_of_states;
+            if (end == bracket_automaton->start_state)
+                end++;
+            automaton_mark_accepting_state(bracket_automaton, end);
+            bracket_automaton->states[end].transition_symbol = rule->identifier;
+
+            state_id start = automaton_embed(bracket_automaton, rule->automaton,
+             end, rule->end_token, 0);
             automaton_add_transition(bracket_automaton,
              bracket_automaton->start_state, start, rule->start_token);
             apply_renames(bracket_automaton, rule->renames,
