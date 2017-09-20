@@ -1,6 +1,7 @@
 #ifndef _BITSET_H_
 #define _BITSET_H_
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -23,12 +24,6 @@ static inline void bitset_destroy(struct bitset *set)
     free(set->bit_groups);
 }
 
-static inline void bitset_clear(struct bitset *set)
-{
-    for (uint32_t i = 0; i < set->number_of_bit_groups; ++i)
-        set->bit_groups[i] = 0;
-}
-
 static inline bool bitset_contains(struct bitset *set, uint32_t element)
 {
     return set->bit_groups[element / 64] & (1ULL << (element % 64));
@@ -39,12 +34,8 @@ static inline void bitset_add(struct bitset *set, uint32_t element)
     set->bit_groups[element / 64] |= (1ULL << (element % 64));
 }
 
-static inline void bitset_union(struct bitset *set, struct bitset *other)
-{
-    if (set->number_of_bit_groups != other->number_of_bit_groups)
-        abort();
-    for (uint32_t i = 0; i < set->number_of_bit_groups; ++i)
-        set->bit_groups[i] |= other->bit_groups[i];
-}
+void bitset_clear(struct bitset *set);
+void bitset_union(struct bitset *set, struct bitset *other);
+int bitset_compare(struct bitset *a, struct bitset *b);
 
 #endif

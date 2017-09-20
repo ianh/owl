@@ -352,16 +352,7 @@ static int compare_bracket_transitions(const void *aa, const void *bb)
 {
     struct bitset *a = &((struct bracket_transition *)aa)->transition_symbols;
     struct bitset *b = &((struct bracket_transition *)bb)->transition_symbols;
-    if (a->number_of_bit_groups != b->number_of_bit_groups)
-        abort();
-    uint32_t n = a->number_of_bit_groups;
-    for (uint32_t i = 0; i < n; ++i) {
-        if (a->bit_groups[i] < b->bit_groups[i])
-            return -1;
-        if (a->bit_groups[i] > b->bit_groups[i])
-            return 1;
-    }
-    return 0;
+    return bitset_compare(a, b);
 }
 
 static bool equal_bracket_transitions(struct bracket_transitions *a,
@@ -371,10 +362,8 @@ static bool equal_bracket_transitions(struct bracket_transitions *a,
         return false;
     uint32_t n = a->number_of_transitions;
     for (uint32_t i = 0; i < n; ++i) {
-        if (compare_bracket_transitions(&a->transitions[i], &b->transitions[i])
-         != 0) {
+        if (compare_bracket_transitions(&a->transitions[i], &b->transitions[i]))
             return false;
-        }
     }
     return true;
 }
