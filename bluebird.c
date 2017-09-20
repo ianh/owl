@@ -9,7 +9,7 @@
 int main()
 {
     const char *string =
-    "a = [b[a]e] | [b[b]e] b = [b[a]e] | [b[b]e]";
+    "a = [s[a]e] | [s[b]e] b = [s[a]e] | [s[b]e]";
     //"a = b b b = c c c = d d d = e e e = f f f = g g g = h h h = i i i = j j j = k k k = l l l = m m m = n n n = o o o = p p p = q q q = r r r = s s s = t t t = u u u = v v v = w w w = x x x = y y y = z";
     struct bluebird_tree *tree = bluebird_tree_create_from_string(string,
      strlen(string));
@@ -31,6 +31,12 @@ int main()
 
     struct bracket_transitions bracket_transitions = {0};
     determinize_bracket_transitions(&bracket_transitions, &combined);
+    printf("---\n");
+
+    struct deterministic_grammar deterministic = {0};
+    determinize(&combined, &deterministic, &bracket_transitions);
+    automaton_print(&deterministic.automaton);
+    automaton_print(&deterministic.bracket_automaton);
 
     bluebird_tree_destroy(tree);
     return 0;

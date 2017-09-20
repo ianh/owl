@@ -37,17 +37,26 @@ struct worklist {
 static state_id deterministic_state_for_subset(struct subset_table *table,
  struct worklist *worklist, struct state_array *states, state_id *next_state);
 
-// We provide an option to ignore the start state in order to properly
-// determinize reversed automata -- otherwise Brzozowski's algorithm won't work.
-enum start_state_options {
-    INCLUDE_START_STATE,
-    IGNORE_START_STATE,
+// Find the set of transition symbols corresponding to an accepting
+// deterministic state.
+static struct bitset transition_symbols_from_state(struct automaton *a,
+ struct subset_table *subsets, state_id state);
+
+enum options {
+    // We provide an option to ignore the start state in order to determinize
+    // reversed automata -- otherwise Brzozowski's algorithm won't work.
+    INCLUDE_START_STATE = 0,
+    IGNORE_START_STATE = 1,
+
+    // Mark the accepting states of a bracket automaton using the deterministic
+    // transition symbols in in_transitions.
+    MARK_ACCEPTING_BRACKET_STATES = 2,
 };
 
 static void determinize_automaton(struct automaton *a,
  struct automaton *result, struct bracket_transitions in_transitions,
  struct bracket_transitions *out_transitions, symbol_id next_transition_symbol,
- enum start_state_options start_state_options)
+ enum options options)
 {
     automaton_compute_epsilon_closure(a);
 
@@ -62,7 +71,7 @@ static void determinize_automaton(struct automaton *a,
 
     state_id next_state = 0;
     struct state_array next_subset = {0};
-    if (start_state_options == INCLUDE_START_STATE)
+    if (!(options & IGNORE_START_STATE))
         state_array_push(&next_subset, a->start_state);
     state_array_push_array(&next_subset,
      &a->epsilon_closure_for_state[a->start_state]);
@@ -143,15 +152,15 @@ static void determinize_automaton(struct automaton *a,
         }
     }
 
-    if (out_transitions) {
-        struct bracket_transitions *ts = out_transitions;
-        for (uint32_t i = 0; i < subsets.available_size; ++i) {
-            if (!subsets.subsets[i])
-                continue;
-            struct state *state = &result->states[subsets.subset_states[i]];
-            if (!state->accepting)
-                continue;
+    for (uint32_t i = 0; i < subsets.available_size; ++i) {
+        if (!subsets.subsets[i])
+            continue;
+        struct state *state = &result->states[subsets.subset_states[i]];
+        if (!state->accepting)
+            continue;
 
+        if (out_transitions) {
+            struct bracket_transitions *ts = out_transitions;
             uint32_t j = ts->number_of_transitions++;
             ts->transitions = grow_array(ts->transitions,
              &ts->transitions_allocated_bytes, ts->number_of_transitions *
@@ -159,13 +168,18 @@ static void determinize_automaton(struct automaton *a,
             state->transition_symbol = next_transition_symbol++;
             ts->transitions[j].deterministic_transition_symbol =
              state->transition_symbol;
-
-            struct bitset *symbols = &ts->transitions[j].transition_symbols;
-            *symbols = bitset_create_empty(a->number_of_symbols);
-            struct state_array *subset = subsets.subsets[i];
-            for (uint32_t k = 0; k < subset->number_of_states; ++k) {
-                bitset_add(symbols,
-                 a->states[subset->states[k]].transition_symbol);
+            ts->transitions[j].transition_symbols =
+             transition_symbols_from_state(a, &subsets, i);
+        }
+        if (options & MARK_ACCEPTING_BRACKET_STATES) {
+            struct bitset s = transition_symbols_from_state(a, &subsets, i);
+            uint32_t j;
+            for (j = 0; j < in_transitions.number_of_transitions; ++j) {
+                struct bracket_transition t = in_transitions.transitions[j];
+                if (bitset_compare(&t.transition_symbols, &s))
+                    continue;
+                state->transition_symbol = t.deterministic_transition_symbol;
+                break;
             }
         }
     }
@@ -217,6 +231,16 @@ static state_id deterministic_state_for_subset(struct subset_table *table,
         (*next_state)++;
     }
     return table->subset_states[idx];
+}
+
+void determinize(struct combined_grammar *grammar,
+ struct deterministic_grammar *result, struct bracket_transitions *transitions)
+{
+    determinize_automaton(&grammar->automaton, &result->automaton, *transitions,
+     0, 0, INCLUDE_START_STATE);
+    determinize_automaton(&grammar->bracket_automaton,
+     &result->bracket_automaton, *transitions, 0, 0,
+     INCLUDE_START_STATE | MARK_ACCEPTING_BRACKET_STATES);
 }
 
 void determinize_bracket_transitions(struct bracket_transitions *result,
@@ -346,6 +370,20 @@ static int compare_state_ids(const void *aa, const void *bb)
     if (a > b)
         return 1;
     return 0;
+}
+
+static struct bitset transition_symbols_from_state(struct automaton *a,
+ struct subset_table *subsets, state_id state)
+{
+    struct bitset symbols = bitset_create_empty(a->number_of_symbols);
+    struct state_array *subset = subsets->subsets[state];
+    for (uint32_t i = 0; i < subset->number_of_states; ++i) {
+        struct state s = a->states[subset->states[i]];
+        if (!s.accepting)
+            continue;
+        bitset_add(&symbols, s.transition_symbol);
+    }
+    return symbols;
 }
 
 static int compare_bracket_transitions(const void *aa, const void *bb)
