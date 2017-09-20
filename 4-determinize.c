@@ -75,8 +75,8 @@ static void determinize_automaton(struct automaton *a,
         state_array_push(&next_subset, a->start_state);
     state_array_push_array(&next_subset,
      &a->epsilon_closure_for_state[a->start_state]);
-    result->start_state = deterministic_state_for_subset(&subsets, &worklist,
-     &next_subset, &next_state);
+    automaton_set_start_state(result, deterministic_state_for_subset(&subsets,
+     &worklist, &next_subset, &next_state));
 
     while (worklist.number_of_subsets > 0) {
 #if 0

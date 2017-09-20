@@ -11,6 +11,7 @@ struct bluebird_tree;
 #define TYPES \
 TYPE(IDENT) \
 TYPE(LITERAL) \
+TYPE(EMPTY) \
 TYPE(PARENS) \
 TYPE(BRACKETED) \
 TYPE(ZERO_OR_MORE) \

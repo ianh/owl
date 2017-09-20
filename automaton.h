@@ -49,6 +49,7 @@ void automaton_add_transition(struct automaton *a, state_id source,
  state_id target, symbol_id symbol);
 void automaton_add_transition_with_action(struct automaton *a, state_id source,
  state_id target, symbol_id symbol, uint16_t action);
+void automaton_set_start_state(struct automaton *a, state_id state);
 void automaton_mark_accepting_state(struct automaton *a, state_id state);
 
 // Returns the start state of the embedded automaton.

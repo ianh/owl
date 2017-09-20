@@ -61,6 +61,12 @@ void automaton_add_transition_with_action(struct automaton *a, state_id source,
     state_add_transition(&a->states[source], target, symbol, action);
 }
 
+void automaton_set_start_state(struct automaton *a, state_id state)
+{
+    grow_states(a, state);
+    a->start_state = state;
+}
+
 void automaton_mark_accepting_state(struct automaton *a, state_id state)
 {
     grow_states(a, state);
@@ -133,7 +139,7 @@ void automaton_reverse(struct automaton *a, struct automaton *reversed)
         if (s->accepting)
             automaton_add_transition(reversed, start_state, i, SYMBOL_EPSILON);
     }
-    reversed->start_state = start_state;
+    automaton_set_start_state(reversed, start_state);
     automaton_mark_accepting_state(reversed, a->start_state);
 }
 

@@ -333,6 +333,11 @@ static parsed_id parse_expr_item(struct bluebird_tree *ctx, parsed_id next_expr)
          0, ctx);
     }
     if (ctx->string[ctx->offset] == '\'') {
+        if (ctx->offset > 1 && ctx->string[ctx->offset - 1] == '\'') {
+            ctx->offset -= 2;
+            return parsed_expr_add(next_expr, 0, 0, PARSED_EMPTY, 0, 0, 0, 0, 0,
+             0, ctx);
+        }
         parsed_id ident = parse_ident(ctx, 0);
         return parsed_expr_add(next_expr, 0, 0, PARSED_LITERAL, 0, ident, 0, 0,
          0, 0, ctx);

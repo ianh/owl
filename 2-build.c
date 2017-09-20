@@ -67,7 +67,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         struct automaton *combined_automaton;
         combined_automaton = grammar->rules[combined_rule].automaton;
         struct boundary_states combined_boundary = { .entry = 0, .exit = 1 };
-        combined_automaton->start_state = combined_boundary.entry;
+        automaton_set_start_state(combined_automaton, combined_boundary.entry);
 
         // Create a rule for each choice.
         struct parsed_expr expr = parsed_expr_get(tree, body.expr);
@@ -190,7 +190,7 @@ static rule_id add_rule(struct context *ctx, enum rule_type type,
     rule_id i = add_empty_rule(ctx, type, identifier);
 
     struct boundary_states boundary = { .entry = 0, .exit = 1 };
-    grammar->rules[i].automaton->start_state = boundary.entry;
+    automaton_set_start_state(grammar->rules[i].automaton, boundary.entry);
     automaton_mark_accepting_state(grammar->rules[i].automaton, boundary.exit);
     state_id next_state_id = 2;
 
@@ -275,6 +275,10 @@ static void build_body_expression(struct context *ctx, rule_id rule,
     case PARSED_LITERAL: {
         struct parsed_ident ident = parsed_ident_get(tree, expr->ident);
         automaton_add_transition(automaton, b.entry, b.exit, ident.identifier);
+        break;
+    }
+    case PARSED_EMPTY: {
+        automaton_add_transition(automaton, b.entry, b.exit, SYMBOL_EPSILON);
         break;
     }
     case PARSED_PARENS: {
