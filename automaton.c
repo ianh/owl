@@ -1,7 +1,7 @@
 #include "automaton.h"
 
 #include "state-array.h"
-#include "state-set.h"
+#include "bitset.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,11 +93,11 @@ void automaton_compute_epsilon_closure(struct automaton *a)
     uint32_t n = a->number_of_states;
     a->epsilon_closure_for_state = calloc(n, sizeof(struct state_array));
     struct state_array worklist = {0};
-    struct state_set visited = state_set_create_empty(n);
+    struct bitset visited = bitset_create_empty(n);
     for (state_id i = 0; i < n; ++i) {
         struct state_array *closure = &a->epsilon_closure_for_state[i];
         state_array_push(&worklist, i);
-        state_set_add(&visited, i);
+        bitset_add(&visited, i);
         while (worklist.number_of_states > 0) {
             state_id id = state_array_pop(&worklist);
             if (id != i)
@@ -108,17 +108,17 @@ void automaton_compute_epsilon_closure(struct automaton *a)
                 if (state->transitions[j].symbol != SYMBOL_EPSILON)
                     continue;
                 state_id target = state->transitions[j].target;
-                if (!state_set_contains(&visited, target)) {
-                    state_set_add(&visited, target);
+                if (!bitset_contains(&visited, target)) {
+                    bitset_add(&visited, target);
                     state_array_push(&worklist, target);
                 }
             }
         }
         state_array_clear(&worklist);
-        state_set_clear(&visited);
+        bitset_clear(&visited);
     }
     state_array_destroy(&worklist);
-    state_set_destroy(&visited);
+    bitset_destroy(&visited);
 }
 
 void automaton_reverse(struct automaton *a, struct automaton *reversed)
