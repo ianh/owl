@@ -144,7 +144,7 @@ void automaton_print(struct automaton *a)
         struct state *s = &a->states[i];
         if (s->accepting) {
             if (s->transition_symbol)
-                printf("%4u   -- accept --> %u\n", i, s->transition_symbol);
+                printf("%4u   -- accept --> %x\n", i, s->transition_symbol);
             else
                 printf("%4u   -- accept -->\n", i);
         }

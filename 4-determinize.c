@@ -1,6 +1,6 @@
 #include "4-determinize.h"
 
-#include "state-array.h"
+#include "bitset.h"
 
 // A subset_table is a hash table mapping subsets (represented as state arrays)
 // to their state ids in the deterministic automaton.
@@ -45,12 +45,20 @@ enum start_state_options {
 };
 
 static void determinize_automaton(struct automaton *a,
- struct automaton *result, enum start_state_options start_state_options)
+ struct automaton *result, struct bracket_transitions in_transitions,
+ struct bracket_transitions *out_transitions, symbol_id next_transition_symbol,
+ enum start_state_options start_state_options)
 {
     automaton_compute_epsilon_closure(a);
 
     struct subset_table subsets = {0};
     struct worklist worklist = {0};
+
+    struct bitset bracket_symbols = bitset_create_empty(a->number_of_symbols);
+    for (uint32_t i = 0; i < in_transitions.number_of_transitions; ++i) {
+        struct bracket_transition transition = in_transitions.transitions[i];
+        bitset_union(&bracket_symbols, &transition.transition_symbols);
+    }
 
     state_id next_state = 0;
     struct state_array next_subset = {0};
@@ -86,6 +94,10 @@ static void determinize_automaton(struct automaton *a,
         }
 
         for (symbol_id symbol = 0; symbol < a->number_of_symbols; ++symbol) {
+            if (bitset_contains(&bracket_symbols, symbol)) {
+                // We handle bracket symbols separately below.
+                continue;
+            }
             for (uint32_t i = 0; i < subset->number_of_states; ++i) {
                 struct state state = a->states[subset->states[i]];
                 for (uint32_t j = 0; j < state.number_of_transitions; ++j) {
@@ -103,6 +115,59 @@ static void determinize_automaton(struct automaton *a,
              &worklist, &next_subset, &next_state);
             automaton_add_transition(result, state, target, symbol);
         }
+
+        // FIXME: Unify this code with the code above.
+        for (uint32_t n = 0; n < in_transitions.number_of_transitions; ++n) {
+            struct bracket_transition t = in_transitions.transitions[n];
+            for (uint32_t i = 0; i < subset->number_of_states; ++i) {
+                struct state state = a->states[subset->states[i]];
+                for (uint32_t j = 0; j < state.number_of_transitions; ++j) {
+                    struct transition transition = state.transitions[j];
+                    if (transition.symbol == SYMBOL_EPSILON)
+                        continue;
+                    if (!bitset_contains(&t.transition_symbols,
+                     transition.symbol)) {
+                        continue;
+                    }
+                    state_array_push(&next_subset, transition.target);
+                    state_array_push_array(&next_subset,
+                     &a->epsilon_closure_for_state[transition.target]);
+                }
+            }
+            if (next_subset.number_of_states == 0)
+                continue;
+            state_id target = deterministic_state_for_subset(&subsets,
+             &worklist, &next_subset, &next_state);
+            automaton_add_transition(result, state, target,
+             t.deterministic_transition_symbol);
+        }
+    }
+
+    if (out_transitions) {
+        struct bracket_transitions *ts = out_transitions;
+        for (uint32_t i = 0; i < subsets.available_size; ++i) {
+            if (!subsets.subsets[i])
+                continue;
+            struct state *state = &result->states[subsets.subset_states[i]];
+            if (!state->accepting)
+                continue;
+
+            uint32_t j = ts->number_of_transitions++;
+            ts->transitions = grow_array(ts->transitions,
+             &ts->transitions_allocated_bytes, ts->number_of_transitions *
+             sizeof(struct bracket_transition));
+            state->transition_symbol = next_transition_symbol++;
+            ts->transitions[j].deterministic_transition_symbol =
+             state->transition_symbol;
+
+            struct bitset *symbols = &ts->transitions[j].transition_symbols;
+            *symbols = bitset_create_empty(a->number_of_symbols);
+            struct state_array *subset = subsets.subsets[i];
+            for (uint32_t k = 0; k < subset->number_of_states; ++k) {
+                bitset_add(symbols,
+                 a->states[subset->states[k]].transition_symbol);
+            }
+        }
     }
 
     state_array_destroy(&next_subset);
@@ -110,6 +175,9 @@ static void determinize_automaton(struct automaton *a,
 
 static uint32_t fnv(const void *dataPointer, size_t length);
 static int compare_state_ids(const void *aa, const void *bb);
+static int compare_bracket_transitions(const void *aa, const void *bb);
+static bool equal_bracket_transitions(struct bracket_transitions *a,
+ struct bracket_transitions *b);
 
 static state_id deterministic_state_for_subset(struct subset_table *table,
  struct worklist *worklist, struct state_array *states, state_id *next_state)
@@ -151,16 +219,51 @@ static state_id deterministic_state_for_subset(struct subset_table *table,
     return table->subset_states[idx];
 }
 
+void determinize_bracket_transitions(struct bracket_transitions *result,
+ struct combined_grammar *grammar)
+{
+    symbol_id next_transition_symbol = grammar->automaton.number_of_symbols;
+    if (grammar->bracket_automaton.number_of_symbols > next_transition_symbol)
+        next_transition_symbol = grammar->bracket_automaton.number_of_symbols;
+
+    struct automaton a = {0};
+    struct bracket_transitions transitions = {0};
+    while (true) {
+        determinize_automaton(&grammar->bracket_automaton, &a, transitions,
+         result, next_transition_symbol, INCLUDE_START_STATE);
+        qsort(result->transitions, result->number_of_transitions,
+         sizeof(struct bracket_transition), compare_bracket_transitions);
+        if (equal_bracket_transitions(&transitions, result))
+            break;
+#if 1
+        printf("-\n");
+        for (uint32_t i = 0; i < result->number_of_transitions; ++i) {
+            struct bracket_transition t = result->transitions[i];
+            printf("%x: ", t.deterministic_transition_symbol);
+            for (uint32_t j = 0; j < grammar->bracket_automaton.number_of_symbols; ++j) {
+                if (bitset_contains(&t.transition_symbols, j))
+                    printf("%x ", j);
+            }
+            printf("\n");
+        }
+#endif
+        transitions = *result;
+        *result = (struct bracket_transitions){0};
+    }
+    automaton_destroy(&a);
+}
+
 // This is Brzozowski's algorithm.
 void determinize_minimize(struct automaton *input, struct automaton *result)
 {
     struct automaton reversed = {0};
     struct automaton dfa = {0};
+    static const struct bracket_transitions none;
     automaton_reverse(input, &reversed);
-    determinize_automaton(&reversed, &dfa, IGNORE_START_STATE);
+    determinize_automaton(&reversed, &dfa, none, 0, 0, IGNORE_START_STATE);
     automaton_clear(&reversed);
     automaton_reverse(&dfa, &reversed);
-    determinize_automaton(&reversed, result, IGNORE_START_STATE);
+    determinize_automaton(&reversed, result, none, 0, 0, IGNORE_START_STATE);
     automaton_destroy(&reversed);
     automaton_destroy(&dfa);
 }
@@ -243,6 +346,37 @@ static int compare_state_ids(const void *aa, const void *bb)
     if (a > b)
         return 1;
     return 0;
+}
+
+static int compare_bracket_transitions(const void *aa, const void *bb)
+{
+    struct bitset *a = &((struct bracket_transition *)aa)->transition_symbols;
+    struct bitset *b = &((struct bracket_transition *)bb)->transition_symbols;
+    if (a->number_of_bit_groups != b->number_of_bit_groups)
+        abort();
+    uint32_t n = a->number_of_bit_groups;
+    for (uint32_t i = 0; i < n; ++i) {
+        if (a->bit_groups[i] < b->bit_groups[i])
+            return -1;
+        if (a->bit_groups[i] > b->bit_groups[i])
+            return 1;
+    }
+    return 0;
+}
+
+static bool equal_bracket_transitions(struct bracket_transitions *a,
+ struct bracket_transitions *b)
+{
+    if (a->number_of_transitions != b->number_of_transitions)
+        return false;
+    uint32_t n = a->number_of_transitions;
+    for (uint32_t i = 0; i < n; ++i) {
+        if (compare_bracket_transitions(&a->transitions[i], &b->transitions[i])
+         != 0) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // This is the 32-bit FNV-1a hash diffusion algorithm.
