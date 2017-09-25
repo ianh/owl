@@ -13,6 +13,7 @@ typedef uint16_t token_id; // TODO: Should this be here?
 #define SYMBOL_EPSILON 0xffffffff
 
 struct automaton;
+struct epsilon_closure;
 struct state;
 struct transition;
 
@@ -26,7 +27,7 @@ struct automaton {
     // Used during determinization to iterate over all possible symbols.
     symbol_id number_of_symbols;
 
-    struct state_array *epsilon_closure_for_state;
+    struct epsilon_closure *epsilon_closure_for_state;
 };
 
 struct state {
@@ -43,6 +44,17 @@ struct transition {
     state_id target;
 
     uint16_t action;
+};
+
+struct epsilon_closure {
+    struct state_array reachable;
+
+    uint32_t *action_indexes;
+    uint32_t action_indexes_allocated_bytes;
+
+    uint16_t *actions;
+    uint32_t actions_allocated_bytes;
+    uint32_t number_of_actions;
 };
 
 void automaton_add_transition(struct automaton *a, state_id source,

@@ -10,8 +10,12 @@ static void invalidate_epsilon_closure(struct automaton *a)
 {
     if (a->epsilon_closure_for_state == 0)
         return;
-    for (uint32_t i = 0; i < a->number_of_states; ++i)
-        state_array_destroy(&a->epsilon_closure_for_state[i]);
+    for (uint32_t i = 0; i < a->number_of_states; ++i) {
+        struct epsilon_closure *closure = &a->epsilon_closure_for_state[i];
+        state_array_destroy(&closure->reachable);
+        free(closure->action_indexes);
+        free(closure->actions);
+    }
     free(a->epsilon_closure_for_state);
     a->epsilon_closure_for_state = 0;
 }
@@ -90,41 +94,6 @@ state_id automaton_embed(struct automaton *into, struct automaton *from,
         }
     }
     return from->start_state + n;
-}
-
-void automaton_compute_epsilon_closure(struct automaton *a)
-{
-    if (a->epsilon_closure_for_state != 0)
-        return;
-    uint32_t n = a->number_of_states;
-    a->epsilon_closure_for_state = calloc(n, sizeof(struct state_array));
-    struct state_array worklist = {0};
-    struct bitset visited = bitset_create_empty(n);
-    for (state_id i = 0; i < n; ++i) {
-        struct state_array *closure = &a->epsilon_closure_for_state[i];
-        state_array_push(&worklist, i);
-        bitset_add(&visited, i);
-        while (worklist.number_of_states > 0) {
-            state_id id = state_array_pop(&worklist);
-            if (id != i)
-                state_array_push(closure, id);
-            struct state *state = &a->states[id];
-            uint32_t number_of_transitions = state->number_of_transitions;
-            for (uint32_t j = 0; j < number_of_transitions; ++j) {
-                if (state->transitions[j].symbol != SYMBOL_EPSILON)
-                    continue;
-                state_id target = state->transitions[j].target;
-                if (!bitset_contains(&visited, target)) {
-                    bitset_add(&visited, target);
-                    state_array_push(&worklist, target);
-                }
-            }
-        }
-        state_array_clear(&worklist);
-        bitset_clear(&visited);
-    }
-    state_array_destroy(&worklist);
-    bitset_destroy(&visited);
 }
 
 void automaton_reverse(struct automaton *a, struct automaton *reversed)

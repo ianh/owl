@@ -1,6 +1,7 @@
 #include "4-determinize.h"
 
 #include "bitset.h"
+#include "fnv.h"
 
 // A subset_table is a hash table mapping subsets (represented as state arrays)
 // to their state ids in the deterministic automaton.
@@ -86,7 +87,7 @@ static void determinize_automaton(struct context context)
     if (!(context.options & IGNORE_START_STATE))
         state_array_push(&next_subset, a->start_state);
     state_array_push_array(&next_subset,
-     &a->epsilon_closure_for_state[a->start_state]);
+     &a->epsilon_closure_for_state[a->start_state].reachable);
     automaton_set_start_state(result, deterministic_state_for_subset(&subsets,
      &worklist, &next_subset, &next_state));
 
@@ -125,9 +126,10 @@ static void determinize_automaton(struct context context)
                     struct transition transition = state.transitions[j];
                     if (transition.symbol != symbol)
                         continue;
-                    state_array_push(&next_subset, transition.target);
+                    state_id target = transition.target;
+                    state_array_push(&next_subset, target);
                     state_array_push_array(&next_subset,
-                     &a->epsilon_closure_for_state[transition.target]);
+                     &a->epsilon_closure_for_state[target].reachable);
                 }
             }
             if (next_subset.number_of_states == 0)
@@ -150,9 +152,10 @@ static void determinize_automaton(struct context context)
                      transition.symbol)) {
                         continue;
                     }
-                    state_array_push(&next_subset, transition.target);
+                    state_id target = transition.target;
+                    state_array_push(&next_subset, target);
                     state_array_push_array(&next_subset,
-                     &a->epsilon_closure_for_state[transition.target]);
+                     &a->epsilon_closure_for_state[target].reachable);
                 }
             }
             if (next_subset.number_of_states == 0)
@@ -429,21 +432,4 @@ static bool equal_bracket_transitions(struct bracket_transitions *a,
             return false;
     }
     return true;
-}
-
-// This is the 32-bit FNV-1a hash diffusion algorithm.
-// http://www.isthe.com/chongo/tech/comp/fnv/index.html
-
-static uint32_t fnvPrime = 0x01000193;
-static uint32_t fnvInitial = 0x811c9dc5;
-
-static uint32_t fnv(const void *dataPointer, size_t length)
-{
-    uint32_t hash = fnvInitial;
-    const unsigned char *data = dataPointer;
-    for (size_t i = 0; i < length; ++i) {
-        hash ^= data[i];
-        hash *= fnvPrime;
-    }
-    return hash;
 }
