@@ -20,11 +20,12 @@ struct action_map_entry {
     state_id dfa_state;
     state_id nfa_state;
     state_id target_nfa_state;
-    token_id token;
+    symbol_id symbol;
     uint32_t action_id;
 };
 struct action_map {
-    // Sorted lexicographically by dfa_state, then by target_nfa_state, then by token.
+    // Sorted lexicographically by dfa_state, then by target_nfa_state, then by
+    // symbol.
     struct action_map_entry *action_map;
     uint32_t action_map_allocated_bytes;
     uint32_t action_map_length;
