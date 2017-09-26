@@ -12,6 +12,8 @@ void *grow_array_using_realloc(void *a, uint32_t *size, uint32_t target_size)
             n = 0xffffffff;
         else
             n = m;
+        if (n < 16)
+            n = 16;
     }
     char *next_array = realloc(a, n);
     if (!next_array)
