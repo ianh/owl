@@ -32,6 +32,12 @@ struct worklist {
     uint32_t number_of_subsets;
 };
 
+// Follows a single transition and (if `map` is nonzero) records the associated
+// actions into the action map.
+static void follow_subset_transition(struct automaton *a,
+ state_id target_nfa_state, state_id nfa_state, state_id dfa_state,
+ symbol_id symbol, struct state_array *next_subset, struct action_map *map);
+
 // Insert or look up the deterministic state id for a subset.  If a new state
 // is created, `*next_state` will be incremented and the new state will be added
 // to the worklist.
@@ -50,7 +56,7 @@ enum options {
     IGNORE_START_STATE = 1,
 
     // Mark the accepting states of a bracket automaton using the deterministic
-    // transition symbols in in_transitions.
+    // transition symbols in `in_transitions`.
     MARK_ACCEPTING_BRACKET_STATES = 2,
 };
 
@@ -61,6 +67,8 @@ struct context {
     struct bracket_transitions in_transitions;
     struct bracket_transitions *out_transitions;
     symbol_id next_transition_symbol;
+
+    struct action_map *action_map;
 
     enum options options;
 };
@@ -84,10 +92,17 @@ static void determinize_automaton(struct context context)
 
     state_id next_state = 0;
     struct state_array next_subset = {0};
-    if (!(context.options & IGNORE_START_STATE))
-        state_array_push(&next_subset, a->start_state);
-    state_array_push_array(&next_subset,
-     &a->epsilon_closure_for_state[a->start_state].reachable);
+    if (!context.action_map) {
+        if (!(context.options & IGNORE_START_STATE))
+            state_array_push(&next_subset, a->start_state);
+        state_array_push_array(&next_subset,
+         &a->epsilon_closure_for_state[a->start_state].reachable);
+    } else {
+        if (context.options & IGNORE_START_STATE)
+            abort();
+        follow_subset_transition(a, a->start_state, a->start_state, UINT32_MAX,
+         SYMBOL_EPSILON, &next_subset, context.action_map);
+    }
     automaton_set_start_state(result, deterministic_state_for_subset(&subsets,
      &worklist, &next_subset, &next_state));
 
@@ -121,15 +136,14 @@ static void determinize_automaton(struct context context)
                 continue;
             }
             for (uint32_t i = 0; i < subset->number_of_states; ++i) {
-                struct state state = a->states[subset->states[i]];
-                for (uint32_t j = 0; j < state.number_of_transitions; ++j) {
-                    struct transition transition = state.transitions[j];
+                struct state s = a->states[subset->states[i]];
+                for (uint32_t j = 0; j < s.number_of_transitions; ++j) {
+                    struct transition transition = s.transitions[j];
                     if (transition.symbol != symbol)
                         continue;
-                    state_id target = transition.target;
-                    state_array_push(&next_subset, target);
-                    state_array_push_array(&next_subset,
-                     &a->epsilon_closure_for_state[target].reachable);
+                    follow_subset_transition(a, transition.target,
+                     subset->states[i], state, symbol, &next_subset,
+                     context.action_map);
                 }
             }
             if (next_subset.number_of_states == 0)
@@ -139,23 +153,22 @@ static void determinize_automaton(struct context context)
             automaton_add_transition(result, state, target, symbol);
         }
 
-        // FIXME: Unify this code with the code above.
         for (uint32_t n = 0; n < in_transitions.number_of_transitions; ++n) {
             struct bracket_transition t = in_transitions.transitions[n];
             for (uint32_t i = 0; i < subset->number_of_states; ++i) {
-                struct state state = a->states[subset->states[i]];
-                for (uint32_t j = 0; j < state.number_of_transitions; ++j) {
-                    struct transition transition = state.transitions[j];
+                struct state s = a->states[subset->states[i]];
+                for (uint32_t j = 0; j < s.number_of_transitions; ++j) {
+                    struct transition transition = s.transitions[j];
                     if (transition.symbol == SYMBOL_EPSILON)
                         continue;
                     if (!bitset_contains(&t.transition_symbols,
                      transition.symbol)) {
                         continue;
                     }
-                    state_id target = transition.target;
-                    state_array_push(&next_subset, target);
-                    state_array_push_array(&next_subset,
-                     &a->epsilon_closure_for_state[target].reachable);
+                    follow_subset_transition(a, transition.target,
+                     subset->states[i], state,
+                     t.deterministic_transition_symbol, &next_subset,
+                     context.action_map);
                 }
             }
             if (next_subset.number_of_states == 0)
@@ -202,11 +215,62 @@ static void determinize_automaton(struct context context)
     state_array_destroy(&next_subset);
 }
 
-static uint32_t fnv(const void *dataPointer, size_t length);
+static void add_action_map_entry(struct action_map *map,
+ struct action_map_entry entry);
+
 static int compare_state_ids(const void *aa, const void *bb);
 static int compare_bracket_transitions(const void *aa, const void *bb);
 static bool equal_bracket_transitions(struct bracket_transitions *a,
  struct bracket_transitions *b);
+
+static void follow_subset_transition(struct automaton *a,
+ state_id target_nfa_state, state_id nfa_state, state_id dfa_state,
+ symbol_id symbol, struct state_array *next_subset, struct action_map *map)
+{
+    struct epsilon_closure *closure;
+    closure = &a->epsilon_closure_for_state[target_nfa_state];
+    struct state_array *reachable = &closure->reachable;
+    if (!map) {
+        state_array_push(next_subset, target_nfa_state);
+        state_array_push_array(next_subset, reachable);
+        return;
+    }
+
+    uint32_t action_index = map->number_of_actions;
+    map->number_of_actions += closure->number_of_actions;
+    map->actions = grow_array(map->actions, &map->actions_allocated_bytes,
+     map->number_of_actions * sizeof(uint16_t));
+    memcpy(map->actions + action_index, closure->actions,
+     closure->number_of_actions * sizeof(uint16_t));
+
+    state_array_push(next_subset, target_nfa_state);
+    add_action_map_entry(map, (struct action_map_entry){
+        .dfa_state = dfa_state,
+        .nfa_state = nfa_state,
+        .target_nfa_state = target_nfa_state,
+        .symbol = symbol,
+        .action_index = UINT32_MAX,
+    });
+    for (uint32_t i = 0; i < reachable->number_of_states; ++i) {
+        state_array_push(next_subset, closure->reachable.states[i]);
+        add_action_map_entry(map, (struct action_map_entry){
+            .dfa_state = dfa_state,
+            .nfa_state = nfa_state,
+            .target_nfa_state = closure->reachable.states[i],
+            .symbol = symbol,
+            .action_index = action_index + closure->action_indexes[i],
+        });
+    }
+}
+
+static void add_action_map_entry(struct action_map *map,
+ struct action_map_entry entry)
+{
+    uint32_t index = map->number_of_entries++;
+    map->entries = grow_array(map->entries, &map->entries_allocated_bytes,
+     map->number_of_entries * sizeof(struct action_map_entry));
+    map->entries[index] = entry;
+}
 
 static state_id deterministic_state_for_subset(struct subset_table *table,
  struct worklist *worklist, struct state_array *states, state_id *next_state)
@@ -254,14 +318,17 @@ void determinize(struct combined_grammar *grammar,
     determinize_automaton((struct context){
         .input = &grammar->automaton,
         .result = &result->automaton,
-        .in_transitions = *transitions
+        .in_transitions = *transitions,
+        .action_map = &result->action_map,
     });
     determinize_automaton((struct context){
         .input = &grammar->bracket_automaton,
         .result = &result->bracket_automaton,
         .in_transitions = *transitions,
+        .action_map = &result->bracket_action_map,
         .options = MARK_ACCEPTING_BRACKET_STATES
     });
+    result->final_nfa_state = grammar->final_nfa_state;
 }
 
 void determinize_bracket_transitions(struct bracket_transitions *result,

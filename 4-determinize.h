@@ -21,14 +21,15 @@ struct action_map_entry {
     state_id nfa_state;
     state_id target_nfa_state;
     symbol_id symbol;
-    uint32_t action_id;
+    uint32_t action_index;
 };
 struct action_map {
     // Sorted lexicographically by dfa_state, then by target_nfa_state, then by
-    // symbol.
-    struct action_map_entry *action_map;
-    uint32_t action_map_allocated_bytes;
-    uint32_t action_map_length;
+    // symbol.  "Initial" entries with no dfa_state or symbol are encoded using
+    // UINT32_MAX for both fields.
+    struct action_map_entry *entries;
+    uint32_t entries_allocated_bytes;
+    uint32_t number_of_entries;
 
     // Action lists are null-terminated.
     uint16_t *actions;
@@ -41,6 +42,8 @@ struct deterministic_grammar {
 
     struct action_map action_map;
     struct action_map bracket_action_map;
+
+    state_id final_nfa_state;
 };
 
 void determinize(struct combined_grammar *grammar,

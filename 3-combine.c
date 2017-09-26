@@ -28,6 +28,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     automaton_add_transition(&result->automaton, 0, 1,
      grammar->rules[0].identifier);
     automaton_mark_accepting_state(&result->automaton, 1);
+    result->final_nfa_state = 1;
     for (rule_id i = 0; i < grammar->number_of_rules; ++i) {
         struct rule *rule = &grammar->rules[i];
         if (rule->type != BRACKETED_RULE) {
