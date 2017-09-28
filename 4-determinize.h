@@ -20,13 +20,14 @@ struct action_map_entry {
     state_id dfa_state;
     state_id nfa_state;
     state_id target_nfa_state;
-    symbol_id symbol;
+    symbol_id dfa_symbol;
+    symbol_id nfa_symbol;
     uint32_t action_index;
 };
 struct action_map {
     // Sorted lexicographically by dfa_state, then by target_nfa_state, then by
-    // symbol.  "Initial" entries with no dfa_state or symbol are encoded using
-    // UINT32_MAX for both fields.
+    // dfa_symbol.  "Initial" entries with no dfa_state or dfa_symbol are
+    // encoded using UINT32_MAX for both fields.
     struct action_map_entry *entries;
     uint32_t entries_allocated_bytes;
     uint32_t number_of_entries;

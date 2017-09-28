@@ -36,7 +36,8 @@ struct worklist {
 // actions into the action map.
 static void follow_subset_transition(struct automaton *a,
  state_id target_nfa_state, state_id nfa_state, state_id dfa_state,
- symbol_id symbol, struct state_array *next_subset, struct action_map *map);
+ symbol_id nfa_symbol, symbol_id dfa_symbol, struct state_array *next_subset,
+ struct action_map *map);
 
 // Insert or look up the deterministic state id for a subset.  If a new state
 // is created, `*next_state` will be incremented and the new state will be added
@@ -101,7 +102,7 @@ static void determinize_automaton(struct context context)
         if (context.options & IGNORE_START_STATE)
             abort();
         follow_subset_transition(a, a->start_state, a->start_state, UINT32_MAX,
-         SYMBOL_EPSILON, &next_subset, context.action_map);
+         SYMBOL_EPSILON, SYMBOL_EPSILON, &next_subset, context.action_map);
     }
     automaton_set_start_state(result, deterministic_state_for_subset(&subsets,
      &worklist, &next_subset, &next_state));
@@ -142,7 +143,7 @@ static void determinize_automaton(struct context context)
                     if (transition.symbol != symbol)
                         continue;
                     follow_subset_transition(a, transition.target,
-                     subset->states[i], state, symbol, &next_subset,
+                     subset->states[i], state, symbol, symbol, &next_subset,
                      context.action_map);
                 }
             }
@@ -166,7 +167,7 @@ static void determinize_automaton(struct context context)
                         continue;
                     }
                     follow_subset_transition(a, transition.target,
-                     subset->states[i], state,
+                     subset->states[i], state, transition.symbol,
                      t.deterministic_transition_symbol, &next_subset,
                      context.action_map);
                 }
@@ -225,7 +226,8 @@ static bool equal_bracket_transitions(struct bracket_transitions *a,
 
 static void follow_subset_transition(struct automaton *a,
  state_id target_nfa_state, state_id nfa_state, state_id dfa_state,
- symbol_id symbol, struct state_array *next_subset, struct action_map *map)
+ symbol_id nfa_symbol, symbol_id dfa_symbol, struct state_array *next_subset,
+ struct action_map *map)
 {
     struct epsilon_closure *closure;
     closure = &a->epsilon_closure_for_state[target_nfa_state];
@@ -248,7 +250,8 @@ static void follow_subset_transition(struct automaton *a,
         .dfa_state = dfa_state,
         .nfa_state = nfa_state,
         .target_nfa_state = target_nfa_state,
-        .symbol = symbol,
+        .dfa_symbol = dfa_symbol,
+        .nfa_symbol = nfa_symbol,
         .action_index = UINT32_MAX,
     });
     for (uint32_t i = 0; i < reachable->number_of_states; ++i) {
@@ -257,7 +260,8 @@ static void follow_subset_transition(struct automaton *a,
             .dfa_state = dfa_state,
             .nfa_state = nfa_state,
             .target_nfa_state = closure->reachable.states[i],
-            .symbol = symbol,
+            .dfa_symbol = dfa_symbol,
+            .nfa_symbol = nfa_symbol,
             .action_index = action_index + closure->action_indexes[i],
         });
     }
