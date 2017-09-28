@@ -1,7 +1,6 @@
 #include "automaton.h"
 
 #include "state-array.h"
-#include "bitset.h"
 
 #include <stdio.h>
 #include <stdlib.h>

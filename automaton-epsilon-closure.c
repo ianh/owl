@@ -1,6 +1,5 @@
 #include "automaton.h"
 
-#include "bitset.h"
 #include "fnv.h"
 
 struct state_table {

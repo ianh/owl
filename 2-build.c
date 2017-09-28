@@ -264,7 +264,7 @@ static void build_body_expression(struct context *ctx, rule_id rule,
             }
             uint32_t rename_index = r->number_of_renames++;
             r->renames = grow_array(r->renames, &r->renames_allocated_bytes,
-             r->number_of_renames);
+             r->number_of_renames * sizeof(struct rename));
             r->renames[rename_index].name = name.identifier;
             r->renames[rename_index].original_name = ident.identifier;
             symbol = name.identifier;

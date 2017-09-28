@@ -21,7 +21,7 @@ static inline void state_array_push(struct state_array *a, state_id state)
         abort();
     uint32_t i = a->number_of_states++;
     a->states = grow_array(a->states, &a->states_allocated_bytes,
-     a->number_of_states * sizeof(uint32_t));
+     a->number_of_states * sizeof(state_id));
     a->states[i] = state;
 }
 
