@@ -76,25 +76,6 @@ void automaton_mark_accepting_state(struct automaton *a, state_id state)
     a->states[state].accepting = true;
 }
 
-state_id automaton_embed(struct automaton *into, struct automaton *from,
- state_id out_state, symbol_id out_symbol, uint16_t out_action)
-{
-    uint32_t m = from->number_of_states;
-    uint32_t n = into->number_of_states;
-    for (state_id i = 0; i < m; ++i) {
-        struct state s = from->states[i];
-        if (s.accepting) {
-            automaton_add_transition_with_action(into, i + n, out_state,
-             out_symbol, out_action);
-        }
-        for (uint32_t j = 0; j < s.number_of_transitions; ++j) {
-            struct transition t = s.transitions[j];
-            automaton_add_transition(into, i + n, t.target + n, t.symbol);
-        }
-    }
-    return from->start_state + n;
-}
-
 void automaton_reverse(struct automaton *a, struct automaton *reversed)
 {
     state_id start_state = a->number_of_states;

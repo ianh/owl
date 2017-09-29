@@ -5,6 +5,10 @@ static void substitute(struct automaton *into, symbol_id symbol, rule_id rule,
 static void apply_renames(struct automaton *a, struct rename *renames,
  uint32_t number_of_renames);
 
+// Returns the start state of the embedded automaton.
+static state_id embed(struct automaton *into, struct automaton *from,
+ state_id out_state, symbol_id out_symbol, uint16_t out_action);
+
 void combine(struct combined_grammar *result, struct grammar *grammar)
 {
     struct automaton *bracket_automaton = &result->bracket_automaton;
@@ -16,8 +20,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
             automaton_mark_accepting_state(bracket_automaton, end);
             bracket_automaton->states[end].transition_symbol = rule->identifier;
 
-            state_id start = automaton_embed(bracket_automaton, rule->automaton,
-             end, rule->end_token, 0);
+            state_id start = embed(bracket_automaton, rule->automaton, end,
+             rule->end_token, 0);
             automaton_add_transition(bracket_automaton,
              bracket_automaton->start_state, start, rule->start_token);
             apply_renames(bracket_automaton, rule->renames,
@@ -55,7 +59,7 @@ static void substitute(struct automaton *into, symbol_id symbol, rule_id rule,
             if (into->states[i].transitions[j].symbol != symbol)
                 continue;
             state_id end_state = into->states[i].transitions[j].target;
-            state_id start_state = automaton_embed(into, substitute, end_state,
+            state_id start_state = embed(into, substitute, end_state,
              SYMBOL_EPSILON, ACTION_END_RULE | rule);
             into->states[i].transitions[j].target = start_state;
             into->states[i].transitions[j].symbol = SYMBOL_EPSILON;
@@ -84,4 +88,23 @@ static void apply_renames(struct automaton *a, struct rename *renames,
             }
         }
     }
+}
+
+static state_id embed(struct automaton *into, struct automaton *from,
+ state_id out_state, symbol_id out_symbol, uint16_t out_action)
+{
+    uint32_t m = from->number_of_states;
+    uint32_t n = into->number_of_states;
+    for (state_id i = 0; i < m; ++i) {
+        struct state s = from->states[i];
+        if (s.accepting) {
+            automaton_add_transition_with_action(into, i + n, out_state,
+             out_symbol, out_action);
+        }
+        for (uint32_t j = 0; j < s.number_of_transitions; ++j) {
+            struct transition t = s.transitions[j];
+            automaton_add_transition(into, i + n, t.target + n, t.symbol);
+        }
+    }
+    return from->start_state + n;
 }
