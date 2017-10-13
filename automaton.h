@@ -8,7 +8,6 @@
 
 typedef uint32_t state_id;
 typedef uint32_t symbol_id;
-typedef uint16_t token_id; // TODO: Should this be here?
 
 #define SYMBOL_EPSILON 0xffffffff
 

@@ -120,10 +120,9 @@ void automaton_print(struct automaton *a)
 void automaton_clear(struct automaton *a)
 {
     invalidate_epsilon_closure(a);
-    for (uint32_t i = 0; i < a->number_of_states; ++i) {
+    for (uint32_t i = 0; i < a->number_of_states; ++i)
         free(a->states[i].transitions);
-        memset(a->states, 0, a->states_allocated_bytes);
-    }
+    memset(a->states, 0, a->states_allocated_bytes);
     a->number_of_states = 0;
     a->number_of_symbols = 0;
     a->start_state = 0;
