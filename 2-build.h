@@ -5,6 +5,7 @@
 #include "automaton.h"
 
 struct rule;
+struct keyword;
 
 // STEP 2 - BUILD
 
@@ -15,12 +16,20 @@ struct grammar {
     struct rule *rules;
     uint32_t rules_allocated_bytes;
     uint16_t number_of_rules;
+
+    // Symbols for tokens.
+    symbol_id identifier_symbol;
+    symbol_id number_symbol;
+    symbol_id string_symbol;
+    struct keyword *keywords;
+    uint32_t keywords_allocated_bytes;
+    uint32_t number_of_keywords;
 };
 
-// Each rule_id is an index into the rules array of our grammar.  In order to
+// Each `rule_id` is an index into the rules array of our grammar.  In order to
 // build a parse tree, we will track the transitions into and out of each rule
-// by assigning each transition an action_id computed from the rule_id.  We
-// limit rule_ids to a maximum of 0x7fff so they fit into a 16-bit action_id
+// by assigning each transition an `action_id` computed from the `rule_id`.  We
+// limit rule_ids to a maximum of 0x7fff so they fit into a 16-bit `action_id`
 // with room for one extra tag bit.
 typedef uint16_t rule_id;
 #define MAX_NUMBER_OF_RULES 0x8000
@@ -55,14 +64,14 @@ struct rule {
 
     // The name of this rule (for NAMED_RULES) or the rule in which this rule
     // appears (for other types of rules).
-    symbol_id name;
+    uint32_t name;
 
     // For choice rules.
-    symbol_id choice_name;
+    uint32_t choice_name;
 
     // For bracketed rules.
-    token_id start_token;
-    token_id end_token;
+    symbol_id start_symbol;
+    symbol_id end_symbol;
 
     // For operator rules.
     enum fixity fixity;
@@ -82,6 +91,22 @@ struct rule {
 struct rename {
     symbol_id original_name;
     symbol_id name;
+};
+
+enum keyword_type {
+    KEYWORD_NORMAL,
+    KEYWORD_START,
+    KEYWORD_END,
+};
+
+struct keyword {
+    symbol_id symbol;
+
+    enum keyword_type type;
+
+    // The `keyword` string is a direct reference to the original parsed text.
+    const char *keyword;
+    size_t length;
 };
 
 // Create a grammar based on the contents of parse tree `tree`.  We assume that

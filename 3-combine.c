@@ -21,9 +21,9 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
             bracket_automaton->states[end].transition_symbol = rule->identifier;
 
             state_id start = embed(bracket_automaton, rule->automaton, end,
-             rule->end_token, 0);
+             rule->end_symbol, 0);
             automaton_add_transition(bracket_automaton,
-             bracket_automaton->start_state, start, rule->start_token);
+             bracket_automaton->start_state, start, rule->start_symbol);
             apply_renames(bracket_automaton, rule->renames,
              rule->number_of_renames);
         }
