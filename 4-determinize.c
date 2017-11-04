@@ -332,7 +332,6 @@ void determinize(struct combined_grammar *grammar,
         .action_map = &result->bracket_action_map,
         .options = MARK_ACCEPTING_BRACKET_STATES
     });
-    result->final_nfa_state = grammar->final_nfa_state;
 }
 
 void determinize_bracket_transitions(struct bracket_transitions *result,

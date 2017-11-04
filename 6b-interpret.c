@@ -204,7 +204,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
 
 static void build_parse_tree(struct interpret_context *ctx)
 {
-    state_id nfa_state = ctx->deterministic->final_nfa_state;
+    state_id nfa_state = ctx->combined->final_nfa_state;
     while (*ctx->run) {
         struct bluebird_token_run *run = *ctx->run;
         uint16_t n = run->number_of_tokens;

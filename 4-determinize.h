@@ -43,8 +43,6 @@ struct deterministic_grammar {
 
     struct action_map action_map;
     struct action_map bracket_action_map;
-
-    state_id final_nfa_state;
 };
 
 void determinize(struct combined_grammar *grammar,
