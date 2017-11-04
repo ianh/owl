@@ -4,6 +4,7 @@ static void substitute(struct automaton *into, symbol_id symbol, rule_id rule,
  struct automaton *substitute);
 static void apply_renames(struct automaton *a, struct rename *renames,
  uint32_t number_of_renames);
+static void add_write_token_actions(struct automaton *a, symbol_id token);
 
 // Returns the start state of the embedded automaton.
 static state_id embed(struct automaton *into, struct automaton *from,
@@ -46,6 +47,13 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
              rule->number_of_renames);
         }
     }
+
+    add_write_token_actions(&result->automaton, grammar->identifier_symbol);
+    add_write_token_actions(&result->automaton, grammar->number_symbol);
+    add_write_token_actions(&result->automaton, grammar->string_symbol);
+    add_write_token_actions(bracket_automaton, grammar->identifier_symbol);
+    add_write_token_actions(bracket_automaton, grammar->number_symbol);
+    add_write_token_actions(bracket_automaton, grammar->string_symbol);
 }
 
 static void substitute(struct automaton *into, symbol_id symbol, rule_id rule,
@@ -86,6 +94,23 @@ static void apply_renames(struct automaton *a, struct rename *renames,
                 next_state++;
                 break;
             }
+        }
+    }
+}
+
+static void add_write_token_actions(struct automaton *a, symbol_id token)
+{
+    state_id next_state = a->number_of_states;
+    for (state_id i = 0; i < a->number_of_states; ++i) {
+        for (uint32_t j = 0; j < a->states[i].number_of_transitions; ++j) {
+            if (a->states[i].transitions[j].symbol != token)
+                continue;
+            automaton_add_transition_with_action(a, next_state,
+             a->states[i].transitions[j].target, SYMBOL_EPSILON,
+             ACTION_WRITE_TOKEN);
+            a->states[i].transitions[j].target = next_state;
+            next_state++;
+            break;
         }
     }
 }
