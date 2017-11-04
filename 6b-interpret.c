@@ -153,7 +153,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
 {
     struct action_map *map = &ctx->deterministic->action_map;
     bool bracket_automaton = false;
-    if (state >= (1UL << 31)) {
+    if (state >= (1UL << 31) && state != UINT32_MAX) {
         state -= (1UL << 31);
         map = &ctx->deterministic->bracket_action_map;
         bracket_automaton = true;
@@ -169,6 +169,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
     }
     // TODO: Binary search.
     state_id nfa_state = *last_nfa_state;
+    bool found = false;
     for (uint32_t j = 0; j < map->number_of_entries; ++j) {
         struct action_map_entry entry = map->entries[j];
         if (entry.dfa_state != state)
@@ -193,7 +194,12 @@ static void follow_transition_reversed(struct interpret_context *ctx,
                 break;
             perform_action(ctx, map->actions[k]);
         }
+        found = true;
         break;
+    }
+    if (!found) {
+        fprintf(stderr, "internal error (%u %u %x)\n", state, nfa_state, token);
+        exit(-1);
     }
     if (bracket_automaton && state ==
      ctx->deterministic->bracket_automaton.start_state) {
