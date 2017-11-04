@@ -5,14 +5,29 @@
 #include "2-build.h"
 #include "3-combine.h"
 #include "4-determinize.h"
+#include "6b-interpret.h"
 
-int main()
+// TODO:
+// - tokenization
+// - interpreter
+// - code generation
+// - self hosting
+// - interoperability
+// - ambiguity checking
+// - json grammar output
+// - fancy interpreter output
+// - json interpreter output
+// - clean up memory leaks
+// - perf optimization
+
+int main(int argc, char *argv[])
 {
     const char *string =
-    "a = ''";
-    //"grammar = rule*   rule = identifier '=' body   body = expr | (expr ':' identifier)+ operators*   expr =     identifier ('@' identifier@rename)? `identifier`     single-quoted-string `literal`     [ '(' [ expr ] ')' ] `parens`     [ '[' [ identifier@left expr identifier@right ] ']' ] `guarded`    postfix $     '*' `zero-or-more`     '+' `one-or-more`     '?' `optional`    infix flat $     '' `concatenation`    infix flat $     '|' `choice`   operators = '.operators' fixity operator+   operator = expr ':' identifier   fixity =    'postfix' `postfix`    'prefix' `prefix`    'infix' assoc `infix`   assoc =    'flat' `flat`    'left' `left`    'right' `right`    'nonassoc' `nonassoc`";
+    //"a = [ '(' [ a ] ')' ] | 'x'";
+    //"a = [ '(' [ a ] ')' ] `parens` identifier `ident` infix flat $ '+' `plus`";
+    "grammar = rule*   rule = identifier '=' body   body = expr | (expr ':' identifier)+ operators*   operators = '.operators' fixity operator+   operator = expr ':' identifier   fixity =    'postfix' `postfix`    'prefix' `prefix`    'infix' assoc `infix`   assoc =    'flat' `flat`    'left' `left`    'right' `right`    'nonassoc' `nonassoc`    expr =     identifier ('@' identifier@rename)? `identifier`     single-quoted-string `literal`     [ '(' [ expr ] ')' ] `parens`     [ '[' [ identifier@left expr? identifier@right ] ']' ] `guarded`    postfix $     '*' `zero-or-more`     '+' `one-or-more`     '?' `optional`    infix flat $     '' `concatenation`    infix flat $     '|' `choice`";
     //"a = [s[a]e] | [s[b]e] b = [s[a]e] | [s[b]e]";
-    //"a = b b b = c c c = d d d = e e e = f f f = g g g = h h h = i i i = j j j = k k k = l l l = m m m = n n n = o o o = p p p = q q q = r r r = s s s = t t t = u u u = v v v = w w w = x x x = y y y = z";
+    //"a = b b b = c c c = d d d = e e e = f f f = g g g = h h h = i i i = j j j = k k k = l l l = m m m = n n n = o o o = p p p = q q q = r r r = s s s = t t t = u u u = v";// v v = w w w = x x x = y y y = z";
     struct bluebird_tree *tree = bluebird_tree_create_from_string(string,
      strlen(string));
     print_grammar(tree, bluebird_tree_root(tree), 0);
@@ -42,6 +57,21 @@ int main()
     determinize(&combined, &deterministic, &bracket_transitions);
     automaton_print(&deterministic.automaton);
     automaton_print(&deterministic.bracket_automaton);
+
+    //const char *text_to_parse = "(((x)))";
+    const char *text_to_parse = "a = [ x (a@b | a) y ] | (c | b)* : eee  .operators infix left  p : p  .operators prefix pre : pre";
+    //const char *text_to_parse = "q + (x + y) + z + ((d + ((w))) + r) + k";
+    //const char *text_to_parse = "a = (b)";
+    interpret(&grammar, &combined, &bracket_transitions, &deterministic, tree, text_to_parse, strlen(text_to_parse));
+
+    /*
+    const char *tok;
+#define EVALUATE_MACROS_AND_STRINGIFY(...) #__VA_ARGS__
+#define TOKENIZE_BODY(...) tok = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
+#define READ_KEYWORD_TOKEN(...) 0
+#include "tokenize.h"
+    printf("%s\n", tok);
+*/
 
     bluebird_tree_destroy(tree);
     return 0;
