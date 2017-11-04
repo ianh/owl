@@ -123,8 +123,12 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string,
 
 parsed_id bluebird_tree_root(struct bluebird_tree *tree);
 
-// TODO: Remove this and do lexing separately.
+// TODO: Remove these and do lexing separately.
 uint32_t bluebird_tree_next_identifier(struct bluebird_tree *tree);
+uint32_t bluebird_tree_identify_string(struct bluebird_tree *tree,
+ const char *s, size_t *len);
+
+const char *bluebird_tree_get_identifier(struct bluebird_tree *tree, uint32_t id, size_t *length);
 
 void bluebird_tree_destroy(struct bluebird_tree *tree);
 

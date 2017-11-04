@@ -18,15 +18,15 @@ struct bluebird_tree {
 
 #define MAX_IDS 2048
     uint32_t number_of_ids;
-    uint32_t id_lengths[MAX_IDS];
-    uint32_t id_offsets[MAX_IDS];
+    size_t id_lengths[MAX_IDS];
+    size_t id_offsets[MAX_IDS];
 };
 
 static void print_ident_string(struct bluebird_tree *tree, uint32_t id,
  int indent)
 {
     for (int i = 0; i < indent; ++i) printf("  ");
-    printf("%.*s\n", tree->id_lengths[id], tree->string + tree->id_offsets[id]);
+    printf("%.*s\n", (int)tree->id_lengths[id], tree->string + tree->id_offsets[id]);
 }
 
 static bool grow_tree(struct bluebird_tree *tree, size_t size)
@@ -260,7 +260,7 @@ static uint32_t parse_ident_raw(struct bluebird_tree *ctx)
     for (uint32_t i = 0; i < ctx->number_of_ids; ++i) {
         if (ctx->id_lengths[i] != length)
             continue;
-        uint32_t id_offset = ctx->id_offsets[i];
+        size_t id_offset = ctx->id_offsets[i];
         if (memcmp(ctx->string + id_offset, ctx->string + offset, length))
             continue;
         id = i;
@@ -270,8 +270,8 @@ static uint32_t parse_ident_raw(struct bluebird_tree *ctx)
         if (ctx->number_of_ids >= MAX_IDS)
             return 0;
         id = ctx->number_of_ids++;
-        ctx->id_lengths[id] = (uint32_t)length;
-        ctx->id_offsets[id] = (uint32_t)offset;
+        ctx->id_lengths[id] = length;
+        ctx->id_offsets[id] = offset;
     }
     return id;
 }
@@ -492,6 +492,33 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string,
 uint32_t bluebird_tree_next_identifier(struct bluebird_tree *tree)
 {
     return tree->number_of_ids;
+}
+
+uint32_t bluebird_tree_identify_string(struct bluebird_tree *tree,
+ const char *s, size_t *len)
+{
+    uint32_t longest_match = 0;
+    size_t longest_length = 0;
+    for (uint32_t i = 0; i < tree->number_of_ids; ++i) {
+        if (tree->id_lengths[i] > *len)
+            continue;
+        size_t id_offset = tree->id_offsets[i];
+        // FIXME: Doesn't handle prefixes properly.
+        if (memcmp(tree->string + id_offset, s, tree->id_lengths[i]))
+            continue;
+        if (tree->id_lengths[i] <= longest_length)
+            continue;
+        longest_length = tree->id_lengths[i];
+        longest_match = i;
+    }
+    *len = longest_length;
+    return longest_match;
+}
+
+const char *bluebird_tree_get_identifier(struct bluebird_tree *tree, uint32_t id, size_t *length)
+{
+    *length = tree->id_lengths[id];
+    return tree->string + tree->id_offsets[id];
 }
 
 void bluebird_tree_destroy(struct bluebird_tree *tree)
