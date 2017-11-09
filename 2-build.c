@@ -16,7 +16,7 @@ struct context {
 };
 
 static rule_id add_rule(struct context *ctx, enum rule_type type,
- symbol_id identifier, struct parsed_expr *expr);
+ symbol_id identifier, struct parsed_expr *expr, rule_id original_rule);
 static rule_id add_empty_rule(struct context *ctx, enum rule_type type,
  symbol_id identifier);
 static void determinize_minimize_rule(struct rule *rule);
@@ -62,7 +62,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         if (!body.ident) {
             // This is a single-choice rule, so we just add it directly.
             struct parsed_expr expr = parsed_expr_get(tree, body.expr);
-            rule_id i = add_rule(&context, NAMED_RULE, name, &expr);
+            rule_id i = add_rule(&context, NAMED_RULE, name, &expr, 0);
             grammar->rules[i].name = name;
             rule = parsed_rule_next(rule);
             continue;
@@ -82,7 +82,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         struct parsed_ident choice = parsed_ident_get(tree, body.ident);
         while (!expr.empty) {
             symbol_id id = context.next_symbol++;
-            rule_id i = add_rule(&context, CHOICE_RULE, id, &expr);
+            rule_id i = add_rule(&context, CHOICE_RULE, id, &expr, 0);
             grammar->rules[i].name = name;
             grammar->rules[i].choice_name = choice.identifier;
             automaton_add_transition(combined_automaton,
@@ -132,7 +132,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             struct parsed_ident op_choice = parsed_ident_get(tree, ops.ident);
             while (!op_expr.empty) {
                 symbol_id op_id = context.next_symbol++;
-                rule_id i = add_rule(&context, OPERATOR_RULE, op_id, &op_expr);
+                rule_id i;
+                i = add_rule(&context, OPERATOR_RULE, op_id, &op_expr, 0);
                 struct rule *r = &grammar->rules[i];
                 r->name = name;
                 r->choice_name = op_choice.identifier;
@@ -192,10 +193,11 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
 }
 
 static rule_id add_rule(struct context *ctx, enum rule_type type,
- symbol_id identifier, struct parsed_expr *expr)
+ symbol_id identifier, struct parsed_expr *expr, rule_id original_rule)
 {
     struct grammar *grammar = ctx->grammar;
     rule_id i = add_empty_rule(ctx, type, identifier);
+    grammar->rules[i].original_rule = original_rule;
 
     struct boundary_states boundary = { .entry = 0, .exit = 1 };
     automaton_set_start_state(grammar->rules[i].automaton, boundary.entry);
@@ -267,6 +269,8 @@ static void build_body_expression(struct context *ctx, rule_id rule,
         find_token(ctx, id, n, &symbol);
         if (!name.empty) {
             struct rule *r = &ctx->grammar->rules[rule];
+            if (r->type == BRACKETED_RULE)
+                r = &ctx->grammar->rules[r->original_rule];
             if (r->number_of_renames >= MAX_NUMBER_OF_RENAMES) {
                 fprintf(stderr, "error: rules with more than %u references of "
                  "the form 'rule@name' are currently unsupported.\n",
@@ -302,7 +306,10 @@ static void build_body_expression(struct context *ctx, rule_id rule,
     case PARSED_BRACKETED: {
         struct parsed_expr bracket = parsed_expr_get(tree, expr->expr);
         symbol_id id = ctx->next_symbol++;
-        rule_id bracketed = add_rule(ctx, BRACKETED_RULE, id, &bracket);
+        rule_id orig = rule;
+        if (ctx->grammar->rules[rule].type == BRACKETED_RULE)
+            orig = ctx->grammar->rules[rule].original_rule;
+        rule_id bracketed = add_rule(ctx, BRACKETED_RULE, id, &bracket, orig);
         struct rule *r = &ctx->grammar->rules[bracketed];
         r->name = ctx->grammar->rules[rule].name;
         // TODO: This should also be reworked to use an explicit token rule.

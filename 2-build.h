@@ -68,6 +68,9 @@ struct rule {
     // For bracketed rules.
     symbol_id start_symbol;
     symbol_id end_symbol;
+    // The rule in which this bracketed rule appears.  We need to put renames in
+    // the original_rule so we can find them later.
+    rule_id original_rule;
 
     // For operator rules.
     enum fixity fixity;
