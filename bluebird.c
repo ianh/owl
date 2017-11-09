@@ -39,8 +39,8 @@ int main(int argc, char *argv[])
         printf("%x - %u / %u (%u):\n", grammar.rules[i].identifier, grammar.rules[i].name, grammar.rules[i].choice_name, grammar.rules[i].type);
         automaton_print(grammar.rules[i].automaton);
     }
-    for (uint32_t i = 0; i < grammar.number_of_keywords; ++i) {
-        printf("keyword: %x - '%.*s'\n", grammar.keywords[i].symbol, grammar.keywords[i].length, grammar.keywords[i].keyword);
+    for (uint32_t i = 0; i < grammar.number_of_tokens; ++i) {
+        printf("keyword: %x - '%.*s'\n", grammar.tokens[i].symbol, grammar.tokens[i].length, grammar.tokens[i].string);
     }
     printf("---\n");
 

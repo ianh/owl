@@ -24,8 +24,11 @@ static void determinize_minimize_rule(struct rule *rule);
 static void build_body_expression(struct context *ctx, rule_id rule,
  struct parsed_expr *expr, struct boundary_states boundary,
  state_id *next_state_id);
+static symbol_id add_token(struct context *ctx, const char *str, size_t length);
+static void find_token(struct context *ctx, const char *str, size_t length,
+ symbol_id *symbol);
 static symbol_id add_keyword_token(struct context *ctx, uint32_t identifier,
- enum keyword_type type);
+ enum token_type type);
 static struct boundary_states connect_expression(struct context *ctx,
  rule_id rule, struct parsed_expr *expr, struct boundary_states outer,
  state_id *next_state_id);
@@ -42,9 +45,9 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         .tree = tree,
         .next_symbol = bluebird_tree_next_identifier(tree),
     };
-    grammar->identifier_symbol = context.next_symbol++;
-    grammar->number_symbol = context.next_symbol++;
-    grammar->string_symbol = context.next_symbol++;
+    add_token(&context, "identifier", strlen("identifier"));
+    add_token(&context, "number", strlen("number"));
+    add_token(&context, "string", strlen("string"));
     parsed_id root = bluebird_tree_root(tree);
     struct parsed_grammar g = parsed_grammar_get(tree, root);
     struct parsed_rule rule = parsed_rule_get(tree, g.rule);
@@ -259,18 +262,9 @@ static void build_body_expression(struct context *ctx, rule_id rule,
         struct parsed_ident ident = parsed_ident_get(tree, expr->ident);
         struct parsed_ident name = parsed_ident_get(tree, expr->name);
         symbol_id symbol = ident.identifier;
-        // TODO: Identifying what kind of token this is should be done at parse
-        // time (with identifier, number, etc. as keywords), not as a post-pass.
-        // Two grammar rules: token (as a separate rule) and keyword (as a
-        // choice in expr).
         size_t n;
         const char *id = bluebird_tree_get_identifier(tree, symbol, &n);
-        if (n == strlen("identifier") && !memcmp(id, "identifier", n))
-            symbol = ctx->grammar->identifier_symbol;
-        else if (n == strlen("number") && !memcmp(id, "number", n))
-            symbol = ctx->grammar->number_symbol;
-        else if (n == strlen("string") && !memcmp(id, "string", n))
-            symbol = ctx->grammar->string_symbol;
+        find_token(ctx, id, n, &symbol);
         if (!name.empty) {
             struct rule *r = &ctx->grammar->rules[rule];
             if (r->number_of_renames >= MAX_NUMBER_OF_RENAMES) {
@@ -292,7 +286,7 @@ static void build_body_expression(struct context *ctx, rule_id rule,
     case PARSED_LITERAL: {
         struct parsed_ident ident = parsed_ident_get(tree, expr->ident);
         symbol_id symbol = add_keyword_token(ctx, ident.identifier,
-         KEYWORD_NORMAL);
+         TOKEN_NORMAL);
         automaton_add_transition(automaton, b.entry, b.exit, symbol);
         break;
     }
@@ -314,9 +308,9 @@ static void build_body_expression(struct context *ctx, rule_id rule,
         // TODO: This should also be reworked to use an explicit token rule.
         // Or a semantic rather than syntactic restriction?
         r->start_symbol = add_keyword_token(ctx,
-         parsed_ident_get(tree, expr->left).identifier, KEYWORD_START);
+         parsed_ident_get(tree, expr->left).identifier, TOKEN_START);
         r->end_symbol = add_keyword_token(ctx,
-         parsed_ident_get(tree, expr->right).identifier, KEYWORD_END);
+         parsed_ident_get(tree, expr->right).identifier, TOKEN_END);
         automaton_add_transition(automaton, b.entry, b.exit, id);
         break;
     }
@@ -346,49 +340,80 @@ static void build_body_expression(struct context *ctx, rule_id rule,
     }
 }
 
-static const char *keyword_type_string(enum keyword_type type)
+static symbol_id add_token(struct context *ctx, const char *str, size_t length)
+{
+    uint32_t id = ctx->grammar->number_of_tokens++;
+    ctx->grammar->tokens = grow_array(ctx->grammar->tokens,
+     &ctx->grammar->tokens_allocated_bytes,
+     ctx->grammar->number_of_tokens * sizeof(struct token));
+    ctx->grammar->tokens[id].symbol = ctx->next_symbol++;
+    ctx->grammar->tokens[id].string = str;
+    ctx->grammar->tokens[id].length = length;
+    ctx->grammar->tokens[id].type = TOKEN_NORMAL;
+    return ctx->grammar->tokens[id].symbol;
+}
+
+static void find_token(struct context *ctx, const char *str, size_t length,
+ symbol_id *symbol)
+{
+    for (uint32_t i = 0; i < ctx->grammar->number_of_tokens; ++i) {
+        struct token other = ctx->grammar->tokens[i];
+        if (other.keyword)
+            continue;
+        if (other.length != length)
+            continue;
+        if (memcmp(other.string, str, length))
+            continue;
+        *symbol = other.symbol;
+    }
+}
+
+static const char *token_type_string(enum token_type type)
 {
     switch (type) {
-    case KEYWORD_NORMAL:
+    case TOKEN_NORMAL:
         return "a normal";
-    case KEYWORD_START:
+    case TOKEN_START:
         return "a start";
-    case KEYWORD_END:
+    case TOKEN_END:
         return "an end";
     }
 }
 
 static symbol_id add_keyword_token(struct context *ctx, uint32_t identifier,
- enum keyword_type type)
+ enum token_type type)
 {
     size_t keyword_length = 0;
     const char *keyword = bluebird_tree_get_identifier(ctx->tree, identifier,
      &keyword_length);
     // Check whether we already added this token -- if so, return its symbol.
-    for (uint32_t i = 0; i < ctx->grammar->number_of_keywords; ++i) {
-        struct keyword other = ctx->grammar->keywords[i];
+    for (uint32_t i = 0; i < ctx->grammar->number_of_tokens; ++i) {
+        struct token other = ctx->grammar->tokens[i];
+        if (!other.keyword)
+            continue;
         if (other.length != keyword_length)
             continue;
-        if (memcmp(other.keyword, keyword, keyword_length))
+        if (memcmp(other.string, keyword, keyword_length))
             continue;
         if (other.type != type) {
             // TODO: Show location in original grammar text.
             fprintf(stderr, "error: token '%.*s' can't be used both as %s and "
              "%s keyword\n", (int)keyword_length, keyword,
-             keyword_type_string(other.type), keyword_type_string(type));
+             token_type_string(other.type), token_type_string(type));
             exit(-1);
         }
         return other.symbol;
     }
-    uint32_t id = ctx->grammar->number_of_keywords++;
-    ctx->grammar->keywords = grow_array(ctx->grammar->keywords,
-     &ctx->grammar->keywords_allocated_bytes,
-     ctx->grammar->number_of_keywords * sizeof(struct keyword));
-    ctx->grammar->keywords[id].symbol = ctx->next_symbol++;
-    ctx->grammar->keywords[id].keyword = keyword;
-    ctx->grammar->keywords[id].length = keyword_length;
-    ctx->grammar->keywords[id].type = type;
-    return ctx->grammar->keywords[id].symbol;
+    uint32_t id = ctx->grammar->number_of_tokens++;
+    ctx->grammar->tokens = grow_array(ctx->grammar->tokens,
+     &ctx->grammar->tokens_allocated_bytes,
+     ctx->grammar->number_of_tokens * sizeof(struct token));
+    ctx->grammar->tokens[id].symbol = ctx->next_symbol++;
+    ctx->grammar->tokens[id].string = keyword;
+    ctx->grammar->tokens[id].length = keyword_length;
+    ctx->grammar->tokens[id].type = type;
+    ctx->grammar->tokens[id].keyword = true;
+    return ctx->grammar->tokens[id].symbol;
 }
 
 static struct boundary_states connect_expression(struct context *ctx,

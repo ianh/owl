@@ -48,12 +48,13 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
         }
     }
 
-    add_write_token_actions(&result->automaton, grammar->identifier_symbol);
-    add_write_token_actions(&result->automaton, grammar->number_symbol);
-    add_write_token_actions(&result->automaton, grammar->string_symbol);
-    add_write_token_actions(bracket_automaton, grammar->identifier_symbol);
-    add_write_token_actions(bracket_automaton, grammar->number_symbol);
-    add_write_token_actions(bracket_automaton, grammar->string_symbol);
+    for (uint32_t i = 0; i < grammar->number_of_tokens; ++i) {
+        if (grammar->tokens[i].keyword)
+            continue;
+        symbol_id symbol = grammar->tokens[i].symbol;
+        add_write_token_actions(&result->automaton, symbol);
+        add_write_token_actions(&result->bracket_automaton, symbol);
+    }
 }
 
 static void substitute(struct automaton *into, symbol_id symbol, rule_id rule,

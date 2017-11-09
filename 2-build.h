@@ -5,7 +5,7 @@
 #include "automaton.h"
 
 struct rule;
-struct keyword;
+struct token;
 
 // STEP 2 - BUILD
 
@@ -17,13 +17,9 @@ struct grammar {
     uint32_t rules_allocated_bytes;
     uint16_t number_of_rules;
 
-    // Symbols for tokens.
-    symbol_id identifier_symbol;
-    symbol_id number_symbol;
-    symbol_id string_symbol;
-    struct keyword *keywords;
-    uint32_t keywords_allocated_bytes;
-    uint32_t number_of_keywords;
+    struct token *tokens;
+    uint32_t tokens_allocated_bytes;
+    uint32_t number_of_tokens;
 };
 
 // Each `rule_id` is an index into the rules array of our grammar.  In order to
@@ -93,19 +89,20 @@ struct rename {
     symbol_id name;
 };
 
-enum keyword_type {
-    KEYWORD_NORMAL,
-    KEYWORD_START,
-    KEYWORD_END,
+enum token_type {
+    TOKEN_NORMAL,
+    TOKEN_START,
+    TOKEN_END,
 };
 
-struct keyword {
+struct token {
     symbol_id symbol;
 
-    enum keyword_type type;
+    enum token_type type;
+    bool keyword;
 
-    // The `keyword` string is a direct reference to the original parsed text.
-    const char *keyword;
+    // This string is a direct reference to the original parsed text.
+    const char *string;
     size_t length;
 };
 

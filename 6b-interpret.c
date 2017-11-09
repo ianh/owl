@@ -7,25 +7,32 @@
 #define READ_KEYWORD_TOKEN read_keyword_token_bootstrap
 
 #define IDENTIFIER_TOKEN \
- (((struct grammar *)tokenizer->info)->identifier_symbol)
-#define NUMBER_TOKEN (((struct grammar *)tokenizer->info)->number_symbol)
-#define STRING_TOKEN (((struct grammar *)tokenizer->info)->string_symbol)
+ (((struct tokenizer_info *)tokenizer->info)->identifier_symbol)
+#define NUMBER_TOKEN (((struct tokenizer_info *)tokenizer->info)->number_symbol)
+#define STRING_TOKEN (((struct tokenizer_info *)tokenizer->info)->string_symbol)
 #define BRACKET_TRANSITION_TOKEN 0xffffffff
+
+struct tokenizer_info {
+    struct grammar *grammar;
+    symbol_id identifier_symbol;
+    symbol_id number_symbol;
+    symbol_id string_symbol;
+};
 
 static size_t read_keyword_token_bootstrap(uint32_t *token, bool *end_token,
  const unsigned char *text, size_t length, void *info)
 {
-    struct grammar *grammar = (struct grammar *)info;
+    struct grammar *grammar = ((struct tokenizer_info *)info)->grammar;
     symbol_id symbol = SYMBOL_EPSILON;
     size_t max_len = 0;
     bool end = false;
-    for (uint32_t i = 0; i < grammar->number_of_keywords; ++i) {
-        struct keyword k = grammar->keywords[i];
-        if (length >= k.length && k.length > max_len &&
-         !memcmp(text, k.keyword, k.length)) {
+    for (uint32_t i = 0; i < grammar->number_of_tokens; ++i) {
+        struct token k = grammar->tokens[i];
+        if (k.keyword && length >= k.length && k.length > max_len &&
+         !memcmp(text, k.string, k.length)) {
             max_len = k.length;
             symbol = k.symbol;
-            end = k.type == KEYWORD_END;
+            end = k.type == TOKEN_END;
         }
     }
     *end_token = end;
@@ -223,6 +230,22 @@ static void build_parse_tree(struct interpret_context *ctx)
     follow_transition_reversed(ctx, &nfa_state, UINT32_MAX, UINT32_MAX);
 }
 
+static symbol_id find_token(struct grammar *grammar, const char *str)
+{
+    size_t length = strlen(str);
+    for (uint32_t i = 0; i < grammar->number_of_tokens; ++i) {
+        struct token other = grammar->tokens[i];
+        if (other.keyword)
+            continue;
+        if (other.length != length)
+            continue;
+        if (memcmp(other.string, str, length))
+            continue;
+        return other.symbol;
+    }
+    return 0xffffffff;
+}
+
 void interpret(struct grammar *grammar, struct combined_grammar *combined,
  struct bracket_transitions *transitions,
  struct deterministic_grammar *deterministic, struct bluebird_tree *tree,
@@ -234,10 +257,16 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
         exit(-1);
     }
     struct bluebird_token_run *token_run = 0;
+    struct tokenizer_info info = {
+        .grammar = grammar,
+        .identifier_symbol = find_token(grammar, "identifier"),
+        .number_symbol = find_token(grammar, "number"),
+        .string_symbol = find_token(grammar, "string"),
+    };
     struct bluebird_default_tokenizer tokenizer = {
         .text = text,
         .length = text_len,
-        .info = grammar,
+        .info = &info,
     };
     struct interpret_context context = {
         .grammar = grammar,
