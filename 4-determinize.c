@@ -93,14 +93,14 @@ static void determinize_automaton(struct context context)
 
     state_id next_state = 0;
     struct state_array next_subset = {0};
-    if (!context.action_map) {
-        if (!(context.options & IGNORE_START_STATE))
-            state_array_push(&next_subset, a->start_state);
+    if (context.options & IGNORE_START_STATE) {
+        // If we're producing an action map, we need to call
+        // follow_subset_transition and include the start state.
+        if (context.action_map)
+            abort();
         state_array_push_array(&next_subset,
          &a->epsilon_closure_for_state[a->start_state].reachable);
     } else {
-        if (context.options & IGNORE_START_STATE)
-            abort();
         follow_subset_transition(a, a->start_state, a->start_state, UINT32_MAX,
          SYMBOL_EPSILON, SYMBOL_EPSILON, &next_subset, context.action_map);
     }
