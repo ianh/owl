@@ -410,7 +410,7 @@ static parsed_id parse_fixity(struct bluebird_tree *ctx)
     if (ident_is(ctx, id, "postfix"))
         return parsed_fixity_add(0, 0, 0, PARSED_POSTFIX, 0, ctx);
     else if (ident_is(ctx, id, "prefix"))
-        return parsed_fixity_add(0, 0, 0, PARSED_INFIX, 0, ctx);
+        return parsed_fixity_add(0, 0, 0, PARSED_PREFIX, 0, ctx);
     else if (ident_is(ctx, id, "flat"))
         assoc = parsed_assoc_add(0, 0, 0, PARSED_FLAT, ctx);
     else if (ident_is(ctx, id, "left"))
