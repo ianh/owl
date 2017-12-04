@@ -35,7 +35,14 @@ typedef uint16_t rule_id;
 
 enum fixity { PREFIX, POSTFIX, INFIX };
 enum associativity { FLAT, LEFT, RIGHT, NONASSOC };
-enum rule_type { NAMED_RULE, CHOICE_RULE, OPERATOR_RULE, BRACKETED_RULE };
+enum rule_type {
+    SIMPLE_RULE,
+    RULE_WITH_CHOICES,
+    RULE_WITH_OPERATORS,
+    CHOICE_RULE,
+    OPERATOR_RULE,
+    BRACKETED_RULE,
+};
 struct rename;
 
 // Rules are pieces of the grammar you can refer to from other rules.  We track
@@ -44,11 +51,15 @@ struct rename;
 // A single syntactic rule may produce multiple rules in this structural sense.
 // Specifically, rules are created for each of the following:
 //
-// - An entire syntactic rule (NAMED_RULE)
+// - An entire syntactic rule (SIMPLE_RULE)
 //     a = b
+// - A syntactic rule with one or many choices (RULE_WITH_CHOICES)
+//     a = choice : choice-name
+// - A syntactic rule with an `.operators` section (RULE_WITH_OPERATORS)
+//     a = choice : choice-name .operators infix left '+' : add
 // - A choice within a syntactic rule (CHOICE_RULE)
 //     choice : choice-name
-// - An operator under a syntactic rule's `.operators` keyword (OPERATOR_RULE)
+// - An operator under a syntactic rule's `.operators` section (OPERATOR_RULE)
 //     '+' : add
 // - The contents of a guard bracket (BRACKETED_RULE)
 //     [ '(' expr ')' ]
@@ -58,8 +69,8 @@ struct rule {
     // A rule's identifier is used to refer to it from other rules.
     symbol_id identifier;
 
-    // The name of this rule (for NAMED_RULES) or the rule in which this rule
-    // appears (for other types of rules).
+    // The name of this rule (for syntactic rules) or the syntactic rule in
+    // which this rule appears (for other types of rules).
     uint32_t name;
 
     // For choice rules.
@@ -92,11 +103,7 @@ struct rename {
     symbol_id name;
 };
 
-enum token_type {
-    TOKEN_NORMAL,
-    TOKEN_START,
-    TOKEN_END,
-};
+enum token_type { TOKEN_NORMAL, TOKEN_START, TOKEN_END };
 
 struct token {
     symbol_id symbol;

@@ -5,10 +5,10 @@
 
 // STEP 6B - INTERPRET
 
-// Reads from standard input.
+// `text` is a zero-terminated string.
 void interpret(struct grammar *grammar, struct combined_grammar *combined,
  struct bracket_transitions *transitions,
  struct deterministic_grammar *deterministic, struct bluebird_tree *tree,
- const unsigned char *text, size_t text_len);
+ const unsigned char *text);
 
 #endif

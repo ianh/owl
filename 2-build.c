@@ -62,7 +62,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         if (!body.ident) {
             // This is a single-choice rule, so we just add it directly.
             struct parsed_expr expr = parsed_expr_get(tree, body.expr);
-            rule_id i = add_rule(&context, NAMED_RULE, name, &expr, 0);
+            rule_id i = add_rule(&context, SIMPLE_RULE, name, &expr, 0);
             grammar->rules[i].name = name;
             rule = parsed_rule_next(rule);
             continue;
@@ -70,7 +70,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
 
         // This is a multiple-choice rule.  We make separate rules for each
         // choice, them combine them into a single named rule.
-        rule_id combined_rule = add_empty_rule(&context, NAMED_RULE, name);
+        rule_id combined_rule = add_empty_rule(&context,
+         body.operators ? RULE_WITH_OPERATORS : RULE_WITH_CHOICES, name);
         grammar->rules[combined_rule].name = name;
         struct automaton *combined_automaton;
         combined_automaton = grammar->rules[combined_rule].automaton;

@@ -17,12 +17,17 @@
 #endif
 
 #ifndef READ_KEYWORD_TOKEN
-static size_t read_keyword_token(TOKEN_T *token, bool *end_token,
- const unsigned char *text, size_t length, void *info)
-{
-    return 0;
-}
-#define READ_KEYWORD_TOKEN read_keyword_token
+#define READ_KEYWORD_TOKEN(...) (0)
+#endif
+
+#ifndef WRITE_NUMBER_TOKEN
+#define WRITE_NUMBER_TOKEN(...)
+#endif
+#ifndef WRITE_IDENTIFIER_TOKEN
+#define WRITE_IDENTIFIER_TOKEN(...)
+#endif
+#ifndef WRITE_STRING_TOKEN
+#define WRITE_STRING_TOKEN(...)
 #endif
 
 #if !defined(IDENTIFIER_TOKEN) || !defined(NUMBER_TOKEN) || \
@@ -47,7 +52,6 @@ struct bluebird_token_run {
 
 struct bluebird_default_tokenizer {
     const unsigned char *text;
-    size_t length;
     size_t offset;
 
     size_t whitespace;
@@ -97,17 +101,16 @@ static bool char_continues_identifier(char c)
 static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
  *tokenizer, struct bluebird_token_run **previous_run)
 {
-    if (tokenizer->offset >= tokenizer->length)
-        return false;
     struct bluebird_token_run *run = malloc(sizeof(struct bluebird_token_run));
     uint16_t number_of_tokens = 0;
     uint16_t number_of_lengths = 0;
     const unsigned char *text = tokenizer->text;
     size_t whitespace = tokenizer->whitespace;
     size_t offset = tokenizer->offset;
-    size_t length = tokenizer->length;
-    while (offset < length && number_of_tokens < TOKEN_RUN_LENGTH) {
+    while (number_of_tokens < TOKEN_RUN_LENGTH) {
         unsigned char c = text[offset];
+        if (c == '\0')
+            break;
         if (char_is_whitespace(c)) {
             whitespace++;
             offset++;
@@ -117,48 +120,53 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
         bool is_token = false;
         bool end_token = false;
         size_t token_length = READ_KEYWORD_TOKEN(&token, &end_token,
-         text + offset, length - offset, tokenizer->info);
+         text + offset, tokenizer->info);
         if (token_length > 0)
             is_token = true;
         if (char_is_numeric(c) || c == '.') {
             // Number.
-            // TODO: Exponents, maybe actually parse the number?
-            bool decimal = false;
-            bool is_number = false;
-            size_t number_offset = offset;
-            while (number_offset < length) {
-                unsigned char c = text[number_offset];
-                if (!decimal && c == '.') {
-                    decimal = true;
-                    offset++;
-                    continue;
-                }
-                if (!char_is_numeric(c))
-                    break;
-                number_offset++;
-                is_number = true;
-            }
-            if (is_number && number_offset - offset > token_length) {
-                token_length = number_offset - offset;
+            const char *start = (const char *)text + offset;
+            char *rest = 0;
+            double number = strtod(start, &rest);
+            if (rest > start) {
+                token_length = rest - start;
                 is_token = true;
                 end_token = false;
                 token = NUMBER_TOKEN;
+                WRITE_NUMBER_TOKEN(offset, token_length, number,
+                 tokenizer->info);
             }
         } else if (c == '\'' || c == '"') {
             // String.
-            token = STRING_TOKEN;
-            // ...
-        } else if (char_starts_identifier(c)) {
-            size_t identifier_offset = offset + 1;
-            while (identifier_offset < length &&
-             char_continues_identifier(text[identifier_offset])) {
-                identifier_offset++;
+            size_t string_offset = offset + 1;
+            while (text[string_offset] != '\0') {
+                if (text[string_offset] == c) {
+                    token_length = string_offset + 1 - offset;
+                    is_token = true;
+                    end_token = false;
+                    token = STRING_TOKEN;
+                    WRITE_STRING_TOKEN(offset, token_length, offset + 1,
+                     string_offset - offset - 1, tokenizer->info);
+                    break;
+                }
+                if (text[string_offset] == '\\') {
+                    string_offset++;
+                    if (text[string_offset] == '\0')
+                        break;
+                }
+                string_offset++;
             }
+        } else if (char_starts_identifier(c)) {
+            // Identifier.
+            size_t identifier_offset = offset + 1;
+            while (char_continues_identifier(text[identifier_offset]))
+                identifier_offset++;
             if (identifier_offset - offset > token_length) {
                 token_length = identifier_offset - offset;
                 is_token = true;
                 end_token = false;
                 token = IDENTIFIER_TOKEN;
+                WRITE_IDENTIFIER_TOKEN(offset, token_length, tokenizer->info);
             }
         }
         if (!is_token) {
