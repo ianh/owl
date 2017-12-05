@@ -71,10 +71,12 @@ struct rule {
 
     // The name of this rule (for syntactic rules) or the syntactic rule in
     // which this rule appears (for other types of rules).
-    uint32_t name;
+    const char *name;
+    size_t name_length;
 
     // For choice rules.
-    uint32_t choice_name;
+    const char *choice_name;
+    size_t choice_name_length;
 
     // For bracketed rules.
     symbol_id start_symbol;
@@ -99,8 +101,11 @@ struct rule {
     struct automaton *automaton;
 };
 struct rename {
-    symbol_id original_name;
-    symbol_id name;
+    symbol_id original_symbol;
+    symbol_id symbol;
+
+    const char *name;
+    size_t name_length;
 };
 
 enum token_type { TOKEN_NORMAL, TOKEN_START, TOKEN_END };

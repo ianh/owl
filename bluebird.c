@@ -43,11 +43,15 @@ int main(int argc, char *argv[])
     build(&grammar, tree);
 
     for (uint32_t i = 0; i < grammar.number_of_rules; ++i) {
-        printf("%x - %u / %u (%u):\n", grammar.rules[i].identifier, grammar.rules[i].name, grammar.rules[i].choice_name, grammar.rules[i].type);
+        printf("%x - %.*s / %.*s (%u):\n", grammar.rules[i].identifier,
+         grammar.rules[i].name_length, grammar.rules[i].name,
+         grammar.rules[i].choice_name_length, grammar.rules[i].choice_name,
+         grammar.rules[i].type);
         automaton_print(grammar.rules[i].automaton);
     }
     for (uint32_t i = 0; i < grammar.number_of_tokens; ++i) {
-        printf("keyword: %x - '%.*s'\n", grammar.tokens[i].symbol, grammar.tokens[i].length, grammar.tokens[i].string);
+        printf("keyword: %x - '%.*s'\n", grammar.tokens[i].symbol,
+         grammar.tokens[i].length, grammar.tokens[i].string);
     }
     printf("---\n");
 
@@ -71,7 +75,7 @@ int main(int argc, char *argv[])
     //const char *text_to_parse = "a = [ x (a@b | a1 a2 a3) y ] | (c | b)* : eee  .operators infix left  p : p  .operators prefix pre : pre";
     //const char *text_to_parse = "q + (x + y) + z + ((d + ((w))) + r) + k";
     //const char *text_to_parse = "a = (b)";
-    interpret(&grammar, &combined, &bracket_transitions, &deterministic, tree, text_to_parse);
+    interpret(&grammar, &combined, &bracket_transitions, &deterministic, text_to_parse);
 
     /*
     const char *tok;

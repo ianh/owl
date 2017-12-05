@@ -300,14 +300,7 @@ static void perform_action(struct interpret_context *ctx, uint16_t action)
         printf("  ");
     if (action & ACTION_END_RULE) {
         struct rule *r = &ctx->grammar->rules[action & ~ACTION_END_RULE];
-        size_t name_length;
-        const char *name = bluebird_tree_get_identifier(ctx->tree, r->name, &name_length);
-        size_t choice_length = 0;
-        const char *choice = "";
-        if (r->choice_name) {
-            choice = bluebird_tree_get_identifier(ctx->tree, r->choice_name, &choice_length);
-        }
-        printf("action end rule: %.*s / %.*s\n", (int)name_length, name, (int)choice_length, choice);
+        printf("action end rule: %.*s / %.*s\n", (int)r->name_length, r->name, (int)r->choice_name_length, r->choice_name);
         ctx->indent++;
     } else if (action & ACTION_RENAME) {
         printf("action rename: %u\n", action & ~ACTION_RENAME);
@@ -323,10 +316,9 @@ static void print_parse_tree(struct interpret_context *ctx,
         printf("  ");
     if (node->rename < MAX_NUMBER_OF_RENAMES) {
         struct rule *p = &ctx->grammar->rules[node->parent->rule.id];
-        size_t rename_length;
-        const char *rename = bluebird_tree_get_identifier(ctx->tree, p->renames[node->rename].name, &rename_length);
+        struct rename r = p->renames[node->rename];
         printf("(as ");
-        fwrite(rename, rename_length, 1, stdout);
+        fwrite(r.name, r.name_length, 1, stdout);
         printf(") ");
     }
     switch (node->type) {
@@ -344,14 +336,10 @@ static void print_parse_tree(struct interpret_context *ctx,
         break;
     }
     struct rule *r = &ctx->grammar->rules[node->rule.id];
-    size_t name_length;
-    const char *name = bluebird_tree_get_identifier(ctx->tree, r->name, &name_length);
-    fwrite(name, name_length, 1, stdout);
+    fwrite(r->name, r->name_length, 1, stdout);
     if (r->choice_name) {
-        size_t choice_length;
-        const char *choice = bluebird_tree_get_identifier(ctx->tree, r->choice_name, &choice_length);
         printf(" / ");
-        fwrite(choice, choice_length, 1, stdout);
+        fwrite(r->choice_name, r->choice_name_length, 1, stdout);
     }
     if (node->rule.first_child)
         printf(":\n");
@@ -510,8 +498,7 @@ static void write_number_token(size_t offset, size_t length, double number,
 
 void interpret(struct grammar *grammar, struct combined_grammar *combined,
  struct bracket_transitions *transitions,
- struct deterministic_grammar *deterministic, struct bluebird_tree *tree,
- const unsigned char *text)
+ struct deterministic_grammar *deterministic, const unsigned char *text)
 {
     if (deterministic->automaton.number_of_states > (1UL << 31) ||
      deterministic->bracket_automaton.number_of_states > (1UL << 31)) {
@@ -533,7 +520,6 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
         .combined = combined,
         .transitions = transitions,
         .deterministic = deterministic,
-        .tree = tree,
         .tokenizer = &tokenizer,
         .run = &token_run,
 

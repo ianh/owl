@@ -57,13 +57,18 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
              "currently unsupported.\n", MAX_NUMBER_OF_RULES);
             exit(-1);
         }
-        symbol_id name = parsed_ident_get(tree, rule.ident).identifier;
+        symbol_id identifier = parsed_ident_get(tree, rule.ident).identifier;
+        size_t name_length = 0;
+        const char *name = bluebird_tree_get_identifier(tree, identifier,
+         &name_length);
+
         struct parsed_body body = parsed_body_get(tree, rule.body);
         if (!body.ident) {
             // This is a single-choice rule, so we just add it directly.
             struct parsed_expr expr = parsed_expr_get(tree, body.expr);
-            rule_id i = add_rule(&context, SIMPLE_RULE, name, &expr, 0);
+            rule_id i = add_rule(&context, SIMPLE_RULE, identifier, &expr, 0);
             grammar->rules[i].name = name;
+            grammar->rules[i].name_length = name_length;
             rule = parsed_rule_next(rule);
             continue;
         }
@@ -71,8 +76,9 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         // This is a multiple-choice rule.  We make separate rules for each
         // choice, them combine them into a single named rule.
         rule_id combined_rule = add_empty_rule(&context,
-         body.operators ? RULE_WITH_OPERATORS : RULE_WITH_CHOICES, name);
+         body.operators ? RULE_WITH_OPERATORS : RULE_WITH_CHOICES, identifier);
         grammar->rules[combined_rule].name = name;
+        grammar->rules[combined_rule].name_length = name_length;
         struct automaton *combined_automaton;
         combined_automaton = grammar->rules[combined_rule].automaton;
         struct boundary_states combined_boundary = { .entry = 0, .exit = 1 };
@@ -85,7 +91,9 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             symbol_id id = context.next_symbol++;
             rule_id i = add_rule(&context, CHOICE_RULE, id, &expr, 0);
             grammar->rules[i].name = name;
-            grammar->rules[i].choice_name = choice.identifier;
+            grammar->rules[i].name_length = name_length;
+            grammar->rules[i].choice_name = bluebird_tree_get_identifier(tree,
+             choice.identifier, &grammar->rules[i].choice_name_length);
             automaton_add_transition(combined_automaton,
              combined_boundary.entry, combined_boundary.exit, id);
             expr = parsed_expr_next(expr);
@@ -137,7 +145,9 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 i = add_rule(&context, OPERATOR_RULE, op_id, &op_expr, 0);
                 struct rule *r = &grammar->rules[i];
                 r->name = name;
-                r->choice_name = op_choice.identifier;
+                r->name_length = name_length;
+                r->choice_name = bluebird_tree_get_identifier(tree,
+                 op_choice.identifier, &r->choice_name_length);
                 r->fixity = rule_fixity;
                 r->associativity = rule_associativity;
                 r->precedence = precedence;
@@ -281,8 +291,10 @@ static void build_body_expression(struct context *ctx, rule_id rule,
             uint32_t rename_index = r->number_of_renames++;
             r->renames = grow_array(r->renames, &r->renames_allocated_bytes,
              r->number_of_renames * sizeof(struct rename));
-            r->renames[rename_index].name = name.identifier;
-            r->renames[rename_index].original_name = symbol;
+            r->renames[rename_index].symbol = name.identifier;
+            r->renames[rename_index].original_symbol = symbol;
+            r->renames[rename_index].name = bluebird_tree_get_identifier(tree,
+             name.identifier, &r->renames[rename_index].name_length);
             symbol = name.identifier;
         }
         automaton_add_transition(automaton, b.entry, b.exit, symbol);

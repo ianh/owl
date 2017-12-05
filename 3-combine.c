@@ -85,12 +85,12 @@ static void apply_renames(struct automaton *a, struct rename *renames,
     for (uint32_t i = 0; i < a->number_of_states; ++i) {
         for (state_id j = 0; j < a->states[i].number_of_transitions; ++j) {
             for (uint32_t k = 0; k < number_of_renames; ++k) {
-                if (renames[k].name != a->states[i].transitions[j].symbol)
+                if (renames[k].symbol != a->states[i].transitions[j].symbol)
                     continue;
                 automaton_add_transition_with_action(a, next_state,
                  a->states[i].transitions[j].target, SYMBOL_EPSILON,
                  ACTION_RENAME | k);
-                a->states[i].transitions[j].symbol = renames[k].original_name;
+                a->states[i].transitions[j].symbol = renames[k].original_symbol;
                 a->states[i].transitions[j].target = next_state;
                 next_state++;
                 break;
