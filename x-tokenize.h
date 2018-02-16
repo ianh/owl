@@ -1,9 +1,9 @@
-// This file is written in a somewhat unusual way.  When interpreting a grammar,
-// we use this tokenizer code directly.  When compiling a grammar, we generate a
-// tokenizer based on this code.  To avoid involving any external build tools,
-// we enclose the entire file in a macro invocation -- the interpreter includes
-// the source directly, while the compiler defines TOKENIZE_BODY(...) to return
-// the source as a string.
+// These "x-files" are written in a somewhat unusual way.  When interpreting a
+// grammar, we use the code in this file directly.  When compiling a grammar, we
+// turn this code into a string to include in the generated file.  To avoid
+// involving any external build tools, we enclose the entire file in a macro
+// invocation.  The interpreter includes the source directly, while the compiler
+// redefines the macro to return the source code as a string.
 
 #ifndef TOKEN_T
 #define TOKEN_T uint32_t
@@ -150,6 +150,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
                     break;
                 }
                 if (text[string_offset] == '\\') {
+                    // TODO: Escapes.
                     string_offset++;
                     if (text[string_offset] == '\0')
                         break;

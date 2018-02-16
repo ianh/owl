@@ -37,9 +37,10 @@ static bool grow_tree(struct bluebird_tree *tree, size_t size)
     // FIXME: overflow is possible in this loop
     while (size > n)
         n = (n + 1) * 3 / 2;
-    void *r = realloc(tree->region, n);
+    uint8_t *r = realloc(tree->region, n);
     if (!r)
         return false;
+    memset(r + tree->region_size, 0, n - tree->region_size);
     tree->region_size = n;
     tree->region = r;
     return true;

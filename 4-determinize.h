@@ -11,7 +11,7 @@ struct bracket_transition {
     symbol_id deterministic_transition_symbol;
 };
 struct bracket_transitions {
-    // Sorted by transition_symbols (lexicographically by array order).
+    // Sorted by transition_symbols.
     struct bracket_transition *transitions;
     uint32_t transitions_allocated_bytes;
     uint32_t number_of_transitions;

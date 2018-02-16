@@ -8,7 +8,7 @@ void bitset_clear(struct bitset *set)
 
 void bitset_union(struct bitset *set, struct bitset *other)
 {
-    if (set->number_of_bit_groups != other->number_of_bit_groups)
+    if (set->number_of_elements != other->number_of_elements)
         abort();
     for (uint32_t i = 0; i < set->number_of_bit_groups; ++i)
         set->bit_groups[i] |= other->bit_groups[i];
@@ -16,7 +16,7 @@ void bitset_union(struct bitset *set, struct bitset *other)
 
 int bitset_compare(struct bitset *a, struct bitset *b)
 {
-    if (a->number_of_bit_groups != b->number_of_bit_groups)
+    if (a->number_of_elements != b->number_of_elements)
         abort();
     uint32_t n = a->number_of_bit_groups;
     for (uint32_t i = 0; i < n; ++i) {

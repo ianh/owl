@@ -8,6 +8,9 @@
 struct bitset {
     uint64_t *bit_groups;
     uint32_t number_of_bit_groups;
+
+    // We track of the number of elements in order to detect mismatches.
+    uint32_t number_of_elements;
 };
 
 static inline struct bitset bitset_create_empty(uint32_t number_of_elements)
@@ -16,6 +19,7 @@ static inline struct bitset bitset_create_empty(uint32_t number_of_elements)
     return (struct bitset){
         .bit_groups = calloc(number_of_groups, sizeof(uint64_t)),
         .number_of_bit_groups = number_of_groups,
+        .number_of_elements = number_of_elements,
     };
 }
 

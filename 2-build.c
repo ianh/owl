@@ -3,6 +3,7 @@
 #include "4-determinize.h"
 #include "grow-array.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -16,7 +17,8 @@ struct context {
 };
 
 static rule_id add_rule(struct context *ctx, enum rule_type type,
- symbol_id identifier, struct parsed_expr *expr, rule_id original_rule);
+ symbol_id identifier, struct parsed_expr *expr,
+ uint32_t syntactic_rule_or_0xffff);
 static rule_id add_empty_rule(struct context *ctx, enum rule_type type,
  symbol_id identifier);
 static void determinize_minimize_rule(struct rule *rule);
@@ -24,9 +26,8 @@ static void determinize_minimize_rule(struct rule *rule);
 static void build_body_expression(struct context *ctx, rule_id rule,
  struct parsed_expr *expr, struct boundary_states boundary,
  state_id *next_state_id);
-static symbol_id add_token(struct context *ctx, const char *str, size_t length);
-static void find_token(struct context *ctx, const char *str, size_t length,
- symbol_id *symbol);
+static symbol_id add_binding(struct context *ctx, const char *str, size_t len);
+static symbol_id find_binding(struct context *ctx, const char *str, size_t len);
 static symbol_id add_keyword_token(struct context *ctx, uint32_t identifier,
  enum token_type type);
 static struct boundary_states connect_expression(struct context *ctx,
@@ -43,44 +44,64 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
     struct context context = {
         .grammar = grammar,
         .tree = tree,
-        .next_symbol = bluebird_tree_next_identifier(tree),
+        // TODO: choose this symbol in a more reasonable way (counting down
+        // doesn't work because bitsets)
+        .next_symbol = bluebird_tree_next_identifier(tree) + 100,
     };
-    add_token(&context, "identifier", strlen("identifier"));
-    add_token(&context, "number", strlen("number"));
-    add_token(&context, "string", strlen("string"));
     parsed_id root = bluebird_tree_root(tree);
     struct parsed_grammar g = parsed_grammar_get(tree, root);
+
+    // First, we set up bindings for every syntactic rule.
     struct parsed_rule rule = parsed_rule_get(tree, g.rule);
     while (!rule.empty) {
-        if (grammar->number_of_rules >= MAX_NUMBER_OF_RULES) {
-            fprintf(stderr, "error: grammars with more than %u rules are "
-             "currently unsupported.\n", MAX_NUMBER_OF_RULES);
-            exit(-1);
-        }
-        symbol_id identifier = parsed_ident_get(tree, rule.ident).identifier;
+        uint32_t identifier = parsed_ident_get(tree, rule.ident).identifier;
         size_t name_length = 0;
         const char *name = bluebird_tree_get_identifier(tree, identifier,
          &name_length);
+        add_binding(&context, name, name_length);
+        rule = parsed_rule_next(rule);
+    }
+    // ...and every named token type.
+    grammar->first_token_binding = grammar->number_of_bindings;
+    add_binding(&context, "identifier", strlen("identifier"));
+    add_binding(&context, "number", strlen("number"));
+    add_binding(&context, "string", strlen("string"));
+    // Any further bindings will be keyword tokens.
+    grammar->first_keyword_token_binding = grammar->number_of_bindings;
+
+    // Now we do another pass to create each rule.
+    rule = parsed_rule_get(tree, g.rule);
+    while (!rule.empty) {
+        symbol_id ident = parsed_ident_get(tree, rule.ident).identifier;
+        size_t name_length = 0;
+        const char *name = bluebird_tree_get_identifier(tree, ident,
+         &name_length);
+
+        symbol_id identifier = find_binding(&context, name, name_length);
 
         struct parsed_body body = parsed_body_get(tree, rule.body);
         if (!body.ident) {
             // This is a single-choice rule, so we just add it directly.
             struct parsed_expr expr = parsed_expr_get(tree, body.expr);
-            rule_id i = add_rule(&context, SIMPLE_RULE, identifier, &expr, 0);
-            grammar->rules[i].name = name;
-            grammar->rules[i].name_length = name_length;
+            rule_id id;
+            id = add_rule(&context, SIMPLE_RULE, identifier, &expr, 0xffff);
+            grammar->bindings[identifier].rule = id;
+            grammar->rules[id].name = name;
+            grammar->rules[id].name_length = name_length;
             rule = parsed_rule_next(rule);
             continue;
         }
 
         // This is a multiple-choice rule.  We make separate rules for each
         // choice, them combine them into a single named rule.
-        rule_id combined_rule = add_empty_rule(&context,
+        rule_id syntactic_rule = add_empty_rule(&context,
          body.operators ? RULE_WITH_OPERATORS : RULE_WITH_CHOICES, identifier);
-        grammar->rules[combined_rule].name = name;
-        grammar->rules[combined_rule].name_length = name_length;
+        grammar->bindings[identifier].rule = syntactic_rule;
+        grammar->rules[syntactic_rule].name = name;
+        grammar->rules[syntactic_rule].name_length = name_length;
+        uint32_t number_of_choices = 0;
         struct automaton *combined_automaton;
-        combined_automaton = grammar->rules[combined_rule].automaton;
+        combined_automaton = grammar->rules[syntactic_rule].automaton;
         struct boundary_states combined_boundary = { .entry = 0, .exit = 1 };
         automaton_set_start_state(combined_automaton, combined_boundary.entry);
 
@@ -88,14 +109,23 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         struct parsed_expr expr = parsed_expr_get(tree, body.expr);
         struct parsed_ident choice = parsed_ident_get(tree, body.ident);
         while (!expr.empty) {
-            symbol_id id = context.next_symbol++;
-            rule_id i = add_rule(&context, CHOICE_RULE, id, &expr, 0);
-            grammar->rules[i].name = name;
-            grammar->rules[i].name_length = name_length;
-            grammar->rules[i].choice_name = bluebird_tree_get_identifier(tree,
-             choice.identifier, &grammar->rules[i].choice_name_length);
+            symbol_id sym = context.next_symbol++;
+            rule_id id;
+            id = add_rule(&context, CHOICE_RULE, sym, &expr, syntactic_rule);
+            grammar->rules[id].name = name;
+            grammar->rules[id].name_length = name_length;
+            grammar->rules[id].choice_name = bluebird_tree_get_identifier(tree,
+             choice.identifier, &grammar->rules[id].choice_name_length);
+            if (number_of_choices >= MAX_NUMBER_OF_CHOICES) {
+                fprintf(stderr, "error: rules with more than %u choices and "
+                 "operators are currently unsupported.\n",
+                 MAX_NUMBER_OF_CHOICES);
+                exit(-1);
+            }
+            grammar->rules[id].choice_index = number_of_choices++;
+            grammar->rules[id].syntactic_rule = syntactic_rule;
             automaton_add_transition(combined_automaton,
-             combined_boundary.entry, combined_boundary.exit, id);
+             combined_boundary.entry, combined_boundary.exit, sym);
             expr = parsed_expr_next(expr);
             choice = parsed_ident_next(choice);
         }
@@ -141,16 +171,24 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             struct parsed_ident op_choice = parsed_ident_get(tree, ops.ident);
             while (!op_expr.empty) {
                 symbol_id op_id = context.next_symbol++;
-                rule_id i;
-                i = add_rule(&context, OPERATOR_RULE, op_id, &op_expr, 0);
+                rule_id i = add_rule(&context, OPERATOR_RULE, op_id, &op_expr,
+                 syntactic_rule);
                 struct rule *r = &grammar->rules[i];
                 r->name = name;
                 r->name_length = name_length;
                 r->choice_name = bluebird_tree_get_identifier(tree,
                  op_choice.identifier, &r->choice_name_length);
+                if (number_of_choices >= MAX_NUMBER_OF_CHOICES) {
+                    fprintf(stderr, "error: rules with more than %u choices "
+                     "and operators are currently unsupported.\n",
+                     MAX_NUMBER_OF_CHOICES);
+                    exit(-1);
+                }
+                r->choice_index = number_of_choices++;
                 r->fixity = rule_fixity;
                 r->associativity = rule_associativity;
                 r->precedence = precedence;
+                r->syntactic_rule = syntactic_rule;
                 if (rule_fixity == PREFIX) {
                     // Prefix operators are a transition from the start state
                     // to itself.
@@ -195,20 +233,25 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             ops = parsed_operators_next(ops);
         }
 
+        grammar->rules[syntactic_rule].number_of_choices = number_of_choices;
         automaton_mark_accepting_state(combined_automaton,
          combined_boundary.exit);
-        determinize_minimize_rule(&grammar->rules[combined_rule]);
+        determinize_minimize_rule(&grammar->rules[syntactic_rule]);
 
         rule = parsed_rule_next(rule);
     }
 }
 
 static rule_id add_rule(struct context *ctx, enum rule_type type,
- symbol_id identifier, struct parsed_expr *expr, rule_id original_rule)
+ symbol_id identifier, struct parsed_expr *expr,
+ uint32_t syntactic_rule_or_0xffff)
 {
     struct grammar *grammar = ctx->grammar;
     rule_id i = add_empty_rule(ctx, type, identifier);
-    grammar->rules[i].original_rule = original_rule;
+    if (syntactic_rule_or_0xffff == 0xffff)
+        grammar->rules[i].syntactic_rule = i;
+    else
+        grammar->rules[i].syntactic_rule = syntactic_rule_or_0xffff;
 
     struct boundary_states boundary = { .entry = 0, .exit = 1 };
     automaton_set_start_state(grammar->rules[i].automaton, boundary.entry);
@@ -231,6 +274,7 @@ static rule_id add_empty_rule(struct context *ctx, enum rule_type type,
      grammar->number_of_rules * sizeof(struct rule));
     grammar->rules[i].type = type;
     grammar->rules[i].identifier = identifier;
+    grammar->rules[i].choice_index = 0xffff;
     grammar->rules[i].automaton = calloc(1, sizeof(struct automaton));
     return i;
 }
@@ -274,28 +318,30 @@ static void build_body_expression(struct context *ctx, rule_id rule,
     case PARSED_IDENT: {
         struct parsed_ident ident = parsed_ident_get(tree, expr->ident);
         struct parsed_ident name = parsed_ident_get(tree, expr->name);
-        symbol_id symbol = ident.identifier;
+        symbol_id symbol = ctx->next_symbol++;
+        struct rule *r = &ctx->grammar->rules[rule];
+        r = &ctx->grammar->rules[r->syntactic_rule];
+        if (r->number_of_slots >= MAX_NUMBER_OF_SLOTS) {
+            fprintf(stderr, "error: rules with more than %u references to "
+             "other rules or tokens are currently unsupported.\n",
+             MAX_NUMBER_OF_SLOTS);
+            exit(-1);
+        }
+        uint32_t slot = r->number_of_slots++;
+        r->slots = grow_array(r->slots, &r->slots_allocated_bytes,
+         r->number_of_slots * sizeof(struct slot));
+        r->slots[slot].identifier = symbol;
+
         size_t n;
-        const char *id = bluebird_tree_get_identifier(tree, symbol, &n);
-        find_token(ctx, id, n, &symbol);
+        const char *id = bluebird_tree_get_identifier(tree,
+         ident.identifier, &n);
+        r->slots[slot].binding = find_binding(ctx, id, n);
         if (!name.empty) {
-            struct rule *r = &ctx->grammar->rules[rule];
-            if (r->type == BRACKETED_RULE)
-                r = &ctx->grammar->rules[r->original_rule];
-            if (r->number_of_renames >= MAX_NUMBER_OF_RENAMES) {
-                fprintf(stderr, "error: rules with more than %u references of "
-                 "the form 'rule@name' are currently unsupported.\n",
-                 MAX_NUMBER_OF_RENAMES);
-                exit(-1);
-            }
-            uint32_t rename_index = r->number_of_renames++;
-            r->renames = grow_array(r->renames, &r->renames_allocated_bytes,
-             r->number_of_renames * sizeof(struct rename));
-            r->renames[rename_index].symbol = name.identifier;
-            r->renames[rename_index].original_symbol = symbol;
-            r->renames[rename_index].name = bluebird_tree_get_identifier(tree,
-             name.identifier, &r->renames[rename_index].name_length);
-            symbol = name.identifier;
+            r->slots[slot].name = bluebird_tree_get_identifier(tree,
+             name.identifier, &r->slots[slot].name_length);
+        } else {
+            r->slots[slot].name = id;
+            r->slots[slot].name_length = n;
         }
         automaton_add_transition(automaton, b.entry, b.exit, symbol);
         break;
@@ -319,10 +365,8 @@ static void build_body_expression(struct context *ctx, rule_id rule,
     case PARSED_BRACKETED: {
         struct parsed_expr bracket = parsed_expr_get(tree, expr->expr);
         symbol_id id = ctx->next_symbol++;
-        rule_id orig = rule;
-        if (ctx->grammar->rules[rule].type == BRACKETED_RULE)
-            orig = ctx->grammar->rules[rule].original_rule;
-        rule_id bracketed = add_rule(ctx, BRACKETED_RULE, id, &bracket, orig);
+        rule_id bracketed = add_rule(ctx, BRACKETED_RULE, id, &bracket,
+         ctx->grammar->rules[rule].syntactic_rule);
         struct rule *r = &ctx->grammar->rules[bracketed];
         r->name = ctx->grammar->rules[rule].name;
         // TODO: This should also be reworked to use an explicit token rule.
@@ -360,32 +404,29 @@ static void build_body_expression(struct context *ctx, rule_id rule,
     }
 }
 
-static symbol_id add_token(struct context *ctx, const char *str, size_t length)
+static symbol_id add_binding(struct context *ctx, const char *str, size_t len)
 {
-    uint32_t id = ctx->grammar->number_of_tokens++;
-    ctx->grammar->tokens = grow_array(ctx->grammar->tokens,
-     &ctx->grammar->tokens_allocated_bytes,
-     ctx->grammar->number_of_tokens * sizeof(struct token));
-    ctx->grammar->tokens[id].symbol = ctx->next_symbol++;
-    ctx->grammar->tokens[id].string = str;
-    ctx->grammar->tokens[id].length = length;
-    ctx->grammar->tokens[id].type = TOKEN_NORMAL;
-    return ctx->grammar->tokens[id].symbol;
+    symbol_id id = ctx->grammar->number_of_bindings++;
+    ctx->grammar->bindings = grow_array(ctx->grammar->bindings,
+     &ctx->grammar->bindings_allocated_bytes,
+     ctx->grammar->number_of_bindings * sizeof(struct binding));
+    ctx->grammar->bindings[id].name = str;
+    ctx->grammar->bindings[id].length = len;
+    return id;
 }
 
-static void find_token(struct context *ctx, const char *str, size_t length,
- symbol_id *symbol)
+static symbol_id find_binding(struct context *ctx, const char *str, size_t len)
 {
-    for (uint32_t i = 0; i < ctx->grammar->number_of_tokens; ++i) {
-        struct token other = ctx->grammar->tokens[i];
-        if (other.keyword)
+    // Don't return keyword tokens.  We have another function to find those.
+    for (uint32_t i = 0; i < ctx->grammar->first_keyword_token_binding; ++i) {
+        struct binding *binding = &ctx->grammar->bindings[i];
+        if (binding->length != len)
             continue;
-        if (other.length != length)
+        if (memcmp(binding->name, str, len))
             continue;
-        if (memcmp(other.string, str, length))
-            continue;
-        *symbol = other.symbol;
+        return i;
     }
+    return SYMBOL_EPSILON;
 }
 
 static const char *token_type_string(enum token_type type)
@@ -407,33 +448,26 @@ static symbol_id add_keyword_token(struct context *ctx, uint32_t identifier,
     const char *keyword = bluebird_tree_get_identifier(ctx->tree, identifier,
      &keyword_length);
     // Check whether we already added this token -- if so, return its symbol.
-    for (uint32_t i = 0; i < ctx->grammar->number_of_tokens; ++i) {
-        struct token other = ctx->grammar->tokens[i];
-        if (!other.keyword)
+    for (uint32_t i = ctx->grammar->first_keyword_token_binding;
+     i < ctx->grammar->number_of_bindings; ++i) {
+        struct binding *binding = &ctx->grammar->bindings[i];
+        if (binding->length != keyword_length)
             continue;
-        if (other.length != keyword_length)
+        if (memcmp(binding->name, keyword, keyword_length))
             continue;
-        if (memcmp(other.string, keyword, keyword_length))
-            continue;
-        if (other.type != type) {
+        if (binding->type != type) {
             // TODO: Show location in original grammar text.
             fprintf(stderr, "error: token '%.*s' can't be used both as %s and "
              "%s keyword\n", (int)keyword_length, keyword,
-             token_type_string(other.type), token_type_string(type));
+             token_type_string(binding->type), token_type_string(type));
             exit(-1);
         }
-        return other.symbol;
+        return i;
     }
-    uint32_t id = ctx->grammar->number_of_tokens++;
-    ctx->grammar->tokens = grow_array(ctx->grammar->tokens,
-     &ctx->grammar->tokens_allocated_bytes,
-     ctx->grammar->number_of_tokens * sizeof(struct token));
-    ctx->grammar->tokens[id].symbol = ctx->next_symbol++;
-    ctx->grammar->tokens[id].string = keyword;
-    ctx->grammar->tokens[id].length = keyword_length;
-    ctx->grammar->tokens[id].type = type;
-    ctx->grammar->tokens[id].keyword = true;
-    return ctx->grammar->tokens[id].symbol;
+    symbol_id id = add_binding(ctx, keyword, keyword_length);
+    assert(id >= ctx->grammar->first_keyword_token_binding);
+    ctx->grammar->bindings[id].type = type;
+    return id;
 }
 
 static struct boundary_states connect_expression(struct context *ctx,

@@ -1,5 +1,6 @@
 #include "6b-interpret.h"
 
+#include <assert.h>
 #include <stdio.h>
 
 // TODO: Review style for this file.
@@ -32,7 +33,18 @@ struct tokenizer_info {
     symbol_id string_symbol;
 };
 
-#include "tokenize.h"
+static void *finish_node()
+{
+    static char *ptr = 1000;
+    printf("finished!\n");
+    return ptr++;
+}
+
+#define FINISH_NODE(binding, choice, next_sibling, slots, operand, left, \
+right, info) finish_node()
+
+#include "x-construct-parse-tree.h"
+#include "x-tokenize.h"
 
 static bool follow_transition(struct automaton *a, state_id *state,
  symbol_id symbol)
@@ -57,14 +69,18 @@ enum parse_tree_node_type {
 struct parse_tree_node {
     struct parse_tree_node *parent;
     struct parse_tree_node *next_sibling;
+
     size_t start;
     size_t length;
-    uint16_t rename;
+
+    const char *name;
+    size_t name_length;
 
     enum parse_tree_node_type type;
     union {
         struct {
             rule_id id;
+            uint32_t choice_index;
             struct parse_tree_node *first_child;
         } rule;
         struct {
@@ -84,6 +100,8 @@ struct operator_precedence_stack {
 
     struct parse_tree_node *first_operator;
     struct parse_tree_node *first_value;
+
+    struct parse_tree_node *parent_under_construction;
 };
 
 struct interpret_context {
@@ -102,7 +120,9 @@ struct interpret_context {
     struct parse_tree_node *under_construction;
     struct parse_tree_node *token_nodes;
     struct operator_precedence_stack *op_stack;
-    uint16_t next_rename;
+    bool empty_rule_with_operators;
+
+    struct construct_state construct_state;
 
     int indent;
 };
@@ -221,25 +241,85 @@ static void reduce(struct interpret_context *ctx)
 
 static void perform_action(struct interpret_context *ctx, uint16_t action)
 {
-    if (action & ACTION_END_RULE) {
-        rule_id id = action & ~ACTION_END_RULE;
+    /*
+    if (action & ACTION_END_SLOT) {
+        assert(ctx->under_construction);
+        uint16_t slot_id = action & ~ACTION_END_SLOT;
+        rule_id parent_id = ctx->under_construction->rule.id;
+        struct rule *parent = &ctx->grammar->rules[parent_id];
+        if (parent->slots[slot_id].binding >= ctx->grammar->first_token_binding) {
+            struct parse_tree_node *n = ctx->token_nodes;
+            ctx->token_nodes = n->next_sibling;
+            n->next_sibling = 0;
+            if (ctx->under_construction) {
+                n->parent = ctx->under_construction;
+                n->next_sibling = ctx->under_construction->rule.first_child;
+                ctx->under_construction->rule.first_child = n;
+            } else
+                ctx->root = n;
+            for (int i = 0; i < ctx->indent; ++i)
+                printf("  ");
+            printf("token %.*s\n",
+             ctx->grammar->bindings[parent->slots[slot_id].binding].length,
+             ctx->grammar->bindings[parent->slots[slot_id].binding].name);
+            return;
+        }
+//        printf("current rule is %u, slot is %u, binding is %u, rule is %u\n", parent_id, slot_id, parent->slots[slot_id].binding, ctx->grammar->bindings[parent->slots[slot_id].binding].rule);
+        if (slot_id >= parent->number_of_slots)
+            abort();
+        if (parent->slots[slot_id].binding >= ctx->grammar->number_of_bindings)
+            abort();
+        if (ctx->grammar->bindings[parent->slots[slot_id].binding].rule >= ctx->grammar->number_of_rules)
+            abort();
+        rule_id id = ctx->grammar->bindings[parent->slots[slot_id].binding].rule;
         struct rule *rule = &ctx->grammar->rules[id];
         if (rule->type == RULE_WITH_OPERATORS) {
             struct operator_precedence_stack *stack;
             stack = calloc(1, sizeof(struct operator_precedence_stack));
             stack->parent = ctx->op_stack;
             ctx->op_stack = stack;
+            ctx->empty_rule_with_operators = true;
         }
         struct parse_tree_node *n = calloc(1, sizeof(struct parse_tree_node));
         n->type = NODE_RULE;
-        n->rename = ctx->next_rename;
         n->rule.id = id;
-        struct rule *parent = 0;
-        if (ctx->under_construction) {
-            rule_id parent_id = ctx->under_construction->rule.id;
-            parent = &ctx->grammar->rules[parent_id];
+        n->next_sibling = ctx->under_construction->rule.first_child;
+        ctx->under_construction->rule.first_child = n;
+        n->parent = ctx->under_construction;
+        ctx->under_construction = n;
+    } else if (action == ACTION_BEGIN) {
+        rule_id id = ctx->under_construction->rule.id;
+        if (ctx->grammar->rules[id].type == RULE_WITH_OPERATORS) {
+            if (!ctx->empty_rule_with_operators)
+                ctx->under_construction = ctx->under_construction->parent;
+            while (ctx->op_stack->first_operator)
+                reduce(ctx);
+            ctx->under_construction->rule.first_child = ctx->op_stack->first_value;
+            struct operator_precedence_stack *stack = ctx->op_stack;
+            ctx->op_stack = ctx->op_stack->parent;
+            free(stack);
+            ctx->empty_rule_with_operators = false;
         }
-        if (parent && parent->type == RULE_WITH_OPERATORS) {
+        ctx->under_construction = ctx->under_construction->parent;
+    } else if ((action & 0xc000) == ACTION_MARK_CHOICE_INDEX) {
+        if (ctx->grammar->rules[ctx->under_construction->rule.id].type == RULE_WITH_CHOICES)
+            ctx->under_construction->rule.choice_index = (action & ~0xc000);
+        else if (ctx->grammar->rules[ctx->under_construction->rule.id].type == RULE_WITH_OPERATORS) {
+            if (!ctx->empty_rule_with_operators)
+                ctx->under_construction = ctx->under_construction->parent;
+            rule_id i;
+            for (i = 0; i < ctx->grammar->number_of_rules; ++i) {
+                if (ctx->grammar->rules[i].syntactic_rule != ctx->under_construction->rule.id)
+                    continue;
+                if (ctx->grammar->rules[i].choice_index != (action & ~0xc000))
+                    continue;
+                break;
+            }
+            struct parse_tree_node *n = calloc(1, sizeof(struct parse_tree_node));
+            n->type = NODE_RULE;
+            n->rule.id = ctx->under_construction->rule.id;
+            struct rule *rule = &ctx->grammar->rules[i];
+            n->rule.choice_index = rule->choice_index;
             if (rule->type == CHOICE_RULE) {
                 n->next_sibling = ctx->op_stack->first_value;
                 ctx->op_stack->first_value = n;
@@ -252,61 +332,39 @@ static void perform_action(struct interpret_context *ctx, uint16_t action)
                     reduce(ctx);
             } else
                 abort();
-        } else {
-            if (ctx->under_construction) {
-                n->next_sibling = ctx->under_construction->rule.first_child;
-                ctx->under_construction->rule.first_child = n;
-            } else
-                ctx->root = n;
-        }
-        n->parent = ctx->under_construction;
-        ctx->under_construction = n;
-    } else if (action == ACTION_BEGIN) {
-        rule_id id = ctx->under_construction->rule.id;
-        if (ctx->grammar->rules[id].type == RULE_WITH_OPERATORS) {
-            while (ctx->op_stack->first_operator)
-                reduce(ctx);
-            ctx->under_construction->rule.first_child = ctx->op_stack->first_value;
-            struct operator_precedence_stack *stack = ctx->op_stack;
-            ctx->op_stack = ctx->op_stack->parent;
-            free(stack);
-        }
-        ctx->under_construction = ctx->under_construction->parent;
-    } else if (action & ACTION_RENAME) {
-        ctx->next_rename = action & ~ACTION_RENAME;
-        rule_id id = ctx->under_construction->rule.id;
-        if (ctx->grammar->rules[id].number_of_renames <= ctx->next_rename)
-            abort();
-    } else if (action == ACTION_WRITE_TOKEN) {
-        struct parse_tree_node *n = ctx->token_nodes;
-        ctx->token_nodes = n->next_sibling;
-        n->next_sibling = 0;
-        n->rename = ctx->next_rename;
-        if (ctx->under_construction) {
             n->parent = ctx->under_construction;
-            n->next_sibling = ctx->under_construction->rule.first_child;
-            ctx->under_construction->rule.first_child = n;
+            ctx->under_construction = n;
+            ctx->empty_rule_with_operators = false;
         } else
-            ctx->root = n;
+            abort();
+        // TODO
     } else
         abort();
-
-    if (!(action & ACTION_RENAME))
-        ctx->next_rename = 0xffff;
-
+end:
     if (action == ACTION_BEGIN)
         ctx->indent--;
     for (int i = 0; i < ctx->indent; ++i)
         printf("  ");
-    if (action & ACTION_END_RULE) {
-        struct rule *r = &ctx->grammar->rules[action & ~ACTION_END_RULE];
-        printf("action end rule: %.*s / %.*s\n", (int)r->name_length, r->name, (int)r->choice_name_length, r->choice_name);
+    if (action & ACTION_END_SLOT) {
+        struct rule *rule = &ctx->grammar->rules[ctx->under_construction->rule.id];
+        printf("action end slot (%.*s)\n", (int)rule->name_length, rule->name);
         ctx->indent++;
-    } else if (action & ACTION_RENAME) {
-        printf("action rename: %u\n", action & ~ACTION_RENAME);
+    } else if ((action & 0xc000) == ACTION_MARK_CHOICE_INDEX) {
+        printf("marked choice %u", action & ~0xc000);
+        for (rule_id i = 0; i < ctx->grammar->number_of_rules; ++i) {
+            if (ctx->grammar->rules[i].syntactic_rule != ctx->under_construction->rule.id)
+                continue;
+            if (ctx->grammar->rules[i].choice_index != (action & ~0xc000))
+                continue;
+            printf(" (%u): ", i);
+            fwrite(ctx->grammar->rules[i].choice_name, 1, ctx->grammar->rules[i].choice_name_length, stdout);
+            break;
+        }
+        printf("\n");
     } else {
         printf("action: %u\n", action);
     }
+     */
 }
 
 static void print_parse_tree(struct interpret_context *ctx,
@@ -314,13 +372,13 @@ static void print_parse_tree(struct interpret_context *ctx,
 {
     for (int i = 0; i < indent; ++i)
         printf("  ");
-    if (node->rename < MAX_NUMBER_OF_RENAMES) {
-        struct rule *p = &ctx->grammar->rules[node->parent->rule.id];
-        struct rename r = p->renames[node->rename];
-        printf("(as ");
-        fwrite(r.name, r.name_length, 1, stdout);
-        printf(") ");
-    }
+//    if (node->rename < MAX_NUMBER_OF_RENAMES) {
+//        struct rule *p = &ctx->grammar->rules[node->parent->rule.id];
+//        struct rename r = p->renames[node->rename];
+//        printf("(as ");
+//        fwrite(r.name, r.name_length, 1, stdout);
+//        printf(") ");
+//    }
     switch (node->type) {
     case NODE_IDENTIFIER:
         fwrite(node->identifier.name, node->identifier.length, 1, stdout);
@@ -337,9 +395,16 @@ static void print_parse_tree(struct interpret_context *ctx,
     }
     struct rule *r = &ctx->grammar->rules[node->rule.id];
     fwrite(r->name, r->name_length, 1, stdout);
-    if (r->choice_name) {
+    if (r->type == RULE_WITH_CHOICES || r->type == RULE_WITH_OPERATORS) {
         printf(" / ");
-        fwrite(r->choice_name, r->choice_name_length, 1, stdout);
+        for (rule_id i = 0; i < ctx->grammar->number_of_rules; ++i) {
+            if (ctx->grammar->rules[i].syntactic_rule != node->rule.id)
+                continue;
+            if (ctx->grammar->rules[i].choice_index != node->rule.choice_index)
+                continue;
+            fwrite(ctx->grammar->rules[i].choice_name, 1, ctx->grammar->rules[i].choice_name_length, stdout);
+            break;
+        }
     }
     if (node->rule.first_child)
         printf(":\n");
@@ -394,7 +459,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         for (uint32_t k = entry.action_index; k < map->number_of_actions; k++) {
             if (map->actions[k] == 0)
                 break;
-            perform_action(ctx, map->actions[k]);
+            construct_action_apply(&ctx->construct_state, map->actions[k]);
         }
         found = true;
         break;
@@ -412,6 +477,18 @@ static void follow_transition_reversed(struct interpret_context *ctx,
 
 static void build_parse_tree(struct interpret_context *ctx)
 {
+    ctx->root = calloc(1, sizeof(struct parse_tree_node));
+    ctx->root->type = NODE_RULE;
+    ctx->root->rule.id = 0;
+    ctx->under_construction = ctx->root;
+    if (ctx->grammar->rules[0].type == RULE_WITH_OPERATORS) {
+        // TODO: Unify this code with the code that runs as an action.
+        struct operator_precedence_stack *stack;
+        stack = calloc(1, sizeof(struct operator_precedence_stack));
+        stack->parent = ctx->op_stack;
+        ctx->op_stack = stack;
+        ctx->empty_rule_with_operators = true;
+    }
     state_id nfa_state = ctx->combined->final_nfa_state;
     while (*ctx->run) {
         struct bluebird_token_run *run = *ctx->run;
@@ -423,20 +500,30 @@ static void build_parse_tree(struct interpret_context *ctx)
         *ctx->run = run->prev;
     }
     follow_transition_reversed(ctx, &nfa_state, UINT32_MAX, UINT32_MAX);
+    if (ctx->grammar->rules[0].type == RULE_WITH_OPERATORS) {
+        if (!ctx->empty_rule_with_operators)
+            ctx->under_construction = ctx->under_construction->parent;
+        while (ctx->op_stack->first_operator)
+            reduce(ctx);
+        ctx->under_construction->rule.first_child = ctx->op_stack->first_value;
+        struct operator_precedence_stack *stack = ctx->op_stack;
+        ctx->op_stack = ctx->op_stack->parent;
+        ctx->empty_rule_with_operators = false;
+        assert(!ctx->op_stack);
+        free(stack);
+    }
 }
 
 static symbol_id find_token(struct grammar *grammar, const char *str)
 {
     size_t length = strlen(str);
-    for (uint32_t i = 0; i < grammar->number_of_tokens; ++i) {
-        struct token other = grammar->tokens[i];
-        if (other.keyword)
+    for (uint32_t i = grammar->first_token_binding; i < grammar->first_keyword_token_binding; ++i) {
+        struct binding *binding = &grammar->bindings[i];
+        if (binding->length != length)
             continue;
-        if (other.length != length)
+        if (memcmp(binding->name, str, length))
             continue;
-        if (memcmp(other.string, str, length))
-            continue;
-        return other.symbol;
+        return i;
     }
     return 0xffffffff;
 }
@@ -448,13 +535,13 @@ static size_t read_keyword_token_bootstrap(uint32_t *token, bool *end_token,
     symbol_id symbol = SYMBOL_EPSILON;
     size_t max_len = 0;
     bool end = false;
-    for (uint32_t i = 0; i < grammar->number_of_tokens; ++i) {
-        struct token k = grammar->tokens[i];
-        if (k.keyword && k.length > max_len &&
-         !strncmp((const char *)text, k.string, k.length)) {
-            max_len = k.length;
-            symbol = k.symbol;
-            end = k.type == TOKEN_END;
+    for (uint32_t i = grammar->first_keyword_token_binding; i < grammar->number_of_bindings; ++i) {
+        struct binding *binding = &grammar->bindings[i];
+        if (binding->length > max_len &&
+         !strncmp((const char *)text, binding->name, binding->length)) {
+            max_len = binding->length;
+            symbol = i;
+            end = binding->type == TOKEN_END;
         }
     }
     *end_token = end;
@@ -524,8 +611,6 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
         .run = &token_run,
 
         .state = deterministic->automaton.start_state,
-
-        .next_rename = 0xffff,
     };
     info.context = &context;
     while (bluebird_default_tokenizer_advance(&tokenizer, &token_run))
@@ -540,7 +625,7 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
     }
     print_token_runs(&context, token_run);
     build_parse_tree(&context);
-    if (context.token_nodes)
-        abort();
     print_parse_tree(&context, context.root, 0);
+//    if (context.token_nodes)
+//        abort();
 }
