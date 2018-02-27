@@ -24,6 +24,8 @@ void automaton_compute_epsilon_closure(struct automaton *a)
 {
     if (a->epsilon_closure_for_state != 0)
         return;
+    // Ensure we've actually created a start state.
+    automaton_set_start_state(a, a->start_state);
     uint32_t n = a->number_of_states;
     a->epsilon_closure_for_state = calloc(n, sizeof(struct epsilon_closure));
     struct state_array worklist = {0};
