@@ -67,6 +67,7 @@ void automaton_compute_epsilon_closure(struct automaton *a);
 void automaton_reverse(struct automaton *a, struct automaton *reversed);
 void automaton_print(struct automaton *a);
 
+void automaton_move(struct automaton *from, struct automaton *to);
 void automaton_clear(struct automaton *a);
 void automaton_destroy(struct automaton *a);
 

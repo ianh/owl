@@ -117,6 +117,12 @@ void automaton_print(struct automaton *a)
     }
 }
 
+void automaton_move(struct automaton *from, struct automaton *to)
+{
+    *to = *from;
+    memset(from, 0, sizeof(struct automaton));
+}
+
 void automaton_clear(struct automaton *a)
 {
     invalidate_epsilon_closure(a);
