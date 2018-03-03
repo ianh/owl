@@ -39,7 +39,7 @@
 #endif
 
 #include "x-construct-actions.h"
-#define CONSTRUCT_ACTION(action) CONSTRUCT_ACTION_##action,
+#define CONSTRUCT_ACTION_NAME(action) CONSTRUCT_ACTION_##action,
 
 CONSTRUCT_BODY
 (
@@ -224,7 +224,6 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
         struct construct_node *node = construct_node_alloc(s);
         node->next = s->under_construction;
         node->slot_index = CONSTRUCT_ACTION_GET_SLOT(action);
-        node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
         node->binding = BINDING_LOOKUP(s->under_construction->binding,
          CONSTRUCT_ACTION_GET_SLOT(action), s->info);
         s->under_construction = node;
@@ -264,6 +263,10 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
         construct_expression_free(s, expr);
         break;
     }
+    case CONSTRUCT_ACTION_SET_SLOT_CHOICE:
+        s->under_construction->choice_index =
+         CONSTRUCT_ACTION_GET_CHOICE(action);
+        break;
     case CONSTRUCT_ACTION_TOKEN_SLOT: {
         uint16_t slot = CONSTRUCT_ACTION_GET_SLOT(action);
         FINISHED_NODE_T *finished = &s->under_construction->slots[slot];
@@ -313,4 +316,4 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
 
 )
 
-#undef CONSTRUCT_ACTION
+#undef CONSTRUCT_ACTION_NAME

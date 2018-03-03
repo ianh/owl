@@ -10,6 +10,13 @@ struct combined_grammar {
     struct automaton bracket_automaton;
 
     state_id final_nfa_state;
+
+    struct token *tokens;
+    // The number of tokens, including both keyword tokens and "token class"
+    // tokens (like identifier or number).
+    uint32_t number_of_tokens;
+    // The first `number_of_keyword_tokens` are keyword tokens.
+    uint32_t number_of_keyword_tokens;
 };
 
 void combine(struct combined_grammar *result, struct grammar *grammar);

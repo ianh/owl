@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#if 0
+
 enum substitution_transform {
     NO_TRANSFORM,
     LOWERCASE_WITH_UNDERSCORES,
@@ -128,7 +130,7 @@ static bool rule_has_choices(struct rule rule)
 
 void generate(struct generator *gen)
 {
-    struct generator_internal internal = { 0 };
+    struct generator_internal internal = {0};
     gen->internal = &internal;
 
     if (gen->grammar->number_of_rules == 0) {
@@ -223,3 +225,5 @@ void generate(struct generator *gen)
     free(internal.substitutions);
     gen->internal = 0;
 }
+
+#endif

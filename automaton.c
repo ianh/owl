@@ -64,6 +64,13 @@ void automaton_add_transition_with_action(struct automaton *a, state_id source,
     state_add_transition(&a->states[source], target, symbol, action);
 }
 
+state_id automaton_create_state(struct automaton *a)
+{
+    state_id state = a->number_of_states;
+    grow_states(a, state);
+    return state;
+}
+
 void automaton_set_start_state(struct automaton *a, state_id state)
 {
     grow_states(a, state);
@@ -117,8 +124,28 @@ void automaton_print(struct automaton *a)
     }
 }
 
+void automaton_copy(struct automaton *from, struct automaton *to)
+{
+    automaton_clear(to);
+    automaton_set_start_state(to, from->start_state);
+    for (uint32_t i = 0; i < from->number_of_states; ++i) {
+        struct state *s = &from->states[i];
+        grow_states(to, i);
+        if (s->accepting)
+            automaton_mark_accepting_state(to, i);
+        to->states[i].transition_symbol = s->transition_symbol;
+        for (uint32_t j = 0; j < s->number_of_transitions; ++j) {
+            automaton_add_transition_with_action(to, i,
+             s->transitions[j].target, s->transitions[j].symbol,
+             s->transitions[j].action);
+        }
+    }
+
+}
+
 void automaton_move(struct automaton *from, struct automaton *to)
 {
+    automaton_destroy(to);
     *to = *from;
     memset(from, 0, sizeof(struct automaton));
 }
@@ -138,4 +165,6 @@ void automaton_destroy(struct automaton *a)
 {
     automaton_clear(a);
     free(a->states);
+    a->states = 0;
+    a->states_allocated_bytes = 0;
 }

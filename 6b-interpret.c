@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <stdio.h>
 
+#if 0
+
 // TODO: Review style for this file.
 
 #define READ_KEYWORD_TOKEN read_keyword_token_bootstrap
@@ -583,8 +585,7 @@ static void write_number_token(size_t offset, size_t length, double number,
     ctx->token_nodes = n;
 }
 
-void interpret(struct grammar *grammar, struct combined_grammar *combined,
- struct bracket_transitions *transitions,
+void interpret(struct grammar *grammar, struct bracket_transitions *transitions,
  struct deterministic_grammar *deterministic, const unsigned char *text)
 {
     if (deterministic->automaton.number_of_states > (1UL << 31) ||
@@ -629,3 +630,5 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
 //    if (context.token_nodes)
 //        abort();
 }
+
+#endif

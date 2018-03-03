@@ -63,10 +63,16 @@ void automaton_add_transition_with_action(struct automaton *a, state_id source,
 void automaton_set_start_state(struct automaton *a, state_id state);
 void automaton_mark_accepting_state(struct automaton *a, state_id state);
 
+// Create a new empty state in the automaton.  You don't have to call this, but
+// it can be useful for creating new states without having to add a transition,
+// mark the state as accepting or set it as a start state.
+state_id automaton_create_state(struct automaton *a);
+
 void automaton_compute_epsilon_closure(struct automaton *a);
 void automaton_reverse(struct automaton *a, struct automaton *reversed);
 void automaton_print(struct automaton *a);
 
+void automaton_copy(struct automaton *from, struct automaton *to);
 void automaton_move(struct automaton *from, struct automaton *to);
 void automaton_clear(struct automaton *a);
 void automaton_destroy(struct automaton *a);

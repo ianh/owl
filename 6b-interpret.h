@@ -3,11 +3,14 @@
 
 #include "4-determinize.h"
 
+#if 0
+
 // STEP 6B - INTERPRET
 
 // `text` is a zero-terminated string.
-void interpret(struct grammar *grammar, struct combined_grammar *combined,
- struct bracket_transitions *transitions,
+void interpret(struct grammar *grammar, struct bracket_transitions *transitions,
  struct deterministic_grammar *deterministic, const unsigned char *text);
+
+#endif
 
 #endif
