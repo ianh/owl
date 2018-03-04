@@ -170,7 +170,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
                 WRITE_IDENTIFIER_TOKEN(offset, token_length, tokenizer->info);
             }
         }
-        if (!is_token) {
+        if (!is_token || token == SYMBOL_EPSILON) {
             // Error.
             free(run);
             return false;

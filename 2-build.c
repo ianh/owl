@@ -50,11 +50,21 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         size_t name_length = 0;
         const char *name = bluebird_tree_get_identifier(tree,
          parsed_ident_get(tree, parsed_rule.ident).identifier, &name_length);
-        add_rule(&context, name, name_length);
+        uint32_t index = add_rule(&context, name, name_length);
+        if (index == UINT32_MAX) {
+            fprintf(stderr, "error: there are multiple rules named '%.*s'\n",
+             (int)name_length, name);
+            exit(-1);
+        }
         parsed_rule = parsed_rule_next(parsed_rule);
     }
+    if (grammar->number_of_rules == 0) {
+        fprintf(stderr, "error: a bluebird grammar needs at least one rule of "
+         "the form 'rule_name = ...'.\n");
+        exit(-1);
+    }
 
-    // Then add rules for all the kinds of tokens we support.
+    // Add rules for all the kinds of tokens we support.
     add_token_rule(&context, "identifier", strlen("identifier"));
     add_token_rule(&context, "number", strlen("number"));
     add_token_rule(&context, "string", strlen("string"));
@@ -420,19 +430,10 @@ static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
 
 static uint32_t add_rule(struct context *ctx, const char *name, size_t len)
 {
-    uint32_t index = find_rule(ctx, name, len);
-    if (index < ctx->grammar->number_of_rules) {
-        // Detect duplicates, but allow implicitly-defined token rules to be
-        // overwritten (if we ever support explicit custom tokens, we need to
-        // handle that case here separately).
-        if (!ctx->grammar->rules[index].is_token) {
-            fprintf(stderr, "error: there are multiple rules named '%.*s'\n",
-             (int)len, name);
-            exit(-1);
-        }
-        ctx->grammar->rules[index].is_token = false;
-    } else
-        index = ctx->grammar->number_of_rules++;
+    // Disallow duplicate rules.
+    if (find_rule(ctx, name, len) < ctx->grammar->number_of_rules)
+        return UINT32_MAX;
+    uint32_t index = ctx->grammar->number_of_rules++;
     ctx->grammar->rules = grow_array(ctx->grammar->rules,
      &ctx->grammar->rules_allocated_bytes,
      sizeof(struct rule) * ctx->grammar->number_of_rules);
@@ -443,8 +444,14 @@ static uint32_t add_rule(struct context *ctx, const char *name, size_t len)
 
 static void add_token_rule(struct context *ctx, const char *name, size_t len)
 {
-    uint32_t rule_index = add_rule(ctx, name, len);
-    ctx->grammar->rules[rule_index].is_token = true;
+    uint32_t index = add_rule(ctx, name, len);
+    if (index == UINT32_MAX) {
+        // Just skip this token rule if there's already an explicit rule with
+        // that name.  If the user wants to name a rule 'identifier', there's no
+        // reason to stop them from doing it.
+        return;
+    }
+    ctx->grammar->rules[index].is_token = true;
 }
 
 static uint32_t find_rule(struct context *ctx, const char *name, size_t len)

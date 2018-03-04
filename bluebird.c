@@ -26,21 +26,23 @@ static void output_stdout(struct generator *g, const char *string, size_t len);
 int main(int argc, char *argv[])
 {
     const char *string =
+    //"a = b*  b = 'x'";
     //"a = 'a' 'b' 'c'";
     //"a = b  b = 'x'";
     //"a = b@x [ '(' [ a@x ] ')' ]  b = a";
     //"a = identifier ('+' identifier)*";
-    "a = identifier `ident`  infix flat $ '+' `plus`";
+    //"a = identifier `ident`  infix flat $ '+' `plus`";
     //"a = b*  b = identifier";
     //"a = b@x b = 'foo'";
     //"a = [ '(' [ a ] ')' ] | 'x'";
-    /*
+    ///*
     "expr = [ '(' [ expr ] ')' ] `parens`"
      "identifier `ident`"
+     "number `literal`"
      "infix flat $ '*' `times` '/' `divided-by`"
      "infix flat $ '+' `plus` '-' `minus`";
-     */
-    //"grammar = rule*   rule = identifier '=' body   body = expr | (expr ':' identifier)+ operators*   operators = '.operators' fixity operator+   operator = expr ':' identifier   fixity =    'postfix' `postfix`    'prefix' `prefix`    'infix' assoc `infix`   assoc =    'flat' `flat`    'left' `left`    'right' `right`    'nonassoc' `nonassoc`    expr =     identifier ('@' identifier@rename)? `identifier`     single-quoted-string `literal`     [ '(' [ expr ] ')' ] `parens`     [ '[' [ identifier@left expr? identifier@right ] ']' ] `guarded`    postfix $     '*' `zero-or-more`     '+' `one-or-more`     '?' `optional`    infix flat $     '' `concatenation`    infix flat $     '|' `choice`";
+    // */
+    //"grammar = rule*   rule = identifier '=' body   body = expr | (expr ':' identifier)+ operators*   operators = '.operators' fixity operator+   operator = expr ':' identifier   fixity =    'postfix' `postfix`    'prefix' `prefix`    'infix' assoc `infix`   assoc =    'flat' `flat`    'left' `left`    'right' `right`    'nonassoc' `nonassoc`    expr =     identifier ('@' identifier@rename)? `identifier`     string `literal`     [ '(' [ expr ] ')' ] `parens`     [ '[' [ identifier@left expr? identifier@right ] ']' ] `guarded`    postfix $     '*' `zero-or-more`     '+' `one-or-more`     '?' `optional`    infix flat $     '' `concatenation`    infix flat $     '|' `choice`";
     //"a = [s[a]e] | [s[b]e] b = [s[a]e] | [s[b]e]";
     //"a = b b b = c c c = d d d = e e e = f f f = g g g = h h h = i i i = j j j = k k k = l l l = m m m = n n n = o o o = p p p = q q q = r r r = s s s = t t t = u u u = v";// v v = w w w = x x x = y y y = z";
     struct bluebird_tree *tree = bluebird_tree_create_from_string(string,
@@ -124,14 +126,14 @@ int main(int argc, char *argv[])
     automaton_print(&deterministic.automaton);
     automaton_print(&deterministic.bracket_automaton);
 
-    //const char *text_to_parse = "a b c d";
-    const char *text_to_parse = "a + b + c * (e + f + g) + h * i + a0 + a1 + a2";
+    //const char *text_to_parse = "x x x x x x";
+    const char *text_to_parse = "a + b + c * (e + f + g) + h * 7 + a0 + a1 + a2";
     //const char *text_to_parse = "a + (b - c) * d / e + f + g * h";
     //const char *text_to_parse = "(((x)))";
     //const char *text_to_parse = "a = [ x (a@b | a1 a2 a3) y ] | (c | b)* : eee  .operators infix left  p : p  .operators prefix pre : pre";
     //const char *text_to_parse = "q + (x + y) + z + ((d + ((w))) + r) + k";
     //const char *text_to_parse = "a = (b)";
-    // interpret(&grammar, &bracket_transitions, &deterministic, text_to_parse);
+    interpret(&grammar, &combined, &bracket_transitions, &deterministic, text_to_parse);
 
     struct generator generator = {
         .output = output_stdout,

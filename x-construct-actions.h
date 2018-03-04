@@ -1,3 +1,5 @@
+#ifndef _CONSTRUCT_ACTIONS_H_
+#define _CONSTRUCT_ACTIONS_H_
 
 // These are the parse tree construction actions in order.  See 3-combine.c and
 // x-construct-parse-tree.h for how these are used.
@@ -22,3 +24,5 @@
 #define CONSTRUCT_ACTION_GET_TYPE(action) (((action) >> 12) & 0xf)
 #define CONSTRUCT_ACTION_GET_SLOT(action) ((action) & 0xfff)
 #define CONSTRUCT_ACTION_GET_CHOICE(action) ((action) & 0xfff)
+
+#endif
