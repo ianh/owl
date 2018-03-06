@@ -38,6 +38,9 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     if (!automaton_for_rule)
         abort();
 
+    result->root_rule_is_expression =
+     grammar->rules[grammar->root_rule].number_of_operators > 0;
+
     // First pass: collect all the keyword tokens into the `tokens` result
     // array, making sure to combine duplicates using `find_token`.
     for (uint32_t i = 0; i < n; ++i) {

@@ -185,6 +185,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             precedence--;
             ops = parsed_operators_next(ops);
         }
+        // TODO: add explicit left/right/operand slots?
     }
 }
 

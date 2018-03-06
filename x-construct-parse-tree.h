@@ -9,20 +9,16 @@
 #define CONSTRUCT_BODY(...) __VA_ARGS__
 #endif
 
-#ifndef BINDING_T
-#define BINDING_T uint32_t
-#endif
-
 #ifndef FINISHED_NODE_T
 #define FINISHED_NODE_T void *
 #endif
 
 #ifndef FINISH_NODE
-#define FINISH_NODE(binding, choice, next_sibling, slots, operand, left, \
+#define FINISH_NODE(rule, choice, next_sibling, slots, operand, left, \
  right, info) 0
 #endif
 
-#define FINISH_NODE_STRUCT(n, next_sibling, info) (FINISH_NODE((n)->binding, \
+#define FINISH_NODE_STRUCT(n, next_sibling, info) (FINISH_NODE((n)->rule, \
  (n)->choice_index, next_sibling, (n)->slots, (n)->operand, (n)->left, \
  (n)->right, info))
 
@@ -30,19 +26,31 @@
 #define FINISH_TOKEN(next_sibling, info) 0
 #endif
 
-#ifndef BINDING_LOOKUP
-#define BINDING_LOOKUP(parent, slot, info) 0
+#ifndef RULE_T
+#error Please define the RULE_T type.
+#endif
+
+#ifndef RULE_LOOKUP
+#error Please define a RULE_LOOKUP(parent, slot, info) macro.
+#endif
+
+#ifndef ROOT_RULE
+#error Please define a ROOT_RULE(info) macro.
 #endif
 
 #ifndef FIXITY_ASSOCIATIVITY_LOOKUP
-#define FIXITY_ASSOCIATIVITY_LOOKUP(binding, choice_index, info) 0
+#error Please define a FIXITY_ASSOCIATIVITY_LOOKUP(rule, choice, info) macro.
+#endif
+
+#ifndef PRECEDENCE_LOOKUP
+#error Please define a PRECEDENCE_LOOKUP(rule, choice, info) macro.
 #endif
 
 #include "x-construct-actions.h"
 #define CONSTRUCT_ACTION_NAME(action) CONSTRUCT_ACTION_##action,
 
-CONSTRUCT_BODY
-(
+//CONSTRUCT_BODY
+//(
 
 enum construct_fixity_associativity {
     CONSTRUCT_PREFIX,
@@ -55,12 +63,14 @@ enum construct_fixity_associativity {
 struct construct_node {
     struct construct_node *next;
 
+    // TODO: This should be sized based on the number of slots in the rule, not
+    // the maximum possible number of slots.
     FINISHED_NODE_T slots[MAX_NUMBER_OF_SLOTS];
     FINISHED_NODE_T operand;
     FINISHED_NODE_T left;
     FINISHED_NODE_T right;
 
-    BINDING_T binding;
+    RULE_T rule;
 
     // In parent rule.
     uint16_t slot_index;
@@ -80,15 +90,21 @@ struct construct_expression {
     struct construct_node *first_operator;
     struct construct_node *first_value;
 
-    BINDING_T binding;
+    RULE_T rule;
 
     // In parent rule.
     uint16_t slot_index;
 };
 
-struct construct_state {
-    struct construct_node *under_construction;
+enum construct_root_type {
+    CONSTRUCT_NORMAL_ROOT,
+    CONSTRUCT_EXPRESSION_ROOT,
+};
 
+struct construct_state {
+    enum construct_root_type root_type;
+
+    struct construct_node *under_construction;
     struct construct_expression *current_expression;
 
     struct construct_node *node_freelist;
@@ -174,26 +190,49 @@ static void construct_expression_reduce(struct construct_state *s,
         struct construct_node *last_value = first_value;
         struct construct_node *last_operator = op;
         FINISHED_NODE_T operand = op->operand;
+        struct construct_node *combined_op = construct_node_alloc(s);
+        combined_op->rule = op->rule;
+        combined_op->choice_index = op->choice_index;
+        combined_op->slot_index = op->slot_index;
+        combined_op->fixity_associativity = op->fixity_associativity;
+        combined_op->precedence = op->precedence;
+
+        // Because we're building a singly-linked list with immutable nodes,
+        // each pass through the list reverses its order.  In order to build the
+        // list of operands in a particular order, we need to visit each value
+        // in the reverse of that order.  That means we have to reverse the
+        // list here.
+        struct construct_node *reversed_values = 0;
         while (last_operator &&
          last_operator->choice_index == op->choice_index) {
             struct construct_node *next_op = last_operator->next;
             // TODO: Combine last_operator slots together instead of just
-            // throwing the old ones away.
+            // throwing them away.  To do this, we either need a way to link
+            // finished nodes together or a way of storing unfinished nodes in
+            // slots.
             construct_node_free(s, last_operator);
             last_operator = next_op;
-            // TODO: I think this makes the list backwards...
-            operand = FINISH_NODE_STRUCT(last_value, operand, s->info);
+
+            assert(last_value);
             struct construct_node *next_value = last_value->next;
-            construct_node_free(s, last_value);
+            last_value->next = reversed_values;
+            reversed_values = last_value;
             last_value = next_value;
         }
+        // Now we can build the operand list in the proper order.
+        assert(last_value);
         operand = FINISH_NODE_STRUCT(last_value, operand, s->info);
-        last_operator->next = last_value->next;
+        combined_op->next = last_value->next;
         construct_node_free(s, last_value);
+        while (reversed_values) {
+            operand = FINISH_NODE_STRUCT(reversed_values, operand, s->info);
+            struct construct_node *next_value = reversed_values->next;
+            construct_node_free(s, reversed_values);
+            reversed_values = next_value;
+        }
         expr->first_operator = last_operator;
-        expr->first_value = last_operator;
-        last_value->next = 0;
-        last_operator->operand = operand;
+        expr->first_value = combined_op;
+        combined_op->operand = operand;
     } else if (op->fixity_associativity == CONSTRUCT_INFIX_LEFT ||
      op->fixity_associativity == CONSTRUCT_INFIX_RIGHT) {
         expr->first_operator = op->next;
@@ -217,6 +256,46 @@ static void construct_expression_reduce(struct construct_state *s,
     }
 }
 
+static void construct_begin(struct construct_state *s,
+ enum construct_root_type type)
+{
+    s->root_type = type;
+    if (type == CONSTRUCT_EXPRESSION_ROOT) {
+        struct construct_expression *expr = construct_expression_alloc(s);
+        expr->parent = s->current_expression;
+        expr->rule = ROOT_RULE(s->info);
+        s->current_expression = expr;
+    } else {
+        struct construct_node *node = construct_node_alloc(s);
+        node->next = s->under_construction;
+        node->rule = ROOT_RULE(s->info);
+        s->under_construction = node;
+    }
+}
+static FINISHED_NODE_T construct_finish(struct construct_state *s)
+{
+    FINISHED_NODE_T finished = 0;
+    if (s->root_type == CONSTRUCT_EXPRESSION_ROOT) {
+        struct construct_expression *expr = s->current_expression;
+        s->current_expression = expr->parent;
+        while (expr->first_operator)
+            construct_expression_reduce(s, expr);
+        struct construct_node *node = expr->first_value;
+        if (node) {
+            finished = FINISH_NODE_STRUCT(node, 0, s->info);
+            assert(node->next == 0);
+            construct_node_free(s, node);
+        }
+        construct_expression_free(s, expr);
+    } else {
+        struct construct_node *node = s->under_construction;
+        s->under_construction = node->next;
+        finished = FINISH_NODE_STRUCT(node, 0, s->info);
+        construct_node_free(s, node);
+    }
+    return finished;
+}
+
 static void construct_action_apply(struct construct_state *s, uint16_t action)
 {
     switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
@@ -224,7 +303,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
         struct construct_node *node = construct_node_alloc(s);
         node->next = s->under_construction;
         node->slot_index = CONSTRUCT_ACTION_GET_SLOT(action);
-        node->binding = BINDING_LOOKUP(s->under_construction->binding,
+        node->rule = RULE_LOOKUP(s->under_construction->rule,
          CONSTRUCT_ACTION_GET_SLOT(action), s->info);
         s->under_construction = node;
         break;
@@ -233,7 +312,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
         struct construct_expression *expr = construct_expression_alloc(s);
         expr->parent = s->current_expression;
         s->current_expression = expr;
-        expr->binding = BINDING_LOOKUP(s->under_construction->binding,
+        expr->rule = RULE_LOOKUP(s->under_construction->rule,
          CONSTRUCT_ACTION_GET_SLOT(action), s->info);
         expr->slot_index = CONSTRUCT_ACTION_GET_SLOT(action);
         break;
@@ -277,7 +356,8 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = construct_node_alloc(s);
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
-        node->binding = expr->binding;
+        node->rule = expr->rule;
+        node->next = s->under_construction;
         s->under_construction = node;
         break;
     }
@@ -285,9 +365,12 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = construct_node_alloc(s);
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
-        node->binding = expr->binding;
-        node->fixity_associativity = FIXITY_ASSOCIATIVITY_LOOKUP(expr->binding,
+        node->rule = expr->rule;
+        node->fixity_associativity = FIXITY_ASSOCIATIVITY_LOOKUP(expr->rule,
          CONSTRUCT_ACTION_GET_CHOICE(action), s->info);
+        node->precedence = PRECEDENCE_LOOKUP(expr->rule,
+         CONSTRUCT_ACTION_GET_CHOICE(action), s->info);
+        node->next = s->under_construction;
         s->under_construction = node;
         break;
     }
@@ -314,6 +397,6 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
     }
 }
 
-)
+//)
 
 #undef CONSTRUCT_ACTION_NAME

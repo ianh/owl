@@ -32,20 +32,58 @@ struct tokenizer_info {
     symbol_id string_symbol;
 };
 
+struct interpret_node;
+#define FINISHED_NODE_T struct interpret_node *
+#define FINISH_NODE finish_node
+
+static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
+ struct interpret_node *next_sibling, struct interpret_node **slots,
+ struct interpret_node *operand, struct interpret_node *left,
+ struct interpret_node *right, struct interpret_context *context);
+
+#define RULE_T uint32_t
+#define RULE_LOOKUP rule_lookup
+#define ROOT_RULE root_rule
+#define FIXITY_ASSOCIATIVITY_LOOKUP fixity_associativity_lookup
+#define PRECEDENCE_LOOKUP precedence_lookup
+
+static uint32_t rule_lookup(uint32_t parent, uint32_t slot,
+ struct interpret_context *context);
+static uint32_t root_rule(struct interpret_context *context);
+static int fixity_associativity_lookup(uint32_t rule, uint32_t choice,
+ struct interpret_context *context);
+static int precedence_lookup(uint32_t rule, uint32_t choice,
+ struct interpret_context *context);
+
 #include "x-tokenize.h"
+#include "x-construct-parse-tree.h"
 
 struct interpret_context {
+    struct grammar *grammar;
     struct combined_grammar *combined;
     struct deterministic_grammar *deterministic;
     struct bracket_transitions *transitions;
 
     struct state_array stack;
     state_id state;
+
+    struct construct_state construct_state;
+};
+
+struct interpret_node {
+    uint32_t rule_index;
+    uint32_t choice_index;
+
+    struct interpret_node *next_sibling;
+    struct interpret_node *slots[MAX_NUMBER_OF_SLOTS];
+    struct interpret_node *operand;
+    struct interpret_node *left;
+    struct interpret_node *right;
 };
 
 static void fill_run_states(struct interpret_context *ctx,
  struct bluebird_token_run *run);
-static void build_parse_tree(struct interpret_context *ctx,
+static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
  struct bluebird_token_run *run);
 
 static symbol_id token_symbol(struct combined_grammar *grammar, const char *s);
@@ -72,6 +110,42 @@ static void print_token_runs(struct interpret_context *ctx,
             printf("%02x -> %u\n", token_run->tokens[i], token_run->states[i]);
     }
 }
+
+static void print_parse_tree(struct interpret_context *ctx,
+ struct interpret_node *node, struct slot *slot, int indent)
+{
+    if (!node)
+        return;
+    for (int i = 0; i < indent; ++i)
+        printf(" ");
+    struct rule *rule = &ctx->grammar->rules[node->rule_index];
+    printf("%.*s", (int)rule->name_length, rule->name);
+    if (slot && (slot->name_length != rule->name_length ||
+     memcmp(slot->name, rule->name, rule->name_length)))
+        printf("@%.*s", (int)slot->name_length, slot->name);
+    if (rule->number_of_choices) {
+        // TODO: Indicate more explicitly that this is an operator?
+        if (node->operand || node->left || node->right) {
+            struct operator *op = &rule->operators[node->choice_index];
+            printf(" : %.*s", (int)op->name_length, op->name);
+        } else {
+            struct choice *choice = &rule->choices[node->choice_index];
+            printf(" : %.*s", (int)choice->name_length, choice->name);
+        }
+    }
+    printf("\n");
+    print_parse_tree(ctx, node->operand, 0, indent + 1);
+    print_parse_tree(ctx, node->left, 0, indent + 1);
+    print_parse_tree(ctx, node->right, 0, indent + 1);
+    for (uint32_t i = 0; i < rule->number_of_slots; ++i) {
+        struct slot *slot = &rule->slots[i];
+        if (!node->slots[i])
+            continue;
+        print_parse_tree(ctx, node->slots[i], slot, indent + 1);
+    }
+    print_parse_tree(ctx, node->next_sibling, slot, indent);
+
+}
 #endif
 
 void interpret(struct grammar *grammar, struct combined_grammar *combined,
@@ -94,6 +168,7 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
         .info = &info,
     };
     struct interpret_context context = {
+        .grammar = grammar,
         .combined = combined,
         .deterministic = deterministic,
         .transitions = transitions,
@@ -107,7 +182,8 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
         exit(-1);
     }
     print_token_runs(&context, token_run);
-    build_parse_tree(&context, token_run);
+    struct interpret_node *root = build_parse_tree(&context, token_run);
+    print_parse_tree(&context, root, 0, 0);
 }
 
 static void fill_run_states(struct interpret_context *ctx,
@@ -149,10 +225,15 @@ static void fill_run_states(struct interpret_context *ctx,
     ctx->state = state;
 }
 
-static void build_parse_tree(struct interpret_context *ctx,
+static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
  struct bluebird_token_run *run)
 {
+    ctx->construct_state.info = ctx;
     state_id nfa_state = ctx->combined->final_nfa_state;
+    if (ctx->combined->root_rule_is_expression)
+        construct_begin(&ctx->construct_state, CONSTRUCT_EXPRESSION_ROOT);
+    else
+        construct_begin(&ctx->construct_state, CONSTRUCT_NORMAL_ROOT);
     while (run) {
         uint16_t n = run->number_of_tokens;
         for (uint16_t i = n - 1; i < n; i--) {
@@ -162,6 +243,7 @@ static void build_parse_tree(struct interpret_context *ctx,
         run = run->prev;
     }
     follow_transition_reversed(ctx, &nfa_state, UINT32_MAX, UINT32_MAX);
+    return construct_finish(&ctx->construct_state);
 }
 
 static symbol_id token_symbol(struct combined_grammar *grammar, const char *s)
@@ -192,14 +274,14 @@ static bool follow_transition(struct automaton *a, state_id *state,
     return false;
 }
 
-#define CONSTRUCT_ACTION_NAME(name) CONSTRUCT_ACTION_ ## name,
-enum construct_action_type { CONSTRUCT_ACTIONS };
+#define CONSTRUCT_ACTION_NAME(name) PRINT_CONSTRUCT_ACTION_ ## name,
+enum { CONSTRUCT_ACTIONS };
 #undef CONSTRUCT_ACTION_NAME
 static void print_action(uint16_t action)
 {
     uint16_t slot = CONSTRUCT_ACTION_GET_SLOT(action);
     switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
-#define CONSTRUCT_ACTION_NAME(name) case CONSTRUCT_ACTION_ ## name : printf(#name " %u\n", slot); break;
+#define CONSTRUCT_ACTION_NAME(name) case PRINT_CONSTRUCT_ACTION_ ## name : printf(#name " %u\n", slot); break;
 CONSTRUCT_ACTIONS
 #undef CONSTRUCT_ACTION_NAME
     }
@@ -252,6 +334,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
             if (map->actions[k] == 0)
                 break;
             print_action(map->actions[k]);
+            construct_action_apply(&ctx->construct_state, map->actions[k]);
         }
         found = true;
         break;
@@ -301,6 +384,62 @@ static void write_string_token(size_t offset, size_t length,
 static void write_number_token(size_t offset, size_t length, double number,
  void *info)
 {
+}
+
+static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
+ struct interpret_node *next_sibling, struct interpret_node **slots,
+ struct interpret_node *operand, struct interpret_node *left,
+ struct interpret_node *right, struct interpret_context *context)
+{
+    struct interpret_node *node = calloc(1, sizeof(struct interpret_node));
+    node->rule_index = rule;
+    node->choice_index = choice;
+    node->next_sibling = next_sibling;
+    memcpy(node->slots, slots,
+     sizeof(struct interpret_node *) * MAX_NUMBER_OF_SLOTS);
+    node->operand = operand;
+    node->left = left;
+    node->right = right;
+    return node;
+}
+
+static uint32_t rule_lookup(uint32_t parent, uint32_t slot,
+ struct interpret_context *context)
+{
+    return context->grammar->rules[parent].slots[slot].rule_index;
+}
+
+static uint32_t root_rule(struct interpret_context *context)
+{
+    return context->grammar->root_rule;
+}
+
+static int fixity_associativity_lookup(uint32_t rule, uint32_t choice,
+ struct interpret_context *context)
+{
+    struct operator op = context->grammar->rules[rule].operators[choice];
+    switch (op.fixity) {
+    case PREFIX:
+        return CONSTRUCT_PREFIX;
+    case POSTFIX:
+        return CONSTRUCT_POSTFIX;
+    case INFIX:
+        switch (op.associativity) {
+        case FLAT:
+            return CONSTRUCT_INFIX_FLAT;
+        case NONASSOC:
+        case LEFT:
+            return CONSTRUCT_INFIX_LEFT;
+        case RIGHT:
+            return CONSTRUCT_INFIX_RIGHT;
+        }
+    }
+}
+
+static int precedence_lookup(uint32_t rule, uint32_t choice,
+ struct interpret_context *context)
+{
+    return context->grammar->rules[rule].operators[choice].precedence;
 }
 
 #if 0

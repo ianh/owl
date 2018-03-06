@@ -17,6 +17,8 @@ struct combined_grammar {
     uint32_t number_of_tokens;
     // The first `number_of_keyword_tokens` are keyword tokens.
     uint32_t number_of_keyword_tokens;
+
+    bool root_rule_is_expression;
 };
 
 void combine(struct combined_grammar *result, struct grammar *grammar);
