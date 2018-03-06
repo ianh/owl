@@ -35,11 +35,14 @@ struct tokenizer_info {
 struct interpret_node;
 #define FINISHED_NODE_T struct interpret_node *
 #define FINISH_NODE finish_node
+#define FINISH_TOKEN finish_token
 
 static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
  struct interpret_node *next_sibling, struct interpret_node **slots,
  struct interpret_node *operand, struct interpret_node *left,
  struct interpret_node *right, struct interpret_context *context);
+static struct interpret_node *finish_token(struct interpret_node *next_sibling,
+ struct interpret_context *context);
 
 #define RULE_T uint32_t
 #define RULE_LOOKUP rule_lookup
@@ -70,19 +73,44 @@ struct interpret_context {
     struct state_array stack;
     state_id state;
 
+    struct bluebird_default_tokenizer *tokenizer;
     struct construct_state construct_state;
+    struct interpret_node *tokens;
+};
+
+enum interpret_node_type {
+    NODE_RULE,
+    NODE_IDENTIFIER_TOKEN,
+    NODE_NUMBER_TOKEN,
+    NODE_STRING_TOKEN,
 };
 
 struct interpret_node {
+    enum interpret_node_type type;
+    struct interpret_node *next_sibling;
+
+    // For rules.
     uint32_t rule_index;
     uint32_t choice_index;
 
     size_t number_of_slots;
-    struct interpret_node *next_sibling;
     struct interpret_node **slots;
     struct interpret_node *operand;
     struct interpret_node *left;
     struct interpret_node *right;
+
+    // For tokens.
+    union {
+        struct {
+            const unsigned char *name;
+            size_t length;
+        } identifier;
+        double number;
+        struct {
+            const unsigned char *string;
+            size_t length;
+        } string;
+    };
 };
 
 static void fill_run_states(struct interpret_context *ctx,
@@ -122,6 +150,28 @@ static void print_parse_tree(struct interpret_context *ctx,
         return;
     for (int i = 0; i < indent; ++i)
         printf(" ");
+    if (node->type != NODE_RULE) {
+        switch (node->type) {
+        case NODE_IDENTIFIER_TOKEN:
+            printf("%.*s", (int)node->identifier.length, node->identifier.name);
+            break;
+        case NODE_NUMBER_TOKEN:
+            printf("%f", node->number);
+            break;
+        case NODE_STRING_TOKEN:
+            printf("%.*s", (int)node->string.length, node->string.string);
+            break;
+        default:
+            break;
+        }
+        // FIXME: We need to fill in the correct rule index for this to work.
+//        if (slot && (slot->name_length != rule->name_length ||
+//         memcmp(slot->name, rule->name, rule->name_length)))
+//            printf("@%.*s", (int)slot->name_length, slot->name);
+        printf("\n");
+        print_parse_tree(ctx, node->next_sibling, slot, indent);
+        return;
+    }
     struct rule *rule = &ctx->grammar->rules[node->rule_index];
     printf("%.*s", (int)rule->name_length, rule->name);
     if (slot && (slot->name_length != rule->name_length ||
@@ -176,6 +226,7 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
         .combined = combined,
         .deterministic = deterministic,
         .transitions = transitions,
+        .tokenizer = &tokenizer,
     };
     info.context = &context;
     while (bluebird_default_tokenizer_advance(&tokenizer, &token_run))
@@ -378,16 +429,37 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token,
 
 static void write_identifier_token(size_t offset, size_t length, void *info)
 {
+    struct interpret_context *ctx = ((struct tokenizer_info *)info)->context;
+    struct interpret_node *node = calloc(1, sizeof(struct interpret_node));
+    node->next_sibling = ctx->tokens;
+    node->type = NODE_IDENTIFIER_TOKEN;
+    node->identifier.name = ctx->tokenizer->text + offset;
+    node->identifier.length = length;
+    ctx->tokens = node;
 }
 
 static void write_string_token(size_t offset, size_t length,
  size_t content_offset, size_t content_length, void *info)
 {
+    struct interpret_context *ctx = ((struct tokenizer_info *)info)->context;
+    struct interpret_node *node = calloc(1, sizeof(struct interpret_node));
+    node->next_sibling = ctx->tokens;
+    node->type = NODE_STRING_TOKEN;
+    // TODO: String escape sequences.
+    node->string.string = ctx->tokenizer->text + offset;
+    node->string.length = length;
+    ctx->tokens = node;
 }
 
 static void write_number_token(size_t offset, size_t length, double number,
  void *info)
 {
+    struct interpret_context *ctx = ((struct tokenizer_info *)info)->context;
+    struct interpret_node *node = calloc(1, sizeof(struct interpret_node));
+    node->next_sibling = ctx->tokens;
+    node->type = NODE_NUMBER_TOKEN;
+    node->number = number;
+    ctx->tokens = node;
 }
 
 static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
@@ -408,6 +480,17 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
     node->left = left;
     node->right = right;
     return node;
+}
+
+static struct interpret_node *finish_token(struct interpret_node *next_sibling,
+ struct interpret_context *context)
+{
+    struct interpret_node *token = context->tokens;
+    if (!token)
+        abort();
+    context->tokens = token->next_sibling;
+    token->next_sibling = 0;
+    return token;
 }
 
 static uint32_t rule_lookup(uint32_t parent, uint32_t slot,
