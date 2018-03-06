@@ -64,9 +64,8 @@ struct rule {
 };
 
 // Slots, choices and operators are all encoded using 12 bits in the action ID.
-// That means there can't be more than 4096 (2^12) of them.  We also allocate
-// slots up-front in each tree node, so limit them even more severely.
-#define MAX_NUMBER_OF_SLOTS 32
+// That means there can't be more than 4096 (2^12) of them.
+#define MAX_NUMBER_OF_SLOTS 4096
 #define MAX_NUMBER_OF_CHOICES 4096
 #define MAX_NUMBER_OF_OPERATORS 4096
 

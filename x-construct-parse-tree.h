@@ -38,6 +38,10 @@
 #error Please define a ROOT_RULE(info) macro.
 #endif
 
+#ifndef NUMBER_OF_SLOTS_LOOKUP
+#error Please define a NUMBER_OF_SLOTS_LOOKUP(rule, info) macro.
+#endif
+
 #ifndef FIXITY_ASSOCIATIVITY_LOOKUP
 #error Please define a FIXITY_ASSOCIATIVITY_LOOKUP(rule, choice, info) macro.
 #endif
@@ -63,9 +67,8 @@ enum construct_fixity_associativity {
 struct construct_node {
     struct construct_node *next;
 
-    // TODO: This should be sized based on the number of slots in the rule, not
-    // the maximum possible number of slots.
-    FINISHED_NODE_T slots[MAX_NUMBER_OF_SLOTS];
+    size_t number_of_slots;
+    FINISHED_NODE_T *slots;
     FINISHED_NODE_T operand;
     FINISHED_NODE_T left;
     FINISHED_NODE_T right;
@@ -113,17 +116,31 @@ struct construct_state {
     void *info;
 };
 
-static struct construct_node *construct_node_alloc(struct construct_state *s)
+static struct construct_node *construct_node_alloc(struct construct_state *s,
+ RULE_T rule)
 {
+    struct construct_node *node;
+    size_t number_of_slots = NUMBER_OF_SLOTS_LOOKUP(rule, s->info);
     if (s->node_freelist) {
-        struct construct_node *node = s->node_freelist;
+        node = s->node_freelist;
         s->node_freelist = node->next;
+        FINISHED_NODE_T *slots = realloc(node->slots,
+         number_of_slots * sizeof(FINISHED_NODE_T));
+        if (!slots)
+            abort();
         memset(node, 0, sizeof(struct construct_node));
-        return node;
+        memset(slots, 0, number_of_slots * sizeof(FINISHED_NODE_T));
+        node->slots = slots;
+    } else {
+        node = calloc(1, sizeof(struct construct_node));
+        if (!node)
+            abort();
+        node->slots = calloc(number_of_slots, sizeof(FINISHED_NODE_T));
+        if (!node->slots)
+            abort();
     }
-    struct construct_node *node = calloc(1, sizeof(struct construct_node));
-    if (!node)
-        abort();
+    node->rule = rule;
+    node->number_of_slots = number_of_slots;
     return node;
 }
 
@@ -190,8 +207,7 @@ static void construct_expression_reduce(struct construct_state *s,
         struct construct_node *last_value = first_value;
         struct construct_node *last_operator = op;
         FINISHED_NODE_T operand = op->operand;
-        struct construct_node *combined_op = construct_node_alloc(s);
-        combined_op->rule = op->rule;
+        struct construct_node *combined_op = construct_node_alloc(s, op->rule);
         combined_op->choice_index = op->choice_index;
         combined_op->slot_index = op->slot_index;
         combined_op->fixity_associativity = op->fixity_associativity;
@@ -266,9 +282,9 @@ static void construct_begin(struct construct_state *s,
         expr->rule = ROOT_RULE(s->info);
         s->current_expression = expr;
     } else {
-        struct construct_node *node = construct_node_alloc(s);
+        struct construct_node *node;
+        node = construct_node_alloc(s, ROOT_RULE(s->info));
         node->next = s->under_construction;
-        node->rule = ROOT_RULE(s->info);
         s->under_construction = node;
     }
 }
@@ -300,11 +316,11 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
 {
     switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
     case CONSTRUCT_ACTION_END_SLOT: {
-        struct construct_node *node = construct_node_alloc(s);
+        struct construct_node *node = construct_node_alloc(s,
+         RULE_LOOKUP(s->under_construction->rule,
+          CONSTRUCT_ACTION_GET_SLOT(action), s->info));
         node->next = s->under_construction;
         node->slot_index = CONSTRUCT_ACTION_GET_SLOT(action);
-        node->rule = RULE_LOOKUP(s->under_construction->rule,
-         CONSTRUCT_ACTION_GET_SLOT(action), s->info);
         s->under_construction = node;
         break;
     }
@@ -354,7 +370,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
     }
     case CONSTRUCT_ACTION_END_OPERAND: {
         struct construct_expression *expr = s->current_expression;
-        struct construct_node *node = construct_node_alloc(s);
+        struct construct_node *node = construct_node_alloc(s, expr->rule);
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
         node->rule = expr->rule;
         node->next = s->under_construction;
@@ -363,7 +379,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
     }
     case CONSTRUCT_ACTION_END_OPERATOR: {
         struct construct_expression *expr = s->current_expression;
-        struct construct_node *node = construct_node_alloc(s);
+        struct construct_node *node = construct_node_alloc(s, expr->rule);
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
         node->rule = expr->rule;
         node->fixity_associativity = FIXITY_ASSOCIATIVITY_LOOKUP(expr->rule,

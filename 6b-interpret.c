@@ -46,6 +46,7 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
 #define ROOT_RULE root_rule
 #define FIXITY_ASSOCIATIVITY_LOOKUP fixity_associativity_lookup
 #define PRECEDENCE_LOOKUP precedence_lookup
+#define NUMBER_OF_SLOTS_LOOKUP number_of_slots_lookup
 
 static uint32_t rule_lookup(uint32_t parent, uint32_t slot,
  struct interpret_context *context);
@@ -53,6 +54,8 @@ static uint32_t root_rule(struct interpret_context *context);
 static int fixity_associativity_lookup(uint32_t rule, uint32_t choice,
  struct interpret_context *context);
 static int precedence_lookup(uint32_t rule, uint32_t choice,
+ struct interpret_context *context);
+static size_t number_of_slots_lookup(uint32_t rule,
  struct interpret_context *context);
 
 #include "x-tokenize.h"
@@ -74,8 +77,9 @@ struct interpret_node {
     uint32_t rule_index;
     uint32_t choice_index;
 
+    size_t number_of_slots;
     struct interpret_node *next_sibling;
-    struct interpret_node *slots[MAX_NUMBER_OF_SLOTS];
+    struct interpret_node **slots;
     struct interpret_node *operand;
     struct interpret_node *left;
     struct interpret_node *right;
@@ -395,8 +399,11 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
     node->rule_index = rule;
     node->choice_index = choice;
     node->next_sibling = next_sibling;
+    node->number_of_slots = context->grammar->rules[rule].number_of_slots;
+    node->slots = calloc(node->number_of_slots,
+     sizeof(struct interpret_node *));
     memcpy(node->slots, slots,
-     sizeof(struct interpret_node *) * MAX_NUMBER_OF_SLOTS);
+     sizeof(struct interpret_node *) * node->number_of_slots);
     node->operand = operand;
     node->left = left;
     node->right = right;
@@ -440,6 +447,12 @@ static int precedence_lookup(uint32_t rule, uint32_t choice,
  struct interpret_context *context)
 {
     return context->grammar->rules[rule].operators[choice].precedence;
+}
+
+static size_t number_of_slots_lookup(uint32_t rule,
+ struct interpret_context *context)
+{
+    return context->grammar->rules[rule].number_of_slots;
 }
 
 #if 0
