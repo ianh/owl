@@ -238,6 +238,7 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
     }
     print_token_runs(&context, token_run);
     struct interpret_node *root = build_parse_tree(&context, token_run);
+    // TODO: Error handling.
     print_parse_tree(&context, root, 0, 0);
 }
 

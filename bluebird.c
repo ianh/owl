@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
         .output = output_stdout,
         .grammar = &grammar,
     };
-    //generate(&generator);
+    generate(&generator);
 
     /*
     const char *tok;
