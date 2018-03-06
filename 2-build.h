@@ -6,8 +6,23 @@
 
 // STEP 2 - BUILD
 
-// In step 2, we produce a grammar from the parse tree.
+// In step 2, we produce a structured `grammar` object from the raw parse tree.
+// This grammar serves as a template for the syntax trees our generated parser
+// parser will construct as well as a collection of scripts (in the form of
+// deterministic automata) for recognizing atomic pieces (the individual
+// choices, operators, and bracket expressions) of this syntax.
+
+// Step 3 will stitch these scripts together, encoding the rule indexes, choice
+// indexes and slot indexes as transition actions in one big nondeterministic
+// automaton.
+
+struct grammar;
 struct rule;
+
+// The main function of this step.  The `grammar` struct should be initialized
+// to be full of zeros.
+void build(struct grammar *grammar, struct bluebird_tree *tree);
+
 struct grammar {
     struct rule *rules;
     uint32_t rules_allocated_bytes;
@@ -31,19 +46,45 @@ struct rule {
     // Token classes like 'identifier' and 'number' are represented as rules.
     bool is_token;
 
-    // Give names to each possible choice for this rule.  Choice indexes appear
-    // in automaton actions.
+    // Choices are named alternatives in a rule.  For example, here's a rule
+    // with three choices:
+    //
+    //   operation =
+    //    '+' : plus
+    //    '-' : minus
+    //    '*' : times
+    //
+    // The 'plus', 'minus' and 'times' clauses are represented here as choice
+    // structs.  A rule without any named choices (that is, a rule with a
+    // `number_of_choices` field equal to zero) will store its single automaton
+    // in the `automaton` field declared below.
     struct choice *choices;
     uint32_t choices_allocated_bytes;
     uint32_t number_of_choices;
 
-    // If this symbol has any operators, we generate "expression slot" actions
-    // which can be interpreted to form an expression tree.
+    // Operators are choices that appear after the '.operators' keyword.
+    // They're represented separately and include information like fixity,
+    // associativity and precedence.
     struct operator *operators;
     uint32_t operators_allocated_bytes;
     uint32_t number_of_operators;
 
-    // Slots are where children can appear in the parse tree.
+    // Slots are places where children can appear in the parse tree.  Each
+    // reference to a rule or named token class creates a slot with that name.
+    // For example, this rule has three slots:
+    //
+    //   expression =
+    //     identifier : variable
+    //     number : literal
+    //     [ '(' expression ')' ] : parens
+    //    .operators postfix
+    //     [ '(' (expression (',' expression)*)? ')' ] : function-call
+    //    .operators infix left
+    //     '+' : plus
+    //     '-' : minus
+    //
+    // ...one for 'identifier', one for 'number' and one for 'expression'.  Note
+    // that slots with the same name ('expression') are combined together.
     struct slot *slots;
     uint32_t slots_allocated_bytes;
     uint32_t number_of_slots;
@@ -53,13 +94,15 @@ struct rule {
     uint32_t brackets_allocated_bytes;
     uint32_t number_of_brackets;
 
-    // These are the keyword tokens included in this rule.  They'll be unified
-    // into a single list during the combine stage.
+    // These are the keyword tokens (literal tokens enclosed in 'quotes') that
+    // appear in this rule.  They'll be unified into a single list during the
+    // combine stage.
     struct token *keyword_tokens;
     uint32_t keyword_tokens_allocated_bytes;
     uint32_t number_of_keyword_tokens;
 
-    // For simple rules (for rules with choices, this is an empty automaton).
+    // For simple rules with no choices.  In rules with choices, this is an
+    // empty automaton.
     struct automaton automaton;
 };
 
@@ -75,6 +118,7 @@ struct choice {
     const char *name;
     size_t name_length;
 
+    // A deterministic automaton which recognizes this choice.
     struct automaton automaton;
 };
 
@@ -91,17 +135,19 @@ struct operator {
     enum associativity associativity;
     int32_t precedence;
 
+    // A deterministic automaton which recognizes this operator.
     struct automaton automaton;
 };
 
 struct slot {
-    // Most of the time, the slot name will match the name for the symbol this
-    // slot refers to.  For renamed slots, it may differ.  This is a reference
-    // to the original parsed text.
+    // Unless you use the '@' operator to rename it, a slot will have the same
+    // name as the rule it refers to. The string itself is a reference to the
+    // original parsed text.
     const char *name;
     size_t name_length;
 
-    // The symbol that appears in the containing rule's automata.
+    // The symbol representing this slot.  It can appear in any automaton in the
+    // containing rule -- we'll substitute out these symbols in step 3.
     symbol_id symbol;
 
     // The rule this slot refers to.
@@ -109,26 +155,35 @@ struct slot {
 };
 
 struct bracket {
+    // This symbol represents this bracket when it appears in other automata in
+    // the rule.
     symbol_id symbol;
 
+    // The start and end symbols for the guard bracket.  Right now, these can
+    // only be keyword tokens.
     symbol_id start_symbol;
     symbol_id end_symbol;
 
+    // A deterministic automaton which recognizes the contents of the guard
+    // bracket.
     struct automaton automaton;
 };
 
+// The `token_type` enum encodes whether this token is a start or end token
+// (which can only appear at the start or end of a guard bracket) or a normal
+// token (which cannot appear at the start or end of a guard bracket).
 enum token_type { TOKEN_NORMAL, TOKEN_START, TOKEN_END };
 struct token {
     const char *string;
     size_t length;
 
     enum token_type type;
+
+    // For tokens in step 2, this symbol is local to the token's enclosing rule.
+    // In step 3, we combine the lists of tokens together, and this symbol is
+    // global to the entire combined automaton.
     symbol_id symbol;
 };
-
-// Create a grammar based on the contents of parse tree `tree`.  We assume that
-// `grammar` points to a zero-initialized value.
-void build(struct grammar *grammar, struct bluebird_tree *tree);
 
 // We share this function with the combine step -- both build and combine need
 // to de-duplicate keyword tokens in the same way.

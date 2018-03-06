@@ -265,6 +265,12 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     }
     automaton_mark_accepting_state(&result->automaton, result->final_nfa_state);
 
+    // Set the symbol field in the result tokens (even though it probably
+    // shouldn't be used) to avoid confusion.  (This may be a sign that we
+    // should have a separate type for these tokens without this field.)
+    for (uint32_t i = 0; i < result->number_of_tokens; ++i)
+        result->tokens[i].symbol = i;
+
     // We need the two result automata to share the same `number_of_symbols` so
     // they can share bracket transition bitsets.  (This may be a sign that the
     // two automata should be combined into one.)
