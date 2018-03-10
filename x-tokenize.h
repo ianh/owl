@@ -123,7 +123,8 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
          text + offset, tokenizer->info);
         if (token_length > 0)
             is_token = true;
-        if (char_is_numeric(c) || c == '.') {
+        if (char_is_numeric(c) ||
+         (c == '.' && char_is_numeric(text[offset + 1]))) {
             // Number.
             const char *start = (const char *)text + offset;
             char *rest = 0;
