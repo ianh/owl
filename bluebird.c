@@ -16,7 +16,8 @@
 // - fancy interpreter output
 // - json interpreter output
 // - clean up memory leaks
-// - perf optimization
+// - check if all the input is properly validated
+// - perf optimization?
 
 static void output_stdout(struct generator *g, const char *string, size_t len);
 
@@ -46,11 +47,14 @@ int main(int argc, char *argv[])
     //"a = b b b = c c c = d d d = e e e = f f f = g g g = h h h = i i i = j j j = k k k = l l l = m m m = n n n = o o o = p p p = q q q = r r r = s s s = t t t = u u u = 'v'";// v v = w w w = x x x = y y y = z";
     struct bluebird_tree *tree = bluebird_tree_create_from_string(string,
      strlen(string));
+#if DEBUG_OUTPUT
     print_grammar(tree, bluebird_tree_root(tree), 0);
+#endif
 
     struct grammar grammar = {0};
     build(&grammar, tree);
 
+#if DEBUG_OUTPUT
     for (uint32_t i = 0; i < grammar.number_of_rules; ++i) {
         if (grammar.rules[i].is_token) {
             printf("%u: token '%.*s'\n", i, (int)grammar.rules[i].name_length,
@@ -107,23 +111,30 @@ int main(int argc, char *argv[])
         }
     }
     printf("---\n");
+#endif
     struct combined_grammar combined = {0};
     combine(&combined, &grammar);
+#if DEBUG_OUTPUT
     automaton_print(&combined.automaton);
     automaton_print(&combined.bracket_automaton);
     for (uint32_t i = 0; i < combined.number_of_tokens; ++i) {
         printf("token %x: %.*s\n", i, (int)combined.tokens[i].length,
          combined.tokens[i].string);
     }
+#endif
 
     struct bracket_transitions bracket_transitions = {0};
     determinize_bracket_transitions(&bracket_transitions, &combined);
+#if DEBUG_OUTPUT
     printf("---\n");
+#endif
 
     struct deterministic_grammar deterministic = {0};
     determinize(&combined, &deterministic, &bracket_transitions);
+#if DEBUG_OUTPUT
     automaton_print(&deterministic.automaton);
     automaton_print(&deterministic.bracket_automaton);
+#endif
 
     //const char *text_to_parse = "x x x x x x";
     //const char *text_to_parse = "a + (b / c) + c";
@@ -132,16 +143,23 @@ int main(int argc, char *argv[])
     //const char *text_to_parse = "a + b + c * (e + f + g) + h * 7 + a0 + a1 + a2";
     //const char *text_to_parse = "a + (b - c) * d / e + f + g * h";
     //const char *text_to_parse = "(((x)))";
+    //const char *text_to_parse = "test = a | b*  a = identifier  b = number";
     const char *text_to_parse = "a = [ x (a@b | a1 'a2' a3) y ] | (c | b)* : eee  .operators infix left  p : p  .operators prefix pre : pre";
     //const char *text_to_parse = "q + (x + y) + z + ((d + ((w))) + r) + k";
     //const char *text_to_parse = "a = (b)";
+#if DEBUG_OUTPUT
     interpret(&grammar, &combined, &bracket_transitions, &deterministic, text_to_parse);
+#endif
 
+#if !DEBUG_OUTPUT
     struct generator generator = {
         .output = output_stdout,
         .grammar = &grammar,
+        .combined = &combined,
+        .deterministic = &deterministic,
     };
     generate(&generator);
+#endif
 
     /*
     const char *tok;

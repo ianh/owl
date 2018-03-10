@@ -8,6 +8,6 @@
 // `text` is a zero-terminated string.
 void interpret(struct grammar *grammar, struct combined_grammar *combined,
  struct bracket_transitions *transitions,
- struct deterministic_grammar *deterministic, const unsigned char *text);
+ struct deterministic_grammar *deterministic, const char *text);
 
 #endif

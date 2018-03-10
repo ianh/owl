@@ -17,7 +17,7 @@
 #define BRACKET_TRANSITION_TOKEN 0xffffffff
 
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
- const unsigned char *text, void *info);
+ const char *text, void *info);
 static void write_identifier_token(size_t offset, size_t length, void *info);
 static void write_string_token(size_t offset, size_t length,
  size_t content_offset, size_t content_length, void *info);
@@ -102,12 +102,12 @@ struct interpret_node {
     // For tokens.
     union {
         struct {
-            const unsigned char *name;
+            const char *name;
             size_t length;
         } identifier;
         double number;
         struct {
-            const unsigned char *string;
+            const char *string;
             size_t length;
         } string;
     };
@@ -204,7 +204,7 @@ static void print_parse_tree(struct interpret_context *ctx,
 
 void interpret(struct grammar *grammar, struct combined_grammar *combined,
  struct bracket_transitions *transitions,
- struct deterministic_grammar *deterministic, const unsigned char *text)
+ struct deterministic_grammar *deterministic, const char *text)
 {
     if (deterministic->automaton.number_of_states > (1UL << 31) ||
      deterministic->bracket_automaton.number_of_states > (1UL << 31)) {
@@ -407,7 +407,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
 }
 
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
- const unsigned char *text, void *info)
+ const char *text, void *info)
 {
     struct combined_grammar *combined =
      ((struct tokenizer_info *)info)->context->combined;

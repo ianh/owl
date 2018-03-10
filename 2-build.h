@@ -8,11 +8,11 @@
 
 // In step 2, we produce a structured `grammar` object from the raw parse tree.
 // This grammar serves as a template for the syntax trees our generated parser
-// parser will construct as well as a collection of scripts (in the form of
+// will construct as well as a collection of scripts (in the form of
 // deterministic automata) for recognizing atomic pieces (the individual
 // choices, operators, and bracket expressions) of this syntax.
 
-// Step 3 will stitch these scripts together, encoding the rule indexes, choice
+// Step 3 stitches these scripts together, encoding the rule indexes, choice
 // indexes and slot indexes as transition actions in one big nondeterministic
 // automaton.
 

@@ -337,6 +337,7 @@ void determinize(struct combined_grammar *grammar,
 void determinize_bracket_transitions(struct bracket_transitions *result,
  struct combined_grammar *grammar)
 {
+    // TODO: This should be grammar->number_of_tokens.
     symbol_id next_transition_symbol = grammar->automaton.number_of_symbols;
     if (grammar->bracket_automaton.number_of_symbols > next_transition_symbol)
         next_transition_symbol = grammar->bracket_automaton.number_of_symbols;
@@ -356,7 +357,7 @@ void determinize_bracket_transitions(struct bracket_transitions *result,
          sizeof(struct bracket_transition), compare_bracket_transitions);
         if (equal_bracket_transitions(&transitions, result))
             break;
-#if 1
+#if DEBUG_OUTPUT
         printf("-\n");
         for (uint32_t i = 0; i < result->number_of_transitions; ++i) {
             struct bracket_transition t = result->transitions[i];

@@ -5,6 +5,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Remove this later.
+#define DEBUG_OUTPUT 0
+
 typedef size_t parsed_id;
 struct bluebird_tree;
 

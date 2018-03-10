@@ -35,6 +35,7 @@
 #error The built-in tokenizer needs definitions of basic tokens to work.
 #endif
 
+// TODO: 4096 seems to be a decent value for this.  Do some more testing later.
 #define TOKEN_RUN_LENGTH 8
 
 TOKENIZE_BODY
@@ -51,7 +52,7 @@ struct bluebird_token_run {
 };
 
 struct bluebird_default_tokenizer {
-    const unsigned char *text;
+    const char *text;
     size_t offset;
 
     size_t whitespace;
@@ -64,7 +65,7 @@ struct bluebird_default_tokenizer {
     void *info;
 };
 
-static bool char_is_whitespace(unsigned char c)
+static bool char_is_whitespace(char c)
 {
     switch (c) {
     case ' ':
@@ -77,7 +78,7 @@ static bool char_is_whitespace(unsigned char c)
     }
 }
 
-static bool char_is_numeric(unsigned char c)
+static bool char_is_numeric(char c)
 {
     return c >= '0' && c <= '9';
 }
@@ -104,11 +105,11 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
     struct bluebird_token_run *run = malloc(sizeof(struct bluebird_token_run));
     uint16_t number_of_tokens = 0;
     uint16_t number_of_lengths = 0;
-    const unsigned char *text = tokenizer->text;
+    const char *text = tokenizer->text;
     size_t whitespace = tokenizer->whitespace;
     size_t offset = tokenizer->offset;
     while (number_of_tokens < TOKEN_RUN_LENGTH) {
-        unsigned char c = text[offset];
+        char c = text[offset];
         if (c == '\0')
             break;
         if (char_is_whitespace(c)) {
@@ -173,6 +174,9 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
         }
         if (!is_token || token == SYMBOL_EPSILON) {
             // Error.
+            // TODO: Report the error in a better way?
+            tokenizer->offset = offset;
+            tokenizer->whitespace = whitespace;
             free(run);
             return false;
         }
@@ -189,6 +193,8 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
         offset += token_length;
     }
     if (number_of_tokens == 0) {
+        tokenizer->offset = offset;
+        tokenizer->whitespace = whitespace;
         free(run);
         return false;
     }
