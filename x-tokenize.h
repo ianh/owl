@@ -36,14 +36,13 @@
 #endif
 
 // TODO: 4096 seems to be a decent value for this.  Do some more testing later.
-#define TOKEN_RUN_LENGTH 8
+#define TOKEN_RUN_LENGTH 4096
 
 TOKENIZE_BODY
 (
 
 struct bluebird_token_run {
     struct bluebird_token_run *prev;
-    struct bluebird_token_run **next;
     uint16_t number_of_tokens;
     uint16_t number_of_lengths;
     uint8_t lengths[TOKEN_RUN_LENGTH * 2];
@@ -200,10 +199,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
     }
     tokenizer->offset = offset;
     tokenizer->whitespace = whitespace;
-    if (*previous_run)
-        (*previous_run)->next = &run->prev;
     run->prev = *previous_run;
-    run->next = previous_run;
     run->number_of_tokens = number_of_tokens;
     run->number_of_lengths = number_of_lengths;
     *previous_run = run;

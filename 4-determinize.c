@@ -218,6 +218,7 @@ static void determinize_automaton(struct context context)
 
 static void add_action_map_entry(struct action_map *map,
  struct action_map_entry entry);
+static int compare_action_map_entries(const void *aa, const void *bb);
 
 static int compare_state_ids(const void *aa, const void *bb);
 static int compare_bracket_transitions(const void *aa, const void *bb);
@@ -276,6 +277,22 @@ static void add_action_map_entry(struct action_map *map,
     map->entries[index] = entry;
 }
 
+static int compare_action_map_entries(const void *aa, const void *bb)
+{
+    const struct action_map_entry *a = aa;
+    const struct action_map_entry *b = bb;
+#define COMPARE(field) \
+    if (a->field < b->field) \
+        return -1; \
+    if (a->field > b->field) \
+        return 1;
+    COMPARE(target_nfa_state);
+    COMPARE(dfa_state);
+    COMPARE(dfa_symbol);
+#undef COMPARE
+    return 0;
+}
+
 static state_id deterministic_state_for_subset(struct subset_table *table,
  struct worklist *worklist, struct state_array *states, state_id *next_state)
 {
@@ -330,8 +347,13 @@ void determinize(struct combined_grammar *grammar,
         .result = &result->bracket_automaton,
         .in_transitions = *transitions,
         .action_map = &result->bracket_action_map,
-        .options = MARK_ACCEPTING_BRACKET_STATES
+        .options = MARK_ACCEPTING_BRACKET_STATES,
     });
+    qsort(result->action_map.entries, result->action_map.number_of_entries,
+     sizeof(struct action_map_entry), compare_action_map_entries);
+    qsort(result->bracket_action_map.entries,
+     result->bracket_action_map.number_of_entries,
+     sizeof(struct action_map_entry), compare_action_map_entries);
 }
 
 void determinize_bracket_transitions(struct bracket_transitions *result,
@@ -374,6 +396,19 @@ void determinize_bracket_transitions(struct bracket_transitions *result,
     }
     automaton_destroy(&a);
 }
+
+struct action_map_entry *action_map_find(struct action_map *map,
+ state_id target_nfa_state, state_id dfa_state, symbol_id dfa_symbol)
+{
+    struct action_map_entry query = {
+        .target_nfa_state = target_nfa_state,
+        .dfa_state = dfa_state,
+        .dfa_symbol = dfa_symbol,
+    };
+    return bsearch(&query, map->entries, map->number_of_entries,
+     sizeof(struct action_map_entry), compare_action_map_entries);
+}
+
 
 // This is Brzozowski's algorithm.
 void determinize_minimize(struct automaton *input, struct automaton *result)

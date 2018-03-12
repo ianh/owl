@@ -1,6 +1,7 @@
 #include "6a-generate.h"
 
 #include "grow-array.h"
+#include "x-construct-actions.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -10,12 +11,19 @@ enum substitution_transform {
     UPPERCASE_WITH_UNDERSCORES,
 };
 
+enum substitution_type {
+    STRING,
+    UNSIGNED_NUMBER,
+    SIGNED_NUMBER,
+};
+
 struct substitution {
     // Zero-terminated.
     const char *variable;
 
-    bool is_number;
-    uint32_t number;
+    enum substitution_type type;
+    uint32_t unsigned_number;
+    int32_t signed_number;
 
     const char *value;
     size_t value_length;
@@ -32,72 +40,8 @@ struct generator_internal {
     uint32_t formatted_string_allocated_bytes;
 };
 
-static struct substitution *find_substitution(struct generator *gen,
- const char *variable)
-{
-    uint32_t n = gen->internal->number_of_substitutions;
-    for (uint32_t i = 0; i < n; ++i) {
-        struct substitution *s = &gen->internal->substitutions[i];
-        for (size_t j = 0; ; ++j) {
-            if (s->variable[j] == 0)
-                return s;
-            if (s->variable[j] != variable[j])
-                break;
-        }
-    }
-    return 0;
-}
-
-static void apply_transform(char *string, size_t length,
- enum substitution_transform transform)
-{
-    if (transform == NO_TRANSFORM)
-        return;
-    for (size_t i = 0; i < length; ++i) {
-        if (transform == UPPERCASE_WITH_UNDERSCORES && string[i] >= 'a'
-         && string[i] <= 'z')
-            string[i] = string[i] - 'a' + 'A';
-        if (string[i] == '-')
-            string[i] = '_';
-    }
-}
-
 static void output_string_length(struct generator *gen, const char *string,
- size_t len)
-{
-    if (len == 0)
-        return;
-    size_t next_output_index = 0;
-    char *format = gen->internal->formatted_string;
-    uint32_t format_bytes = gen->internal->formatted_string_allocated_bytes;
-    for (size_t i = 0; i < len - 1; ++i) {
-        if (string[i] == '%' && string[i + 1] == '%') {
-            struct substitution *sub = find_substitution(gen, string + i + 2);
-            if (!sub)
-                abort();
-            gen->output(gen, string + next_output_index, i - next_output_index);
-            if (sub->is_number) {
-                int len = snprintf(0, 0, "%uU", sub->number);
-                format = grow_array(format, &format_bytes, (uint32_t)len + 1);
-                snprintf(format, len + 1, "%uU", sub->number);
-                gen->output(gen, format, len);
-            } else {
-                if (sub->value_length > UINT32_MAX)
-                    abort();
-                format = grow_array(format, &format_bytes,
-                 (uint32_t)sub->value_length);
-                memcpy(format, sub->value, sub->value_length);
-                apply_transform(format, sub->value_length, sub->transform);
-                gen->output(gen, format, sub->value_length);
-            }
-            next_output_index = i + 2 + strlen(sub->variable);
-        }
-    }
-    gen->internal->formatted_string = format;
-    gen->internal->formatted_string_allocated_bytes = format_bytes;
-    if (next_output_index < len)
-        gen->output(gen, string + next_output_index, len - next_output_index);
-}
+ size_t len);
 
 static void output_string(struct generator *gen, const char *string)
 {
@@ -112,62 +56,26 @@ static void output_line(struct generator *gen, const char *string)
 
 static void output_formatted_source(struct generator *gen, const char *string);
 
-static uint32_t create_substitution(struct generator *gen, const char *variable)
-{
-    uint32_t index = 0;
-    for (; index < gen->internal->number_of_substitutions; ++index) {
-        if (strcmp(variable, gen->internal->substitutions[index].variable) == 0)
-            break;
-    }
-    if (index >= gen->internal->number_of_substitutions) {
-        gen->internal->number_of_substitutions = index + 1;
-        gen->internal->substitutions = grow_array(gen->internal->substitutions,
-         &gen->internal->substitutions_allocated_bytes,
-         gen->internal->number_of_substitutions * sizeof(struct substitution));
-        gen->internal->substitutions[index].variable = variable;
-    }
-    return index;
-}
-
 static void set_substitution(struct generator *gen, const char *variable,
- const char *value, size_t value_length, enum substitution_transform transform)
-{
-    uint32_t index = create_substitution(gen, variable);
-    gen->internal->substitutions[index].is_number = false;
-    gen->internal->substitutions[index].value = value;
-    gen->internal->substitutions[index].value_length = value_length;
-    gen->internal->substitutions[index].transform = transform;
-}
-
-static void set_number_substitution(struct generator *gen,
- const char *variable, uint32_t value)
-{
-    uint32_t index = create_substitution(gen, variable);
-    gen->internal->substitutions[index].is_number = true;
-    gen->internal->substitutions[index].number = value;
-}
-
+ const char *value, size_t value_length, enum substitution_transform transform);
+static void set_unsigned_number_substitution(struct generator *gen,
+ const char *variable, uint32_t value);
+static void set_signed_number_substitution(struct generator *gen,
+ const char *variable, int32_t value);
 static void set_literal_substitution(struct generator *gen,
- const char *variable, const char *value)
-{
-    set_substitution(gen, variable, value, strlen(value), NO_TRANSFORM);
-}
+ const char *variable, const char *value);
 
-static bool rule_is_named(struct rule *rule, const char *name)
-{
-    return rule->name_length == strlen(name) &&
-     !memcmp(name, rule->name, rule->name_length);
-}
-
-static bool token_is(struct token *token, const char *name)
-{
-    return token->length == strlen(name) &&
-     !memcmp(name, token->string, token->length);
-}
+static bool rule_is_named(struct rule *rule, const char *name);
+static bool token_is(struct token *token, const char *name);
 
 enum automaton_type { NORMAL_AUTOMATON, BRACKET_AUTOMATON };
 static void generate_automaton(struct generator *gen, struct automaton *a,
  uint32_t offset, enum automaton_type type);
+static void generate_action_automaton(struct generator *gen,
+ struct action_map *map, uint32_t dfa_offset, uint32_t nfa_offset,
+ enum automaton_type type);
+static void generate_actions(struct generator *gen, struct action_map *map,
+ uint32_t action_index);
 
 static bool should_escape(char c);
 
@@ -180,6 +88,8 @@ void generate(struct generator *gen)
      gen->grammar->rules[gen->grammar->root_rule].name,
      gen->grammar->rules[gen->grammar->root_rule].name_length,
      LOWERCASE_WITH_UNDERSCORES);
+    set_unsigned_number_substitution(gen, "root-rule-index",
+     gen->grammar->root_rule);
 
     output_line(gen, "// -----------------------------------------------------------------------------");
     output_line(gen, "// This file was generated by the bluebird parsing tool.");
@@ -283,6 +193,7 @@ void generate(struct generator *gen)
     output_line(gen, "");
     output_line(gen, "#ifdef BLUEBIRD_PARSER_IMPLEMENTATION");
     output_line(gen, "// Code implementing the parser.  This might get a bit messy!");
+    output_line(gen, "#include <assert.h>");
     output_line(gen, "#include <stdio.h>");
     output_line(gen, "#include <stdlib.h>");
     output_line(gen, "#include <string.h>");
@@ -294,20 +205,22 @@ void generate(struct generator *gen)
     set_literal_substitution(gen, "token-type", "uint32_t");
     set_literal_substitution(gen, "state-type", "uint32_t");
 
-    set_number_substitution(gen, "identifier-token", 0xffffffff);
-    set_number_substitution(gen, "number-token", 0xffffffff);
-    set_number_substitution(gen, "string-token", 0xffffffff);
-    set_number_substitution(gen, "bracket-transition-token", 0xffffffff);
+    set_unsigned_number_substitution(gen, "identifier-token", 0xffffffff);
+    set_unsigned_number_substitution(gen, "number-token", 0xffffffff);
+    set_unsigned_number_substitution(gen, "string-token", 0xffffffff);
+    set_unsigned_number_substitution(gen, "bracket-transition-token", 0xffffffff);
     for (uint32_t i = gen->combined->number_of_keyword_tokens;
      i < gen->combined->number_of_tokens; ++i) {
         if (token_is(&gen->combined->tokens[i], "identifier"))
-            set_number_substitution(gen, "identifier-token", i);
+            set_unsigned_number_substitution(gen, "identifier-token", i);
         else if (token_is(&gen->combined->tokens[i], "number"))
-            set_number_substitution(gen, "number-token", i);
+            set_unsigned_number_substitution(gen, "number-token", i);
         else if (token_is(&gen->combined->tokens[i], "string"))
-            set_number_substitution(gen, "string-token", i);
+            set_unsigned_number_substitution(gen, "string-token", i);
     }
-    const char *tokenizer_source;
+    output_line(gen, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info);");
+#define EVALUATE_MACROS_AND_STRINGIFY(...) #__VA_ARGS__
+
 #define TOKEN_T %%token-type
 #define STATE_T %%state-type
 #define READ_KEYWORD_TOKEN read_keyword_token
@@ -319,12 +232,33 @@ void generate(struct generator *gen)
 #define STRING_TOKEN %%string-token
 #define BRACKET_TRANSITION_TOKEN %%bracket-transition-token
 
-#define EVALUATE_MACROS_AND_STRINGIFY(...) #__VA_ARGS__
+    const char *tokenizer_source;
 #define TOKENIZE_BODY(...) tokenizer_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
 #include "x-tokenize.h"
-    output_line(gen, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info);");
     output_formatted_source(gen, tokenizer_source);
-    set_number_substitution(gen, "start-state",
+
+    output_line(gen, "static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context);");
+    output_line(gen, "static void fixity_associativity_precedence_lookup(int *fixity_associativity, int *precedence, uint32_t rule, uint32_t choice, void *context);");
+    output_line(gen, "static int precedence_lookup(uint32_t rule, uint32_t choice, void *context);");
+    output_line(gen, "static size_t number_of_slots_lookup(uint32_t rule, void *context);");
+#define RULE_T uint32_t
+#define RULE_LOOKUP rule_lookup
+#define ROOT_RULE(...) %%root-rule-index
+#define FIXITY_ASSOCIATIVITY_PRECEDENCE_LOOKUP(fixity_associativity, precedence, rule, choice, context) \
+ do { \
+     int local; \
+     fixity_associativity_precedence_lookup(&local, &precedence, rule, choice, context); \
+     fixity_associativity = local; \
+ } while (0)
+#define PRECEDENCE_LOOKUP precedence_lookup
+#define NUMBER_OF_SLOTS_LOOKUP number_of_slots_lookup
+
+    const char *construct_source;
+#define CONSTRUCT_BODY(...) construct_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
+#include "x-construct-parse-tree.h"
+    output_formatted_source(gen, construct_source);
+
+    set_unsigned_number_substitution(gen, "start-state",
      gen->deterministic->automaton.start_state);
     output_line(gen, "");
     output_line(gen, "struct fill_run_continuation {");
@@ -334,6 +268,7 @@ void generate(struct generator *gen)
     output_line(gen, "    size_t state_stack_depth;");
     output_line(gen, "};");
     output_line(gen, "static void fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);");
+    output_line(gen, "static void *build_parse_tree(struct bluebird_token_run *);");
     output_line(gen, "");
     output_line(gen, "struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {");
     output_line(gen, "    struct bluebird_tree *tree = calloc(1, sizeof(struct bluebird_tree));");
@@ -358,15 +293,17 @@ void generate(struct generator *gen)
     output_line(gen, "        fprintf(stderr, \"error: parsing failed because the stack was still full\\n\");");
     output_line(gen, "    }");
     output_line(gen, "    free(c.state_stack);");
-    output_line(gen, "    c.state_stack = 0;");
-    output_line(gen, "    c.state_stack_capacity = 0;");
-    output_line(gen, "    while (token_run) {");
-    output_line(gen, "        for (uint32_t i = 0; i < token_run->number_of_tokens; ++i) {");
-    output_line(gen, "            printf(\"%u -> %u\\n\", token_run->tokens[i], token_run->states[i]);");
+    /*
+    output_line(gen, "    struct bluebird_token_run *run_to_print = token_run;");
+    output_line(gen, "    while (run_to_print) {");
+    output_line(gen, "        for (uint32_t i = 0; i < run_to_print->number_of_tokens; ++i) {");
+    output_line(gen, "            printf(\"%u -> %u\\n\", run_to_print->tokens[i], run_to_print->states[i]);");
     output_line(gen, "        }");
     output_line(gen, "        printf(\"--\\n\");");
-    output_line(gen, "        token_run = token_run->prev;");
+    output_line(gen, "        run_to_print = run_to_print->prev;");
     output_line(gen, "    }");
+     */
+    output_line(gen, "    build_parse_tree(token_run);");
     output_line(gen, "    return tree;");
     output_line(gen, "}");
     output_line(gen, "void bluebird_tree_destroy(struct bluebird_tree *tree) {");
@@ -383,29 +320,50 @@ void generate(struct generator *gen)
     output_line(gen, "    cont->state_stack_capacity = new_capacity;");
     output_line(gen, "    return true;");
     output_line(gen, "}");
+    struct automaton *a = &gen->deterministic->automaton;
+    struct automaton *b = &gen->deterministic->bracket_automaton;
+    set_unsigned_number_substitution(gen, "first-bracket-state-id",
+     a->number_of_states);
     output_line(gen, "static void fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont) {");
     output_line(gen, "    uint16_t token_index = 0;");
     output_line(gen, "    uint16_t number_of_tokens = run->number_of_tokens;");
     output_line(gen, "    uint16_t start_state = cont->state;");
     output_line(gen, "start:");
     output_line(gen, "    switch (start_state) {");
-    struct automaton *a = &gen->deterministic->automaton;
-    struct automaton *b = &gen->deterministic->bracket_automaton;
-    set_number_substitution(gen, "first-bracket-state-id", a->number_of_states);
     generate_automaton(gen, a, 0, NORMAL_AUTOMATON);
     generate_automaton(gen, b, a->number_of_states, BRACKET_AUTOMATON);
     output_line(gen, "    }");
     output_line(gen, "}");
+    set_unsigned_number_substitution(gen, "final-nfa-state",
+     gen->combined->final_nfa_state);
+    output_line(gen, "static void *build_parse_tree(struct bluebird_token_run *run) {");
+    output_line(gen, "    struct construct_state construct_state = { 0 };");
+    if (gen->combined->root_rule_is_expression)
+        output_line(gen, "    construct_begin(&construct_state, CONSTRUCT_EXPRESSION_ROOT);");
+    else
+        output_line(gen, "    construct_begin(&construct_state, CONSTRUCT_NORMAL_ROOT);");
+    output_line(gen, "    uint16_t token_index = run->number_of_tokens;");
+    output_line(gen, "    goto nfa_state_%%final-nfa-state;");
+    generate_action_automaton(gen, &gen->deterministic->action_map, 0, 0, NORMAL_AUTOMATON);
+    generate_action_automaton(gen, &gen->deterministic->bracket_action_map, a->number_of_states, gen->combined->automaton.number_of_states, NORMAL_AUTOMATON);
+    //output_line(gen, "    follow_transition_reversed(&construct_state, &nfa_state, UINT32_MAX, UINT32_MAX);");
+    output_line(gen, "error:");
+    // TODO: Free all remaining token runs here.
+    output_line(gen, "    printf(\"error!\\n\");");
+    output_line(gen, "finish:");
+    output_line(gen, "    return construct_finish(&construct_state);");
+    output_line(gen, "}");
     output_line(gen, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info) {");
     for (uint32_t i = 0; i < gen->combined->number_of_keyword_tokens; ++i) {
         struct token keyword = gen->combined->tokens[i];
-        set_number_substitution(gen, "token-index", keyword.symbol);
+        set_unsigned_number_substitution(gen, "token-index", keyword.symbol);
         if (keyword.length > UINT32_MAX) {
             // Why even store the length as a size_t if we're just gonna do
             // this?
             abort();
         }
-        set_number_substitution(gen, "token-length", (uint32_t)keyword.length);
+        set_unsigned_number_substitution(gen, "token-length",
+         (uint32_t)keyword.length);
         if (keyword.type == TOKEN_END)
             set_literal_substitution(gen, "is-end-token", "true");
         else
@@ -431,6 +389,74 @@ void generate(struct generator *gen)
     }
     output_line(gen, "    return 0;");
     output_line(gen, "}");
+    output_line(gen, "static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context) {");
+    output_line(gen, "    switch (parent) {");
+    for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        if (rule->number_of_slots == 0)
+            continue;
+        set_unsigned_number_substitution(gen, "rule-index", i);
+        output_line(gen, "    case %%rule-index:");
+        output_line(gen, "        switch (slot) {");
+        for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
+            set_unsigned_number_substitution(gen, "slot-index", j);
+            set_unsigned_number_substitution(gen, "slot-rule-index",
+             rule->slots[j].rule_index);
+            output_line(gen, "        case %%slot-index: return %%slot-rule-index;");
+        }
+        output_line(gen, "        default: break;");
+        output_line(gen, "        }");
+        output_line(gen, "        break;");
+    }
+    output_line(gen, "    default: break;");
+    output_line(gen, "    }");
+    output_line(gen, "    return UINT32_MAX;");
+    output_line(gen, "}");
+    output_line(gen, "static void fixity_associativity_precedence_lookup(int *fixity_associativity, int *precedence, uint32_t rule, uint32_t choice, void *context) {");
+    output_line(gen, "    switch (rule) {");
+    for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        if (rule->number_of_operators == 0)
+            continue;
+        set_unsigned_number_substitution(gen, "rule-index", i);
+        output_line(gen, "    case %%rule-index:");
+        output_line(gen, "        switch (choice) {");
+        for (uint32_t j = 0; j < rule->number_of_operators; ++j) {
+            struct operator op = rule->operators[j];
+            set_unsigned_number_substitution(gen, "operator-index", j);
+            set_signed_number_substitution(gen, "operator-precedence",
+             op.precedence);
+            output_line(gen, "        case %%operator-index:");
+            output_line(gen, "            *precedence = %%operator-precedence;");
+            if (op.fixity == PREFIX)
+                output_line(gen, "            *fixity_associativity = CONSTRUCT_PREFIX;");
+            else if (op.fixity == POSTFIX)
+                output_line(gen, "            *fixity_associativity = CONSTRUCT_POSTFIX;");
+            else if (op.associativity == RIGHT)
+                output_line(gen, "            *fixity_associativity = CONSTRUCT_INFIX_RIGHT;");
+            else if (op.associativity == FLAT)
+                output_line(gen, "            *fixity_associativity = CONSTRUCT_INFIX_FLAT;");
+            else
+                output_line(gen, "            *fixity_associativity = CONSTRUCT_INFIX_LEFT;");
+            output_line(gen, "            return;");
+        }
+        output_line(gen, "        default: return;");
+        output_line(gen, "        }");
+    }
+    output_line(gen, "    default: return;");
+    output_line(gen, "    }");
+    output_line(gen, "}");
+    output_line(gen, "static size_t number_of_slots_lookup(uint32_t rule, void *context) {");
+    output_line(gen, "    switch (rule) {");
+    for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
+        set_unsigned_number_substitution(gen, "rule-index", i);
+        set_unsigned_number_substitution(gen, "number-of-slots",
+         gen->grammar->rules[i].number_of_slots);
+        output_line(gen, "    case %%rule-index: return %%number-of-slots;");
+    }
+    output_line(gen, "    default: return 0;");
+    output_line(gen, "    }");
+    output_line(gen, "}");
     output_line(gen, "#endif");
     output_line(gen, "");
 
@@ -443,11 +469,11 @@ static void generate_automaton(struct generator *gen, struct automaton *a,
 {
     for (uint32_t i = 0; i < a->number_of_states; ++i) {
         struct state s = a->states[i];
-        set_number_substitution(gen, "state-id", i + offset);
+        set_unsigned_number_substitution(gen, "state-id", i + offset);
         output_line(gen, "    case %%state-id:");
         output_line(gen, "state_%%state-id: {");
         if (s.accepting && type == BRACKET_AUTOMATON) {
-            set_number_substitution(gen, "state-transition-symbol",
+            set_unsigned_number_substitution(gen, "state-transition-symbol",
              s.transition_symbol);
             output_line(gen, "        start_state = cont->state_stack[--cont->state_stack_depth];");
             output_line(gen, "        run->tokens[token_index] = %%state-transition-symbol;");
@@ -471,8 +497,8 @@ static void generate_automaton(struct generator *gen, struct automaton *a,
                 // be a bracket symbol.
                 has_bracket_symbols = true;
             }
-            set_number_substitution(gen, "token-symbol", t.symbol);
-            set_number_substitution(gen, "token-target", t.target + offset);
+            set_unsigned_number_substitution(gen, "token-symbol", t.symbol);
+            set_unsigned_number_substitution(gen, "token-target", t.target + offset);
             output_line(gen, "        case %%token-symbol: goto state_%%token-target;");
         }
         output_string(gen, "        default:");
@@ -492,6 +518,92 @@ static void generate_automaton(struct generator *gen, struct automaton *a,
         output_line(gen, "    }");
     }
 }
+
+static void generate_action_automaton(struct generator *gen, struct action_map *map,
+ uint32_t dfa_offset, uint32_t nfa_offset, enum automaton_type type)
+{
+    for (uint32_t i = 0; i < map->number_of_entries; ++i) {
+        struct action_map_entry entry = map->entries[i];
+        struct action_map_entry *last_entry = 0;
+        if (i > 0)
+            last_entry = &map->entries[i - 1];
+        if (!last_entry || last_entry->target_nfa_state != entry.target_nfa_state) {
+            set_unsigned_number_substitution(gen, "entry-target",
+             entry.target_nfa_state + nfa_offset);
+            output_line(gen, "nfa_state_%%entry-target:");
+            output_line(gen, "    if (token_index == 0) {");
+            output_line(gen, "        struct bluebird_token_run *last_run = run;");
+            output_line(gen, "        run = run->prev;");
+            output_line(gen, "        free(last_run);");
+            output_line(gen, "        if (!run) {");
+            struct action_map_entry *final_entry = action_map_find(map, entry.target_nfa_state, UINT32_MAX, UINT32_MAX);
+            if (!final_entry) {
+                output_line(gen, "            goto error;");
+            } else {
+                generate_actions(gen, map, final_entry->action_index);
+                output_line(gen, "            goto finish;");
+            }
+            output_line(gen, "        }");
+            output_line(gen, "        token_index = run->number_of_tokens;");
+            output_line(gen, "    }");
+            output_line(gen, "    token_index--;");
+            output_line(gen, "    switch (run->states[token_index]) {");
+        }
+        struct action_map_entry *next_entry = 0;
+        if (i + 1 < map->number_of_entries)
+            next_entry = &map->entries[i + 1];
+        if (entry.dfa_state != UINT32_MAX) {
+            if (!last_entry || last_entry->dfa_state != entry.dfa_state) {
+                set_unsigned_number_substitution(gen, "entry-state-id",
+                 entry.dfa_state + dfa_offset);
+                output_line(gen, "    case %%entry-state-id:");
+                output_line(gen, "        switch (run->tokens[token_index]) {");
+            }
+            set_unsigned_number_substitution(gen, "entry-symbol",
+             entry.dfa_symbol);
+            output_line(gen, "        case %%entry-symbol:");
+            generate_actions(gen, map, entry.action_index);
+            set_unsigned_number_substitution(gen, "entry-nfa-state",
+             entry.nfa_state + nfa_offset);
+            output_line(gen, "            goto nfa_state_%%entry-nfa-state;");
+            // TODO: bracket stuff
+            if (!next_entry || next_entry->dfa_state != entry.dfa_state) {
+                output_line(gen, "        default: break;");
+                output_line(gen, "        }");
+                output_line(gen, "        break;");
+            }
+        }
+        if (!next_entry || next_entry->target_nfa_state != entry.target_nfa_state) {
+            output_line(gen, "    default: break;");
+            output_line(gen, "    }");
+            output_line(gen, "    goto error;");
+        }
+    }
+}
+
+#define CONSTRUCT_ACTION_NAME(name) PRINT_CONSTRUCT_ACTION_ ## name,
+enum { CONSTRUCT_ACTIONS };
+#undef CONSTRUCT_ACTION_NAME
+#define CONSTRUCT_ACTION_NAME(name) case PRINT_CONSTRUCT_ACTION_ ## name : \
+ output_line(gen, "printf(\"" #name " %%action-slot\\n\");"); break;
+#define FORMAT_ACTION(action) do {\
+    switch (CONSTRUCT_ACTION_GET_TYPE(action)) { \
+    CONSTRUCT_ACTIONS \
+    } \
+} while (0)
+static void generate_actions(struct generator *gen, struct action_map *map,
+ uint32_t action_index)
+{
+    for (uint32_t i = action_index; i < map->number_of_actions; ++i) {
+        if (map->actions[i] == 0)
+            break;
+        set_unsigned_number_substitution(gen, "action-id", map->actions[i]);
+        set_unsigned_number_substitution(gen, "action-slot", CONSTRUCT_ACTION_GET_SLOT(map->actions[i]));
+        //FORMAT_ACTION(map->actions[i]);
+        output_line(gen, "            construct_action_apply(&construct_state, %%action-id);");
+    }
+}
+#undef CONSTRUCT_ACTION_NAME
 
 static void output_formatted_source(struct generator *gen, const char *string)
 {
@@ -539,6 +651,149 @@ static void output_formatted_source(struct generator *gen, const char *string)
     }
     output_string_length(gen, string + next_output_index,
      i - next_output_index);
+}
+
+static struct substitution *find_substitution(struct generator *gen,
+ const char *variable)
+{
+    uint32_t n = gen->internal->number_of_substitutions;
+    size_t longest_match = 0;
+    struct substitution *longest_match_substitution = 0;
+    for (uint32_t i = 0; i < n; ++i) {
+        struct substitution *s = &gen->internal->substitutions[i];
+        for (size_t j = 0; ; ++j) {
+            if (s->variable[j] == 0 && j > longest_match) {
+                longest_match = j;
+                longest_match_substitution = s;
+            }
+            if (s->variable[j] != variable[j])
+                break;
+        }
+    }
+    return longest_match_substitution;
+}
+
+static void apply_transform(char *string, size_t length,
+ enum substitution_transform transform)
+{
+    if (transform == NO_TRANSFORM)
+        return;
+    for (size_t i = 0; i < length; ++i) {
+        if (transform == UPPERCASE_WITH_UNDERSCORES && string[i] >= 'a'
+         && string[i] <= 'z')
+            string[i] = string[i] - 'a' + 'A';
+        if (string[i] == '-')
+            string[i] = '_';
+    }
+}
+
+static void output_string_length(struct generator *gen, const char *string,
+ size_t len)
+{
+    if (len == 0)
+        return;
+    size_t next_output_index = 0;
+    char *format = gen->internal->formatted_string;
+    uint32_t format_bytes = gen->internal->formatted_string_allocated_bytes;
+    for (size_t i = 0; i < len - 1; ++i) {
+        if (string[i] == '%' && string[i + 1] == '%') {
+            struct substitution *sub = find_substitution(gen, string + i + 2);
+            if (!sub)
+                abort();
+            gen->output(gen, string + next_output_index, i - next_output_index);
+            switch (sub->type) {
+            case UNSIGNED_NUMBER: {
+                int len = snprintf(0, 0, "%uU", sub->unsigned_number);
+                format = grow_array(format, &format_bytes, (uint32_t)len + 1);
+                snprintf(format, len + 1, "%uU", sub->unsigned_number);
+                gen->output(gen, format, len);
+                break;
+            }
+            case SIGNED_NUMBER: {
+                int len = snprintf(0, 0, "%d", sub->signed_number);
+                format = grow_array(format, &format_bytes, (uint32_t)len + 1);
+                snprintf(format, len + 1, "%d", sub->signed_number);
+                gen->output(gen, format, len);
+                break;
+            }
+            case STRING:
+                if (sub->value_length > UINT32_MAX)
+                    abort();
+                format = grow_array(format, &format_bytes,
+                 (uint32_t)sub->value_length);
+                memcpy(format, sub->value, sub->value_length);
+                apply_transform(format, sub->value_length, sub->transform);
+                gen->output(gen, format, sub->value_length);
+                break;
+            }
+            next_output_index = i + 2 + strlen(sub->variable);
+        }
+    }
+    gen->internal->formatted_string = format;
+    gen->internal->formatted_string_allocated_bytes = format_bytes;
+    if (next_output_index < len)
+        gen->output(gen, string + next_output_index, len - next_output_index);
+}
+
+static uint32_t create_substitution(struct generator *gen, const char *variable)
+{
+    uint32_t index = 0;
+    for (; index < gen->internal->number_of_substitutions; ++index) {
+        if (strcmp(variable, gen->internal->substitutions[index].variable) == 0)
+            break;
+    }
+    if (index >= gen->internal->number_of_substitutions) {
+        gen->internal->number_of_substitutions = index + 1;
+        gen->internal->substitutions = grow_array(gen->internal->substitutions,
+         &gen->internal->substitutions_allocated_bytes,
+         gen->internal->number_of_substitutions * sizeof(struct substitution));
+        gen->internal->substitutions[index].variable = variable;
+    }
+    return index;
+}
+
+static void set_substitution(struct generator *gen, const char *variable,
+ const char *value, size_t value_length, enum substitution_transform transform)
+{
+    uint32_t index = create_substitution(gen, variable);
+    gen->internal->substitutions[index].type = STRING;
+    gen->internal->substitutions[index].value = value;
+    gen->internal->substitutions[index].value_length = value_length;
+    gen->internal->substitutions[index].transform = transform;
+}
+
+static void set_unsigned_number_substitution(struct generator *gen,
+ const char *variable, uint32_t value)
+{
+    uint32_t index = create_substitution(gen, variable);
+    gen->internal->substitutions[index].type = UNSIGNED_NUMBER;
+    gen->internal->substitutions[index].unsigned_number = value;
+}
+
+static void set_signed_number_substitution(struct generator *gen,
+ const char *variable, int32_t value)
+{
+    uint32_t index = create_substitution(gen, variable);
+    gen->internal->substitutions[index].type = SIGNED_NUMBER;
+    gen->internal->substitutions[index].signed_number = value;
+}
+
+static void set_literal_substitution(struct generator *gen,
+ const char *variable, const char *value)
+{
+    set_substitution(gen, variable, value, strlen(value), NO_TRANSFORM);
+}
+
+static bool rule_is_named(struct rule *rule, const char *name)
+{
+    return rule->name_length == strlen(name) &&
+     !memcmp(name, rule->name, rule->name_length);
+}
+
+static bool token_is(struct token *token, const char *name)
+{
+    return token->length == strlen(name) &&
+     !memcmp(name, token->string, token->length);
 }
 
 static bool should_escape(char c)

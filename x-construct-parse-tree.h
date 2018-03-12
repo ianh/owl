@@ -42,19 +42,16 @@
 #error Please define a NUMBER_OF_SLOTS_LOOKUP(rule, info) macro.
 #endif
 
-#ifndef FIXITY_ASSOCIATIVITY_LOOKUP
-#error Please define a FIXITY_ASSOCIATIVITY_LOOKUP(rule, choice, info) macro.
-#endif
-
-#ifndef PRECEDENCE_LOOKUP
-#error Please define a PRECEDENCE_LOOKUP(rule, choice, info) macro.
+#ifndef FIXITY_ASSOCIATIVITY_PRECEDENCE_LOOKUP
+#error Please define a FIXITY_ASSOCIATIVITY_PRECEDENCE_LOOKUP(\
+fixity_associativity_variable, precedence_variable, rule, choice, info) macro.
 #endif
 
 #include "x-construct-actions.h"
 #define CONSTRUCT_ACTION_NAME(action) CONSTRUCT_ACTION_##action,
 
-//CONSTRUCT_BODY
-//(
+CONSTRUCT_BODY
+(
 
 enum construct_fixity_associativity {
     CONSTRUCT_PREFIX,
@@ -124,10 +121,12 @@ static struct construct_node *construct_node_alloc(struct construct_state *s,
     if (s->node_freelist) {
         node = s->node_freelist;
         s->node_freelist = node->next;
-        FINISHED_NODE_T *slots = realloc(node->slots,
-         number_of_slots * sizeof(FINISHED_NODE_T));
-        if (!slots)
-            abort();
+        FINISHED_NODE_T *slots = node->slots;
+        if (number_of_slots > node->number_of_slots) {
+            slots = realloc(slots, number_of_slots * sizeof(FINISHED_NODE_T));
+            if (!slots)
+                abort();
+        }
         memset(node, 0, sizeof(struct construct_node));
         memset(slots, 0, number_of_slots * sizeof(FINISHED_NODE_T));
         node->slots = slots;
@@ -309,6 +308,18 @@ static FINISHED_NODE_T construct_finish(struct construct_state *s)
         finished = FINISH_NODE_STRUCT(node, 0, s->info);
         construct_node_free(s, node);
     }
+    // Clean up memory.
+    while (s->node_freelist) {
+        struct construct_node *node = s->node_freelist;
+        s->node_freelist = node->next;
+        free(node->slots);
+        free(node);
+    }
+    while (s->expression_freelist) {
+        struct construct_expression *expr = s->expression_freelist;
+        s->expression_freelist = expr->parent;
+        free(expr);
+    }
     return finished;
 }
 
@@ -382,10 +393,12 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
         struct construct_node *node = construct_node_alloc(s, expr->rule);
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
         node->rule = expr->rule;
-        node->fixity_associativity = FIXITY_ASSOCIATIVITY_LOOKUP(expr->rule,
-         CONSTRUCT_ACTION_GET_CHOICE(action), s->info);
-        node->precedence = PRECEDENCE_LOOKUP(expr->rule,
-         CONSTRUCT_ACTION_GET_CHOICE(action), s->info);
+        enum construct_fixity_associativity fixity_associativity;
+        int precedence;
+        FIXITY_ASSOCIATIVITY_PRECEDENCE_LOOKUP(fixity_associativity, precedence,
+         expr->rule, CONSTRUCT_ACTION_GET_CHOICE(action), s->info);
+        node->fixity_associativity = fixity_associativity;
+        node->precedence = precedence;
         node->next = s->under_construction;
         s->under_construction = node;
         break;
@@ -413,6 +426,6 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
     }
 }
 
-//)
+)
 
 #undef CONSTRUCT_ACTION_NAME

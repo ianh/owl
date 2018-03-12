@@ -47,8 +47,11 @@ static struct interpret_node *finish_token(struct interpret_node *next_sibling,
 #define RULE_T uint32_t
 #define RULE_LOOKUP rule_lookup
 #define ROOT_RULE root_rule
-#define FIXITY_ASSOCIATIVITY_LOOKUP fixity_associativity_lookup
-#define PRECEDENCE_LOOKUP precedence_lookup
+#define FIXITY_ASSOCIATIVITY_PRECEDENCE_LOOKUP(fixity_associativity, \
+ precedence, rule, choice, context) do { \
+    fixity_associativity = fixity_associativity_lookup(rule, choice, context); \
+    precedence = precedence_lookup(rule, choice, context); \
+ } while (0)
 #define NUMBER_OF_SLOTS_LOOKUP number_of_slots_lookup
 
 static uint32_t rule_lookup(uint32_t parent, uint32_t slot,

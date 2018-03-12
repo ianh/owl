@@ -17,15 +17,15 @@ struct bracket_transitions {
     uint32_t number_of_transitions;
 };
 struct action_map_entry {
-    state_id dfa_state;
-    state_id nfa_state;
     state_id target_nfa_state;
+    state_id dfa_state;
     symbol_id dfa_symbol;
+    state_id nfa_state;
     symbol_id nfa_symbol;
     uint32_t action_index;
 };
 struct action_map {
-    // Sorted lexicographically by dfa_state, then by target_nfa_state, then by
+    // Sorted lexicographically by target_nfa_state, then by dfa_state, then by
     // dfa_symbol.  "Initial" entries with no dfa_state or dfa_symbol are
     // encoded using UINT32_MAX for both fields.
     struct action_map_entry *entries;
@@ -50,6 +50,9 @@ void determinize(struct combined_grammar *grammar,
 
 void determinize_bracket_transitions(struct bracket_transitions *result,
  struct combined_grammar *grammar);
+
+struct action_map_entry *action_map_find(struct action_map *map,
+ state_id target_nfa_state, state_id dfa_state, symbol_id dfa_symbol);
 
 // Step 2 (build) uses this function to determinize and minimize rules.
 void determinize_minimize(struct automaton *input, struct automaton *result);
