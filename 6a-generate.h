@@ -12,6 +12,7 @@ struct generator {
     struct grammar *grammar;
     struct combined_grammar *combined;
     struct deterministic_grammar *deterministic;
+    struct bracket_transitions *transitions;
 
     struct generator_internal *internal;
 };

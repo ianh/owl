@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
         .grammar = &grammar,
         .combined = &combined,
         .deterministic = &deterministic,
+        .transitions = &bracket_transitions,
     };
     generate(&generator);
 #endif

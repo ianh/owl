@@ -73,7 +73,7 @@ static void generate_automaton(struct generator *gen, struct automaton *a,
  uint32_t offset, enum automaton_type type);
 static void generate_action_automaton(struct generator *gen,
  struct action_map *map, uint32_t dfa_offset, uint32_t nfa_offset,
- enum automaton_type type);
+ uint32_t bracket_nfa_offset, enum automaton_type type);
 static void generate_actions(struct generator *gen, struct action_map *map,
  uint32_t action_index);
 
@@ -261,11 +261,14 @@ void generate(struct generator *gen)
     set_unsigned_number_substitution(gen, "start-state",
      gen->deterministic->automaton.start_state);
     output_line(gen, "");
+    output_line(gen, "struct state_stack {");
+    output_line(gen, "    %%state-type *states;");
+    output_line(gen, "    size_t capacity;");
+    output_line(gen, "    size_t depth;");
+    output_line(gen, "};");
     output_line(gen, "struct fill_run_continuation {");
     output_line(gen, "    %%state-type state;");
-    output_line(gen, "    %%state-type *state_stack;");
-    output_line(gen, "    size_t state_stack_capacity;");
-    output_line(gen, "    size_t state_stack_depth;");
+    output_line(gen, "    struct state_stack stack;");
     output_line(gen, "};");
     output_line(gen, "static void fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);");
     output_line(gen, "static void *build_parse_tree(struct bluebird_token_run *);");
@@ -288,11 +291,11 @@ void generate(struct generator *gen)
     output_line(gen, "        fprintf(stderr, \"error: tokenizing failed. next char was %u\\n\", string[tokenizer.offset]);");
     output_line(gen, "        abort();");
     output_line(gen, "    }");
-    output_line(gen, "    if (c.state_stack_depth > 0) {");
+    output_line(gen, "    if (c.stack.depth > 0) {");
     output_line(gen, "        // TODO: Return error instead of printing it");
     output_line(gen, "        fprintf(stderr, \"error: parsing failed because the stack was still full\\n\");");
     output_line(gen, "    }");
-    output_line(gen, "    free(c.state_stack);");
+    output_line(gen, "    free(c.stack.states);");
     /*
     output_line(gen, "    struct bluebird_token_run *run_to_print = token_run;");
     output_line(gen, "    while (run_to_print) {");
@@ -309,15 +312,15 @@ void generate(struct generator *gen)
     output_line(gen, "void bluebird_tree_destroy(struct bluebird_tree *tree) {");
     output_line(gen, "    free(tree);");
     output_line(gen, "}");
-    output_line(gen, "static bool grow_state_stack(struct fill_run_continuation *cont) {");
-    output_line(gen, "    size_t new_capacity = (cont->state_stack_capacity + 2) * 3 / 2;");
-    output_line(gen, "    if (new_capacity <= cont->state_stack_capacity)");
+    output_line(gen, "static bool grow_state_stack(struct state_stack *stack) {");
+    output_line(gen, "    size_t new_capacity = (stack->capacity + 2) * 3 / 2;");
+    output_line(gen, "    if (new_capacity <= stack->capacity)");
     output_line(gen, "        return false;");
-    output_line(gen, "    %%state-type *new_stack = realloc(cont->state_stack, new_capacity * sizeof(%%state-type));");
-    output_line(gen, "    if (!new_stack)");
+    output_line(gen, "    %%state-type *new_states = realloc(stack->states, new_capacity * sizeof(%%state-type));");
+    output_line(gen, "    if (!new_states)");
     output_line(gen, "        return false;");
-    output_line(gen, "    cont->state_stack = new_stack;");
-    output_line(gen, "    cont->state_stack_capacity = new_capacity;");
+    output_line(gen, "    stack->states = new_states;");
+    output_line(gen, "    stack->capacity = new_capacity;");
     output_line(gen, "    return true;");
     output_line(gen, "}");
     struct automaton *a = &gen->deterministic->automaton;
@@ -338,19 +341,23 @@ void generate(struct generator *gen)
      gen->combined->final_nfa_state);
     output_line(gen, "static void *build_parse_tree(struct bluebird_token_run *run) {");
     output_line(gen, "    struct construct_state construct_state = { 0 };");
+    output_line(gen, "    struct state_stack stack = { 0 };");
     if (gen->combined->root_rule_is_expression)
         output_line(gen, "    construct_begin(&construct_state, CONSTRUCT_EXPRESSION_ROOT);");
     else
         output_line(gen, "    construct_begin(&construct_state, CONSTRUCT_NORMAL_ROOT);");
     output_line(gen, "    uint16_t token_index = run->number_of_tokens;");
-    output_line(gen, "    goto nfa_state_%%final-nfa-state;");
-    generate_action_automaton(gen, &gen->deterministic->action_map, 0, 0, NORMAL_AUTOMATON);
-    generate_action_automaton(gen, &gen->deterministic->bracket_action_map, a->number_of_states, gen->combined->automaton.number_of_states, NORMAL_AUTOMATON);
-    //output_line(gen, "    follow_transition_reversed(&construct_state, &nfa_state, UINT32_MAX, UINT32_MAX);");
-    output_line(gen, "error:");
+    output_line(gen, "    %%state-type start_state = %%final-nfa-state;");
+    output_line(gen, "start:");
+    output_line(gen, "    switch (start_state) {");
+    uint32_t nfa_offset = gen->combined->automaton.number_of_states;
+    generate_action_automaton(gen, &gen->deterministic->action_map, 0, 0, nfa_offset, NORMAL_AUTOMATON);
+    generate_action_automaton(gen, &gen->deterministic->bracket_action_map, a->number_of_states, nfa_offset, gen->combined->automaton.number_of_states, BRACKET_AUTOMATON);
+    output_line(gen, "    }");
     // TODO: Free all remaining token runs here.
     output_line(gen, "    printf(\"error!\\n\");");
     output_line(gen, "finish:");
+    output_line(gen, "    free(stack.states);");
     output_line(gen, "    return construct_finish(&construct_state);");
     output_line(gen, "}");
     output_line(gen, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info) {");
@@ -475,7 +482,7 @@ static void generate_automaton(struct generator *gen, struct automaton *a,
         if (s.accepting && type == BRACKET_AUTOMATON) {
             set_unsigned_number_substitution(gen, "state-transition-symbol",
              s.transition_symbol);
-            output_line(gen, "        start_state = cont->state_stack[--cont->state_stack_depth];");
+            output_line(gen, "        start_state = cont->stack.states[--cont->stack.depth];");
             output_line(gen, "        run->tokens[token_index] = %%state-transition-symbol;");
             output_line(gen, "        goto start;");
             output_line(gen, "    }");
@@ -504,11 +511,11 @@ static void generate_automaton(struct generator *gen, struct automaton *a,
         output_string(gen, "        default:");
         if (has_bracket_symbols) {
             output_line(gen, "");
-            output_line(gen, "            if (cont->state_stack_depth >= cont->state_stack_capacity) {");
-            output_line(gen, "                if (!grow_state_stack(cont))");
+            output_line(gen, "            if (cont->stack.depth >= cont->stack.capacity) {");
+            output_line(gen, "                if (!grow_state_stack(&cont->stack))");
             output_line(gen, "                    break;"); // TODO: Error handling.
             output_line(gen, "            }");
-            output_line(gen, "            cont->state_stack[cont->state_stack_depth++] = %%state-id;");
+            output_line(gen, "            cont->stack.states[cont->stack.depth++] = %%state-id;");
             output_line(gen, "            token_index--;");
             output_line(gen, "            goto state_%%first-bracket-state-id;");
         } else
@@ -519,8 +526,9 @@ static void generate_automaton(struct generator *gen, struct automaton *a,
     }
 }
 
-static void generate_action_automaton(struct generator *gen, struct action_map *map,
- uint32_t dfa_offset, uint32_t nfa_offset, enum automaton_type type)
+static void generate_action_automaton(struct generator *gen,
+ struct action_map *map, uint32_t dfa_offset, uint32_t nfa_offset,
+ uint32_t bracket_nfa_offset, enum automaton_type type)
 {
     for (uint32_t i = 0; i < map->number_of_entries; ++i) {
         struct action_map_entry entry = map->entries[i];
@@ -530,53 +538,75 @@ static void generate_action_automaton(struct generator *gen, struct action_map *
         if (!last_entry || last_entry->target_nfa_state != entry.target_nfa_state) {
             set_unsigned_number_substitution(gen, "entry-target",
              entry.target_nfa_state + nfa_offset);
+            output_line(gen, "    case %%entry-target:");
             output_line(gen, "nfa_state_%%entry-target:");
-            output_line(gen, "    if (token_index == 0) {");
-            output_line(gen, "        struct bluebird_token_run *last_run = run;");
-            output_line(gen, "        run = run->prev;");
-            output_line(gen, "        free(last_run);");
-            output_line(gen, "        if (!run) {");
+            output_line(gen, "        if (token_index == 0) {");
+            output_line(gen, "            struct bluebird_token_run *last_run = run;");
+            output_line(gen, "            run = run->prev;");
+            output_line(gen, "            free(last_run);");
+            output_line(gen, "            if (!run) {");
             struct action_map_entry *final_entry = action_map_find(map, entry.target_nfa_state, UINT32_MAX, UINT32_MAX);
             if (!final_entry) {
-                output_line(gen, "            goto error;");
+                output_line(gen, "                break;");
             } else {
                 generate_actions(gen, map, final_entry->action_index);
-                output_line(gen, "            goto finish;");
+                output_line(gen, "                goto finish;");
             }
+            output_line(gen, "            }");
+            output_line(gen, "            token_index = run->number_of_tokens;");
             output_line(gen, "        }");
-            output_line(gen, "        token_index = run->number_of_tokens;");
-            output_line(gen, "    }");
-            output_line(gen, "    token_index--;");
-            output_line(gen, "    switch (run->states[token_index]) {");
+            output_line(gen, "        token_index--;");
+            output_line(gen, "        switch (run->states[token_index]) {");
         }
         struct action_map_entry *next_entry = 0;
         if (i + 1 < map->number_of_entries)
             next_entry = &map->entries[i + 1];
         if (entry.dfa_state != UINT32_MAX) {
-            if (!last_entry || last_entry->dfa_state != entry.dfa_state) {
+            if (!last_entry || last_entry->dfa_state != entry.dfa_state || last_entry->target_nfa_state != entry.target_nfa_state) {
                 set_unsigned_number_substitution(gen, "entry-state-id",
                  entry.dfa_state + dfa_offset);
-                output_line(gen, "    case %%entry-state-id:");
-                output_line(gen, "        switch (run->tokens[token_index]) {");
+                output_line(gen, "        case %%entry-state-id:");
+                output_line(gen, "            switch (run->tokens[token_index]) {");
             }
             set_unsigned_number_substitution(gen, "entry-symbol",
              entry.dfa_symbol);
-            output_line(gen, "        case %%entry-symbol:");
+            output_line(gen, "            case %%entry-symbol:");
             generate_actions(gen, map, entry.action_index);
             set_unsigned_number_substitution(gen, "entry-nfa-state",
              entry.nfa_state + nfa_offset);
-            output_line(gen, "            goto nfa_state_%%entry-nfa-state;");
-            // TODO: bracket stuff
-            if (!next_entry || next_entry->dfa_state != entry.dfa_state) {
-                output_line(gen, "        default: break;");
-                output_line(gen, "        }");
-                output_line(gen, "        break;");
+            if (type == BRACKET_AUTOMATON && entry.dfa_state ==
+             gen->deterministic->bracket_automaton.start_state) {
+                output_line(gen, "                start_state = stack.states[--stack.depth];");
+                output_line(gen, "                goto start;");
+            } else if (entry.dfa_symbol >= gen->combined->number_of_tokens) {
+                output_line(gen, "                if (stack.depth >= stack.capacity) {");
+                output_line(gen, "                    if (!grow_state_stack(&stack))");
+                output_line(gen, "                        break;"); // TODO: Error handling.
+                output_line(gen, "                }");
+                output_line(gen, "                stack.states[stack.depth++] = %%entry-nfa-state;");
+                struct automaton *b = &gen->combined->bracket_automaton;
+                for (state_id j = 0; j < b->number_of_states; ++j) {
+                    if (!b->states[j].accepting)
+                        continue;
+                    if (b->states[j].transition_symbol != entry.nfa_symbol)
+                        continue;
+                    set_unsigned_number_substitution(gen, "bracket-nfa-state",
+                     j + bracket_nfa_offset);
+                    output_line(gen, "                goto nfa_state_%%bracket-nfa-state;");
+                    break;
+                }
+            } else
+                output_line(gen, "                goto nfa_state_%%entry-nfa-state;");
+            if (!next_entry || next_entry->dfa_state != entry.dfa_state || next_entry->target_nfa_state != entry.target_nfa_state) {
+                output_line(gen, "            default: break;");
+                output_line(gen, "            }");
+                output_line(gen, "            break;");
             }
         }
         if (!next_entry || next_entry->target_nfa_state != entry.target_nfa_state) {
-            output_line(gen, "    default: break;");
-            output_line(gen, "    }");
-            output_line(gen, "    goto error;");
+            output_line(gen, "        default: break;");
+            output_line(gen, "        }");
+            output_line(gen, "        break;");
         }
     }
 }
@@ -599,7 +629,7 @@ static void generate_actions(struct generator *gen, struct action_map *map,
             break;
         set_unsigned_number_substitution(gen, "action-id", map->actions[i]);
         set_unsigned_number_substitution(gen, "action-slot", CONSTRUCT_ACTION_GET_SLOT(map->actions[i]));
-        //FORMAT_ACTION(map->actions[i]);
+        FORMAT_ACTION(map->actions[i]);
         output_line(gen, "            construct_action_apply(&construct_state, %%action-id);");
     }
 }
