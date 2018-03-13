@@ -365,42 +365,31 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         bracket_transition = true;
         break;
     }
-    // TODO: Binary search.
+    struct action_map_entry *entry;
     state_id nfa_state = *last_nfa_state;
-    bool found = false;
-    for (uint32_t j = 0; j < map->number_of_entries; ++j) {
-        struct action_map_entry entry = map->entries[j];
-        if (entry.dfa_state != state)
-            continue;
-        if (entry.target_nfa_state != nfa_state)
-            continue;
-        if (entry.dfa_symbol != token)
-            continue;
-        nfa_state = entry.nfa_state;
-        if (bracket_transition) {
-            state_array_push(&ctx->stack, nfa_state);
-            // TODO: Use a table.
-            for (state_id k = 0; k <
-             ctx->combined->bracket_automaton.number_of_states; ++k) {
-                if (ctx->combined->bracket_automaton.states[k].transition_symbol
-                 != entry.nfa_symbol)
-                    continue;
-                nfa_state = k;
-                break;
-            }
-        }
-        for (uint32_t k = entry.action_index; k < map->number_of_actions; k++) {
-            if (map->actions[k] == 0)
-                break;
-            print_action(map->actions[k]);
-            construct_action_apply(&ctx->construct_state, map->actions[k]);
-        }
-        found = true;
-        break;
-    }
-    if (!found) {
+    entry = action_map_find(map, nfa_state, state, token);
+    if (!entry) {
         fprintf(stderr, "internal error (%u %u %x)\n", state, nfa_state, token);
         exit(-1);
+    }
+    nfa_state = entry->nfa_state;
+    if (bracket_transition) {
+        state_array_push(&ctx->stack, nfa_state);
+        // TODO: Use a table.
+        for (state_id k = 0; k <
+         ctx->combined->bracket_automaton.number_of_states; ++k) {
+            if (ctx->combined->bracket_automaton.states[k].transition_symbol
+             != entry->nfa_symbol)
+                continue;
+            nfa_state = k;
+            break;
+        }
+    }
+    for (uint32_t k = entry->action_index; k < map->number_of_actions; k++) {
+        if (map->actions[k] == 0)
+            break;
+        print_action(map->actions[k]);
+        construct_action_apply(&ctx->construct_state, map->actions[k]);
     }
     if (bracket_automaton && state ==
      ctx->deterministic->bracket_automaton.start_state) {
