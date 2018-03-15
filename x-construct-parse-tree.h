@@ -21,7 +21,7 @@
  (n)->choice_index, next_sibling, (n)->slots, info))
 
 #ifndef FINISH_TOKEN
-#define FINISH_TOKEN(next_sibling, info) 0
+#define FINISH_TOKEN(rule, next_sibling, info) 0
 #endif
 
 #ifndef RULE_T
@@ -385,7 +385,8 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
     case CONSTRUCT_ACTION_TOKEN_SLOT: {
         uint16_t slot = CONSTRUCT_ACTION_GET_SLOT(action);
         FINISHED_NODE_T *finished = &s->under_construction->slots[slot];
-        *finished = FINISH_TOKEN(*finished, s->info);
+        *finished = FINISH_TOKEN(RULE_LOOKUP(s->under_construction->rule, slot,
+         s->info), *finished, s->info);
         break;
     }
     case CONSTRUCT_ACTION_END_OPERAND: {

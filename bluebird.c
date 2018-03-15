@@ -11,11 +11,11 @@
 // - code generation
 // - self hosting
 //  - write a blog post or something about how the old parser worked?
-// - interoperability
 // - ambiguity checking
 // - fancy interpreter output
 // - json interpreter output
 // - clean up memory leaks
+// - get rid of RULE_LOOKUP?
 // - check if all the input is properly validated
 // - perf optimization?
 

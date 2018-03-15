@@ -68,6 +68,9 @@ static void set_literal_substitution(struct generator *gen,
 static bool rule_is_named(struct rule *rule, const char *name);
 static bool token_is(struct token *token, const char *name);
 
+static void generate_fields_for_token_rule(struct generator *gen,
+ struct rule *rule, const char *string);
+
 enum automaton_type { NORMAL_AUTOMATON, BRACKET_AUTOMATON };
 static void generate_automaton(struct generator *gen, struct automaton *a,
  uint32_t offset, enum automaton_type type);
@@ -162,17 +165,8 @@ void generate(struct generator *gen)
              slot.name_length, LOWERCASE_WITH_UNDERSCORES);
             output_line(gen, "    parsed_id %%referenced-slot;");
         }
-        if (rule->is_token) {
-            if (rule_is_named(rule, "identifier")) {
-                output_line(gen, "    const char *identifier;");
-                output_line(gen, "    size_t length;");
-            } else if (rule_is_named(rule, "number"))
-                output_line(gen, "    double number;");
-            else if (rule_is_named(rule, "string")) {
-                output_line(gen, "    const char *string;");
-                output_line(gen, "    size_t length;");
-            }
-        }
+        if (rule->is_token)
+            generate_fields_for_token_rule(gen, rule, "    %%type%%field;\n");
         output_line(gen, "};");
     }
     output_line(gen, "");
@@ -209,7 +203,41 @@ void generate(struct generator *gen)
     output_line(gen, "    size_t parse_tree_size;");
     output_line(gen, "    parsed_id next_id;");
     output_line(gen, "    parsed_id root_id;");
+    for (uint32_t i = 0; i < n; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        if (!rule->is_token)
+            continue;
+        set_substitution(gen, "rule", rule->name, rule->name_length,
+         LOWERCASE_WITH_UNDERSCORES);
+        output_line(gen, "    struct {");
+        generate_fields_for_token_rule(gen, rule, "        %%type%%field;\n");
+        output_line(gen, "    } *%%rule_tokens;");
+        output_line(gen, "    size_t number_of_%%rule_tokens;");
+        output_line(gen, "    size_t used_%%rule_tokens;");
+        output_line(gen, "    size_t %%rule_tokens_capacity;");
+    }
     output_line(gen, "};");
+    for (uint32_t i = 0; i < n; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        if (!rule->is_token)
+            continue;
+        set_substitution(gen, "rule", rule->name, rule->name_length,
+         LOWERCASE_WITH_UNDERSCORES);
+        output_string(gen, "static void add_%%rule_token(struct bluebird_tree *tree");
+        generate_fields_for_token_rule(gen, rule, ", %%type%%field_param");
+        output_line(gen, ") {");
+        output_line(gen, "    size_t index = tree->number_of_%%rule_tokens++;");
+        output_line(gen, "    if (tree->number_of_%%rule_tokens > tree->%%rule_tokens_capacity) {");
+        output_line(gen, "        size_t capacity = (tree->%%rule_tokens_capacity + 1) * 3 / 2;");
+        output_line(gen, "        void *tokens = realloc(tree->%%rule_tokens, sizeof(tree->%%rule_tokens[0]) * capacity);");
+        output_line(gen, "        if (!tokens)");
+        output_line(gen, "            abort();");
+        output_line(gen, "        tree->%%rule_tokens_capacity = capacity;");
+        output_line(gen, "        tree->%%rule_tokens = tokens;");
+        output_line(gen, "    }");
+        generate_fields_for_token_rule(gen, rule, "    tree->%%rule_tokens[index].%%field = %%field_param;\n");
+        output_line(gen, "}");
+    }
 
     set_literal_substitution(gen, "token-type", "uint32_t");
     set_literal_substitution(gen, "state-type", "uint32_t");
@@ -265,9 +293,14 @@ void generate(struct generator *gen)
         output_line(gen, "struct parsed_%%rule parsed_%%rule_get(struct bluebird_tree *tree, parsed_id id) {");
         output_line(gen, "    if (id == 0)");
         output_line(gen, "        return (struct parsed_%%rule){ ._tree = tree, .empty = true };");
+        output_line(gen, "    parsed_id next = read_tree(&id, tree);");
+        if (rule->is_token)
+            output_line(gen, "    size_t token_index = read_tree(&id, tree);");
         output_line(gen, "    return (struct parsed_%%rule){");
         output_line(gen, "        ._tree = tree,");
-        output_line(gen, "        ._next = read_tree(&id, tree),");
+        output_line(gen, "        ._next = next,");
+        if (rule->is_token)
+            generate_fields_for_token_rule(gen, rule, "        .%%field = tree->%%rule_tokens[token_index].%%field,\n");
         if (rule->number_of_choices > 0)
             output_line(gen, "        .type = read_tree(&id, tree),");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
@@ -282,15 +315,15 @@ void generate(struct generator *gen)
     output_line(gen, "static parsed_id finish_node(uint32_t rule, uint32_t choice, parsed_id next_sibling, parsed_id *slots, void *info) {");
     output_line(gen, "    struct bluebird_tree *tree = info;");
     output_line(gen, "    printf(\"finishing node (%lu): %u / %u\\n\", tree->next_id, rule, choice);");
+    output_line(gen, "    parsed_id id = tree->next_id;");
+    output_line(gen, "    write_tree(tree, next_sibling);");
     output_line(gen, "    switch (rule) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
-        if (rule->number_of_slots == 0)
+        if (rule->is_token)
             continue;
         set_unsigned_number_substitution(gen, "rule-index", i);
         output_line(gen, "    case %%rule-index: {");
-        output_line(gen, "        parsed_id id = tree->next_id;");
-        output_line(gen, "        write_tree(tree, next_sibling);");
         output_line(gen, "        printf(\"next = %lu\\n\", next_sibling);");
         if (rule->number_of_choices > 0)
             output_line(gen, "        write_tree(tree, choice);");
@@ -299,12 +332,41 @@ void generate(struct generator *gen)
             output_line(gen, "        printf(\"slot %%slot-index = %lu\\n\", slots[%%slot-index]);");
             output_line(gen, "        write_tree(tree, slots[%%slot-index]);");
         }
-        output_line(gen, "        return id;");
+        output_line(gen, "        break;");
         output_line(gen, "    }");
     }
     output_line(gen, "    default:");
-    output_line(gen, "        return 0;");
+    output_line(gen, "        break;");
     output_line(gen, "    }");
+    output_line(gen, "    return id;");
+    output_line(gen, "}");
+    output_line(gen, "static parsed_id finish_token(uint32_t rule, parsed_id next_sibling, void *info) {");
+    output_line(gen, "    struct bluebird_tree *tree = info;");
+    output_line(gen, "    printf(\"finishing token (%lu): %u\\n\", tree->next_id, rule);");
+    output_line(gen, "    parsed_id id = tree->next_id;");
+    output_line(gen, "    write_tree(tree, next_sibling);");
+    output_line(gen, "    switch (rule) {");
+    for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        if (!rule->is_token)
+            continue;
+        set_unsigned_number_substitution(gen, "rule-index", i);
+        set_substitution(gen, "rule", rule->name, rule->name_length,
+         LOWERCASE_WITH_UNDERSCORES);
+        output_line(gen, "    case %%rule-index: {");
+        output_line(gen, "        parsed_id id = tree->next_id;");
+        output_line(gen, "        if (tree->used_%%rule_tokens >= tree->number_of_%%rule_tokens)");
+        output_line(gen, "            abort();");
+        output_line(gen, "        size_t token_index = tree->number_of_%%rule_tokens - tree->used_%%rule_tokens++;");
+        // TODO: Remove this cast.
+        output_line(gen, "        write_tree(tree, (parsed_id)token_index);");
+        output_line(gen, "        break;");
+        output_line(gen, "    }");
+    }
+    output_line(gen, "    default:");
+    output_line(gen, "        break;");
+    output_line(gen, "    }");
+    output_line(gen, "    return id;");
     output_line(gen, "}");
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
@@ -360,6 +422,10 @@ void generate(struct generator *gen)
     set_unsigned_number_substitution(gen, "number-token", 0xffffffff);
     set_unsigned_number_substitution(gen, "string-token", 0xffffffff);
     set_unsigned_number_substitution(gen, "bracket-transition-token", 0xffffffff);
+    output_line(gen, "#define IGNORE_TOKEN_WRITE(...)");
+    set_literal_substitution(gen, "write-identifier-token", "IGNORE_TOKEN_WRITE");
+    set_literal_substitution(gen, "write-number-token", "IGNORE_TOKEN_WRITE");
+    set_literal_substitution(gen, "write-string-token", "IGNORE_TOKEN_WRITE");
     for (uint32_t i = gen->combined->number_of_keyword_tokens;
      i < gen->combined->number_of_tokens; ++i) {
         if (token_is(&gen->combined->tokens[i], "identifier"))
@@ -370,14 +436,38 @@ void generate(struct generator *gen)
             set_unsigned_number_substitution(gen, "string-token", i);
     }
     output_line(gen, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info);");
+    for (uint32_t i = 0; i < n; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        if (!rule->is_token)
+            continue;
+        if (rule_is_named(rule, "identifier")) {
+            output_line(gen, "static void write_identifier_token(size_t offset, size_t length, void *info) {");
+            output_line(gen, "    struct bluebird_tree *tree = info;");
+            output_line(gen, "    add_identifier_token(tree, tree->string + offset, length);");
+            output_line(gen, "}");
+            set_literal_substitution(gen, "write-identifier-token", "write_identifier_token");
+        } else if (rule_is_named(rule, "number")) {
+            output_line(gen, "static void write_number_token(size_t offset, size_t length, double number, void *info) {");
+            output_line(gen, "    struct bluebird_tree *tree = info;");
+            output_line(gen, "    add_number_token(tree, number);");
+            output_line(gen, "}");
+            set_literal_substitution(gen, "write-number-token", "write_number_token");
+        } else if (rule_is_named(rule, "string")) {
+            output_line(gen, "static void write_string_token(size_t offset, size_t length, size_t content_offset, size_t content_length, void *info) {");
+            output_line(gen, "    struct bluebird_tree *tree = info;");
+            output_line(gen, "    add_string_token(tree, tree->string + offset, length);");
+            output_line(gen, "}");
+            set_literal_substitution(gen, "write-string-token", "write_string_token");
+        }
+    }
 #define EVALUATE_MACROS_AND_STRINGIFY(...) #__VA_ARGS__
 
 #define TOKEN_T %%token-type
 #define STATE_T %%state-type
 #define READ_KEYWORD_TOKEN read_keyword_token
-#define WRITE_NUMBER_TOKEN(...)
-#define WRITE_IDENTIFIER_TOKEN(...)
-#define WRITE_STRING_TOKEN(...)
+#define WRITE_NUMBER_TOKEN %%write-number-token
+#define WRITE_IDENTIFIER_TOKEN %%write-identifier-token
+#define WRITE_STRING_TOKEN %%write-string-token
 #define IDENTIFIER_TOKEN %%identifier-token
 #define NUMBER_TOKEN %%number-token
 #define STRING_TOKEN %%string-token
@@ -395,6 +485,7 @@ void generate(struct generator *gen)
 
 #define FINISHED_NODE_T parsed_id
 #define FINISH_NODE finish_node
+#define FINISH_TOKEN finish_token
 
 #define RULE_T uint32_t
 #define RULE_LOOKUP rule_lookup
@@ -651,6 +742,31 @@ void generate(struct generator *gen)
 
     free(internal.substitutions);
     gen->internal = 0;
+}
+
+static void generate_fields_for_token_rule(struct generator *gen,
+ struct rule *rule, const char *string)
+{
+    if (rule_is_named(rule, "identifier")) {
+        set_literal_substitution(gen, "type", "const char *");
+        set_literal_substitution(gen, "field", "identifier");
+        output_string(gen, string);
+        set_literal_substitution(gen, "type", "size_t ");
+        set_literal_substitution(gen, "field", "length");
+        output_string(gen, string);
+    } else if (rule_is_named(rule, "number")) {
+        set_literal_substitution(gen, "type", "double ");
+        set_literal_substitution(gen, "field", "number");
+        output_string(gen, string);
+    } else if (rule_is_named(rule, "string")) {
+        set_literal_substitution(gen, "type", "const char *");
+        set_literal_substitution(gen, "field", "string");
+        output_string(gen, string);
+        set_literal_substitution(gen, "type", "size_t ");
+        set_literal_substitution(gen, "field", "length");
+        output_string(gen, string);
+    } else
+        abort();
 }
 
 static void generate_automaton(struct generator *gen, struct automaton *a,

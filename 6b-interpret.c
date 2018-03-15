@@ -40,8 +40,8 @@ struct interpret_node;
 static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
  struct interpret_node *next_sibling, struct interpret_node **slots,
  struct interpret_context *context);
-static struct interpret_node *finish_token(struct interpret_node *next_sibling,
- struct interpret_context *context);
+static struct interpret_node *finish_token(uint32_t rule,
+ struct interpret_node *next_sibling, struct interpret_context *context);
 
 #define RULE_T uint32_t
 #define RULE_LOOKUP rule_lookup
@@ -470,8 +470,8 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
     return node;
 }
 
-static struct interpret_node *finish_token(struct interpret_node *next_sibling,
- struct interpret_context *context)
+static struct interpret_node *finish_token(uint32_t rule,
+ struct interpret_node *next_sibling, struct interpret_context *context)
 {
     struct interpret_node *token = context->tokens;
     if (!token)
