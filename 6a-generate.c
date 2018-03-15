@@ -355,9 +355,10 @@ void generate(struct generator *gen)
          LOWERCASE_WITH_UNDERSCORES);
         output_line(gen, "    case %%rule-index: {");
         output_line(gen, "        parsed_id id = tree->next_id;");
-        output_line(gen, "        if (tree->used_%%rule_tokens >= tree->number_of_%%rule_tokens)");
+        output_line(gen, "        tree->used_%%rule_tokens++;");
+        output_line(gen, "        if (tree->used_%%rule_tokens > tree->number_of_%%rule_tokens)");
         output_line(gen, "            abort();");
-        output_line(gen, "        size_t token_index = tree->number_of_%%rule_tokens - tree->used_%%rule_tokens++;");
+        output_line(gen, "        size_t token_index = tree->number_of_%%rule_tokens - tree->used_%%rule_tokens;");
         // TODO: Remove this cast.
         output_line(gen, "        write_tree(tree, (parsed_id)token_index);");
         output_line(gen, "        break;");
@@ -402,6 +403,14 @@ void generate(struct generator *gen)
                 output_line(gen, "            break;");
             }
             output_line(gen, "        }");
+        }
+        if (rule->is_token) {
+            if (rule_is_named(rule, "identifier"))
+                output_line(gen, "        printf(\" - %.*s\", (int)it.length, it.identifier);");
+            else if (rule_is_named(rule, "number"))
+                output_line(gen, "        printf(\" - %f\", it.number);");
+            else if (rule_is_named(rule, "string"))
+                output_line(gen, "        printf(\" - %.*s\", (int)it.length, it.string);");
         }
         output_line(gen, "        printf(\"\\n\");");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
