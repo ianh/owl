@@ -25,6 +25,10 @@ static void build_body_expression(struct context *ctx,
 static struct boundary_states connect_expression(struct context *ctx,
  struct automaton *a, struct parsed_expr *expr, struct boundary_states outer);
 
+static uint32_t add_slot(struct context *ctx, struct rule *rule,
+ const char *slot_name, size_t slot_name_length,
+ uint32_t referenced_rule_index);
+
 static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
  parsed_id id, enum token_type type);
 
@@ -126,10 +130,12 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         ops = parsed_operators_get(tree, body.operators);
         int32_t precedence = -1;
         while (!ops.empty) {
-            if (rule->number_of_operators >= MAX_NUMBER_OF_OPERATORS) {
+            if (rule->number_of_operators + rule->number_of_choices
+             >= MAX_NUMBER_OF_CHOICES) {
                 // TODO: Show location in original grammar text.
-                fprintf(stderr, "error: rules with more than %u operators are "
-                 "currently unsupported.\n", MAX_NUMBER_OF_OPERATORS);
+                fprintf(stderr, "error: rules with more than %u combined "
+                 "choice and operator clauses are currently unsupported.\n",
+                 MAX_NUMBER_OF_CHOICES);
                 exit(-1);
             }
             // First, unpack the fixity and associativity from the parse tree.
@@ -185,7 +191,35 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             precedence--;
             ops = parsed_operators_next(ops);
         }
-        // TODO: add explicit left/right/operand slots?
+
+        // Add slots for operands -- 'left'/'right' for infix operators, and
+        // 'operand' for prefix and postfix operators.
+        for (uint32_t i = 0; i < rule->number_of_operators; ++i) {
+            struct operator *operator = &rule->operators[i];
+            if (operator->fixity == INFIX) {
+                rule->left_slot_index = add_slot(&context, rule, "left",
+                 strlen("left"), rule_index);
+                rule->right_slot_index = add_slot(&context, rule, "right",
+                 strlen("right"), rule_index);
+                if (rule->left_slot_index == UINT32_MAX ||
+                 rule->right_slot_index == UINT32_MAX) {
+                    fprintf(stderr, "error: the 'left' and 'right' slots are "
+                     "reserved for the left and right operands of the '%.*s' "
+                     "operator.\n", (int)operator->name_length,
+                     operator->name);
+                    exit(-1);
+                }
+            } else {
+                rule->operand_slot_index = add_slot(&context, rule, "operand",
+                 strlen("operand"), rule_index);
+                if (rule->operand_slot_index == UINT32_MAX) {
+                    fprintf(stderr, "error: the 'operand' slot is reserved for "
+                     "the operand of the '%.*s' operator.\n",
+                     (int)operator->name_length, operator->name);
+                    exit(-1);
+                }
+            }
+        }
     }
 }
 
@@ -258,42 +292,10 @@ static void build_body_expression(struct context *ctx,
              (int)rule_name_length, rule_name);
             exit(-1);
         }
-        uint32_t slot_index = 0;
-        for (; slot_index < rule->number_of_slots; ++slot_index) {
-            struct slot *slot = &rule->slots[slot_index];
-            if (slot->name_length != slot_name_length)
-                continue;
-            if (memcmp(slot->name, slot_name, slot_name_length))
-                continue;
-            if (slot->rule_index != rule_index) {
-                fprintf(stderr, "error: in the rule '%.*s', the name '%.*s' "
-                 "could refer to either the rule '%.*s' or the rule '%.*s'.\n",
-                 (int)rule->name_length, rule->name,
-                 (int)slot_name_length, slot_name,
-                 (int)ctx->grammar->rules[slot->rule_index].name_length,
-                 ctx->grammar->rules[slot->rule_index].name,
-                 (int)rule_name_length, rule_name);
-                exit(-1);
-            }
-            break;
-        }
-        if (slot_index >= rule->number_of_slots) {
-            symbol_id symbol = ctx->next_symbol++;
-            if (rule->number_of_slots >= MAX_NUMBER_OF_SLOTS) {
-                fprintf(stderr, "error: rules with more than %u references to "
-                 "other rules or tokens are currently unsupported.\n",
-                 MAX_NUMBER_OF_SLOTS);
-                exit(-1);
-            }
-            rule->number_of_slots = slot_index + 1;
-            rule->slots = grow_array(rule->slots, &rule->slots_allocated_bytes,
-             rule->number_of_slots * sizeof(struct slot));
-            struct slot *slot = &rule->slots[slot_index];
-            slot->symbol = symbol;
-            slot->name = slot_name;
-            slot->name_length = slot_name_length;
-            slot->rule_index = rule_index;
-        }
+        uint32_t slot_index = add_slot(ctx, rule, slot_name, slot_name_length,
+         rule_index);
+        if (slot_index == UINT32_MAX)
+            exit(-1);
         automaton_add_transition(automaton, b.entry, b.exit,
          rule->slots[slot_index].symbol);
         break;
@@ -371,6 +373,49 @@ static struct boundary_states connect_expression(struct context *ctx,
     automaton_add_transition(a, outer.entry, inner.entry, SYMBOL_EPSILON);
     automaton_add_transition(a, inner.exit, outer.exit, SYMBOL_EPSILON);
     return inner;
+}
+
+static uint32_t add_slot(struct context *ctx, struct rule *rule,
+ const char *slot_name, size_t slot_name_length, uint32_t referenced_rule_index)
+{
+    uint32_t slot_index = 0;
+    for (; slot_index < rule->number_of_slots; ++slot_index) {
+        struct slot *slot = &rule->slots[slot_index];
+        if (slot->name_length != slot_name_length)
+            continue;
+        if (memcmp(slot->name, slot_name, slot_name_length))
+            continue;
+        if (slot->rule_index != referenced_rule_index) {
+            fprintf(stderr, "error: in the rule '%.*s', the name '%.*s' "
+             "could refer to either the rule '%.*s' or the rule '%.*s'.\n",
+             (int)rule->name_length, rule->name,
+             (int)slot_name_length, slot_name,
+             (int)ctx->grammar->rules[slot->rule_index].name_length,
+             ctx->grammar->rules[slot->rule_index].name,
+             (int)ctx->grammar->rules[referenced_rule_index].name_length,
+             ctx->grammar->rules[referenced_rule_index].name);
+            return UINT32_MAX;
+        }
+        break;
+    }
+    if (slot_index >= rule->number_of_slots) {
+        symbol_id symbol = ctx->next_symbol++;
+        if (rule->number_of_slots >= MAX_NUMBER_OF_SLOTS) {
+            fprintf(stderr, "error: rules with more than %u references to "
+             "other rules or tokens are currently unsupported.\n",
+             MAX_NUMBER_OF_SLOTS);
+            exit(-1);
+        }
+        rule->number_of_slots = slot_index + 1;
+        rule->slots = grow_array(rule->slots, &rule->slots_allocated_bytes,
+         rule->number_of_slots * sizeof(struct slot));
+        struct slot *slot = &rule->slots[slot_index];
+        slot->symbol = symbol;
+        slot->name = slot_name;
+        slot->name_length = slot_name_length;
+        slot->rule_index = referenced_rule_index;
+    }
+    return slot_index;
 }
 
 static const char *token_type_string(enum token_type type)

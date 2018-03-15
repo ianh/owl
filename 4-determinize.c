@@ -210,6 +210,7 @@ static void determinize_automaton(struct context context)
                 state->transition_symbol = t.deterministic_transition_symbol;
                 break;
             }
+            bitset_destroy(&s);
         }
     }
 
@@ -359,11 +360,7 @@ void determinize(struct combined_grammar *grammar,
 void determinize_bracket_transitions(struct bracket_transitions *result,
  struct combined_grammar *grammar)
 {
-    // TODO: This should be grammar->number_of_tokens.
-    symbol_id next_transition_symbol = grammar->automaton.number_of_symbols;
-    if (grammar->bracket_automaton.number_of_symbols > next_transition_symbol)
-        next_transition_symbol = grammar->bracket_automaton.number_of_symbols;
-
+    symbol_id next_transition_symbol = grammar->number_of_tokens;
     struct automaton a = {0};
     struct bracket_transitions transitions = {0};
     struct context context = {
@@ -408,7 +405,6 @@ struct action_map_entry *action_map_find(struct action_map *map,
     return bsearch(&query, map->entries, map->number_of_entries,
      sizeof(struct action_map_entry), compare_action_map_entries);
 }
-
 
 // This is Brzozowski's algorithm.
 void determinize_minimize(struct automaton *input, struct automaton *result)

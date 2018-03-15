@@ -143,6 +143,11 @@ void generate(struct generator *gen)
                  rule->choices[j].name_length, UPPERCASE_WITH_UNDERSCORES);
                 output_line(gen, "    PARSED_%%choice-name,");
             }
+            for (uint32_t j = 0; j < rule->number_of_operators; ++j) {
+                set_substitution(gen, "operator-name", rule->operators[j].name,
+                 rule->operators[j].name_length, UPPERCASE_WITH_UNDERSCORES);
+                output_line(gen, "    PARSED_%%operator-name,");
+            }
             output_line(gen, "};");
         }
         output_line(gen, "struct parsed_%%rule {");
@@ -200,10 +205,156 @@ void generate(struct generator *gen)
     output_line(gen, "");
     output_line(gen, "struct bluebird_tree {");
     output_line(gen, "    const char *string;");
+    output_line(gen, "    uint8_t *parse_tree;");
+    output_line(gen, "    size_t parse_tree_size;");
+    output_line(gen, "    parsed_id next_id;");
+    output_line(gen, "    parsed_id root_id;");
     output_line(gen, "};");
 
     set_literal_substitution(gen, "token-type", "uint32_t");
     set_literal_substitution(gen, "state-type", "uint32_t");
+
+    // Code for reading and writing packed parse trees.
+    // TODO: Delta encoding instead of absolute numbers.
+    output_line(gen, "static inline parsed_id read_tree(parsed_id *id, struct bluebird_tree *tree) {");
+    output_line(gen, "    uint8_t *parse_tree = tree->parse_tree;");
+    output_line(gen, "    size_t parse_tree_size = tree->parse_tree_size;");
+    output_line(gen, "    if (*id >= parse_tree_size)");
+    output_line(gen, "        return 0;");
+    output_line(gen, "    parsed_id result = parse_tree[*id] & 0x7f;");
+    output_line(gen, "    (*id)++;");
+    output_line(gen, "    int shift_amount = 7;");
+    output_line(gen, "    while (*id < parse_tree_size && (parse_tree[*id] & 0x80) != 0) {");
+    output_line(gen, "        result |= (parse_tree[*id] & 0x7f) << shift_amount;");
+    output_line(gen, "        shift_amount += 7;");
+    output_line(gen, "        (*id)++;");
+    output_line(gen, "    }");
+    output_line(gen, "    return result;");
+    output_line(gen, "}");
+    output_line(gen, "static bool grow_tree(struct bluebird_tree *tree, size_t size)");
+    output_line(gen, "{");
+    output_line(gen, "    size_t n = tree->parse_tree_size;");
+    output_line(gen, "    while (size > n)");
+    output_line(gen, "        n = (n + 1) * 3 / 2;");
+    output_line(gen, "    uint8_t *parse_tree = realloc(tree->parse_tree, n);");
+    output_line(gen, "    if (!parse_tree)");
+    output_line(gen, "        return false;");
+    output_line(gen, "    memset(parse_tree + tree->parse_tree_size, 0, n - tree->parse_tree_size);");
+    output_line(gen, "    tree->parse_tree_size = n;");
+    output_line(gen, "    tree->parse_tree = parse_tree;");
+    output_line(gen, "    return true;");
+    output_line(gen, "}");
+    output_line(gen, "static void write_tree(struct bluebird_tree *tree, parsed_id value)");
+    output_line(gen, "{");
+    output_line(gen, "    // Reserve 5 bytes (the maximum encoded size of a 32-bit value).");
+    output_line(gen, "    size_t reserved_size = tree->next_id + 5;");
+    output_line(gen, "    if (tree->parse_tree_size <= reserved_size && !grow_tree(tree, reserved_size))");
+    // FIXME: Should we handle this case?
+    output_line(gen, "        return;");
+    output_line(gen, "    tree->parse_tree[tree->next_id++] = value & 0x7f;");
+    output_line(gen, "    value >>= 7;");
+    output_line(gen, "    while (value > 0) {");
+    output_line(gen, "        tree->parse_tree[tree->next_id++] = 0x80 | (value & 0x7f);");
+    output_line(gen, "        value >>= 7;");
+    output_line(gen, "    }");
+    output_line(gen, "}");
+    for (uint32_t i = 0; i < n; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        set_substitution(gen, "rule", rule->name, rule->name_length,
+         LOWERCASE_WITH_UNDERSCORES);
+        output_line(gen, "struct parsed_%%rule parsed_%%rule_get(struct bluebird_tree *tree, parsed_id id) {");
+        output_line(gen, "    if (id == 0)");
+        output_line(gen, "        return (struct parsed_%%rule){ ._tree = tree, .empty = true };");
+        output_line(gen, "    return (struct parsed_%%rule){");
+        output_line(gen, "        ._tree = tree,");
+        output_line(gen, "        ._next = read_tree(&id, tree),");
+        if (rule->number_of_choices > 0)
+            output_line(gen, "        .type = read_tree(&id, tree),");
+        for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
+            struct slot slot = rule->slots[j];
+            set_substitution(gen, "referenced-slot", slot.name,
+             slot.name_length, LOWERCASE_WITH_UNDERSCORES);
+            output_line(gen, "        .%%referenced-slot = read_tree(&id, tree),");
+        }
+        output_line(gen, "    };");
+        output_line(gen, "}");
+    }
+    output_line(gen, "static parsed_id finish_node(uint32_t rule, uint32_t choice, parsed_id next_sibling, parsed_id *slots, void *info) {");
+    output_line(gen, "    struct bluebird_tree *tree = info;");
+    output_line(gen, "    printf(\"finishing node (%lu): %u / %u\\n\", tree->next_id, rule, choice);");
+    output_line(gen, "    switch (rule) {");
+    for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        if (rule->number_of_slots == 0)
+            continue;
+        set_unsigned_number_substitution(gen, "rule-index", i);
+        output_line(gen, "    case %%rule-index: {");
+        output_line(gen, "        parsed_id id = tree->next_id;");
+        output_line(gen, "        write_tree(tree, next_sibling);");
+        output_line(gen, "        printf(\"next = %lu\\n\", next_sibling);");
+        if (rule->number_of_choices > 0)
+            output_line(gen, "        write_tree(tree, choice);");
+        for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
+            set_unsigned_number_substitution(gen, "slot-index", j);
+            output_line(gen, "        printf(\"slot %%slot-index = %lu\\n\", slots[%%slot-index]);");
+            output_line(gen, "        write_tree(tree, slots[%%slot-index]);");
+        }
+        output_line(gen, "        return id;");
+        output_line(gen, "    }");
+    }
+    output_line(gen, "    default:");
+    output_line(gen, "        return 0;");
+    output_line(gen, "    }");
+    output_line(gen, "}");
+    for (uint32_t i = 0; i < n; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        set_substitution(gen, "rule", rule->name, rule->name_length,
+         LOWERCASE_WITH_UNDERSCORES);
+        output_line(gen, "static void parsed_%%rule_print(struct bluebird_tree *tree, parsed_id id, const char *slot_name, int indent);");
+    }
+    for (uint32_t i = 0; i < n; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        set_substitution(gen, "rule", rule->name, rule->name_length,
+         LOWERCASE_WITH_UNDERSCORES);
+        output_line(gen, "static void parsed_%%rule_print(struct bluebird_tree *tree, parsed_id id, const char *slot_name, int indent) {");
+        output_line(gen, "    struct parsed_%%rule it = parsed_%%rule_get(tree, id);");
+        output_line(gen, "    while (!it.empty) {");
+        output_line(gen, "        for (int i = 0; i < indent; ++i) printf(\"  \");");
+        output_line(gen, "        printf(\"%%rule\");");
+        output_line(gen, "        if (strcmp(\"%%rule\", slot_name))");
+        output_line(gen, "            printf(\"@%s\", slot_name);");
+        if (rule->number_of_choices > 0) {
+            output_line(gen, "        switch (it.type) {");
+            for (uint32_t j = 0; j < rule->number_of_choices; ++j) {
+                set_substitution(gen, "choice-name", rule->choices[j].name,
+                 rule->choices[j].name_length, UPPERCASE_WITH_UNDERSCORES);
+                output_line(gen, "        case PARSED_%%choice-name:");
+                output_line(gen, "            printf(\" : %%choice-name\");");
+                output_line(gen, "            break;");
+            }
+            for (uint32_t j = 0; j < rule->number_of_operators; ++j) {
+                set_substitution(gen, "operator-name", rule->operators[j].name,
+                 rule->operators[j].name_length, UPPERCASE_WITH_UNDERSCORES);
+                output_line(gen, "        case PARSED_%%operator-name:");
+                output_line(gen, "            printf(\" : %%operator-name\");");
+                output_line(gen, "            break;");
+            }
+            output_line(gen, "        }");
+        }
+        output_line(gen, "        printf(\"\\n\");");
+        for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
+            struct slot slot = rule->slots[j];
+            set_substitution(gen, "slot-name", slot.name, slot.name_length,
+             LOWERCASE_WITH_UNDERSCORES);
+            struct rule *slot_rule = &gen->grammar->rules[slot.rule_index];
+            set_substitution(gen, "slot-rule", slot_rule->name,
+             slot_rule->name_length, LOWERCASE_WITH_UNDERSCORES);
+            output_line(gen, "        parsed_%%slot-rule_print(tree, it.%%slot-name, \"%%slot-name\", indent + 1);");
+        }
+        output_line(gen, "        it = parsed_%%rule_next(it);");
+        output_line(gen, "    }");
+        output_line(gen, "}");
+    }
 
     set_unsigned_number_substitution(gen, "identifier-token", 0xffffffff);
     set_unsigned_number_substitution(gen, "number-token", 0xffffffff);
@@ -236,11 +387,15 @@ void generate(struct generator *gen)
 #define TOKENIZE_BODY(...) tokenizer_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
 #include "x-tokenize.h"
     output_formatted_source(gen, tokenizer_source);
-
     output_line(gen, "static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context);");
     output_line(gen, "static void fixity_associativity_precedence_lookup(int *fixity_associativity, int *precedence, uint32_t rule, uint32_t choice, void *context);");
     output_line(gen, "static int precedence_lookup(uint32_t rule, uint32_t choice, void *context);");
     output_line(gen, "static size_t number_of_slots_lookup(uint32_t rule, void *context);");
+    output_line(gen, "static void left_right_operand_slots_lookup(uint32_t rule, uint32_t *left, uint32_t *right, uint32_t *operand, void *context);");
+
+#define FINISHED_NODE_T parsed_id
+#define FINISH_NODE finish_node
+
 #define RULE_T uint32_t
 #define RULE_LOOKUP rule_lookup
 #define ROOT_RULE(...) %%root-rule-index
@@ -252,6 +407,8 @@ void generate(struct generator *gen)
  } while (0)
 #define PRECEDENCE_LOOKUP precedence_lookup
 #define NUMBER_OF_SLOTS_LOOKUP number_of_slots_lookup
+#define LEFT_RIGHT_OPERAND_SLOTS_LOOKUP(rule, left, right, operand, info) \
+ (left_right_operand_slots_lookup(rule, &(left), &(right), &(operand), info))
 
     const char *construct_source;
 #define CONSTRUCT_BODY(...) construct_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
@@ -271,11 +428,12 @@ void generate(struct generator *gen)
     output_line(gen, "    struct state_stack stack;");
     output_line(gen, "};");
     output_line(gen, "static void fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);");
-    output_line(gen, "static void *build_parse_tree(struct bluebird_token_run *);");
+    output_line(gen, "static parsed_id build_parse_tree(struct bluebird_token_run *, struct bluebird_tree *);");
     output_line(gen, "");
     output_line(gen, "struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {");
     output_line(gen, "    struct bluebird_tree *tree = calloc(1, sizeof(struct bluebird_tree));");
     output_line(gen, "    tree->string = string;");
+    output_line(gen, "    tree->next_id = 1;");
     output_line(gen, "    struct bluebird_default_tokenizer tokenizer = {");
     output_line(gen, "        .text = string,");
     output_line(gen, "        .info = tree,");
@@ -306,7 +464,8 @@ void generate(struct generator *gen)
     output_line(gen, "        run_to_print = run_to_print->prev;");
     output_line(gen, "    }");
      */
-    output_line(gen, "    build_parse_tree(token_run);");
+    output_line(gen, "    tree->root_id = build_parse_tree(token_run, tree);");
+    output_line(gen, "    parsed_%%root-rule_print(tree, tree->root_id, \"%%root-rule\", 0);");
     output_line(gen, "    return tree;");
     output_line(gen, "}");
     output_line(gen, "void bluebird_tree_destroy(struct bluebird_tree *tree) {");
@@ -339,8 +498,8 @@ void generate(struct generator *gen)
     output_line(gen, "}");
     set_unsigned_number_substitution(gen, "final-nfa-state",
      gen->combined->final_nfa_state);
-    output_line(gen, "static void *build_parse_tree(struct bluebird_token_run *run) {");
-    output_line(gen, "    struct construct_state construct_state = { 0 };");
+    output_line(gen, "static parsed_id build_parse_tree(struct bluebird_token_run *run, struct bluebird_tree *tree) {");
+    output_line(gen, "    struct construct_state construct_state = { .info = tree };");
     output_line(gen, "    struct state_stack stack = { 0 };");
     if (gen->combined->root_rule_is_expression)
         output_line(gen, "    construct_begin(&construct_state, CONSTRUCT_EXPRESSION_ROOT);");
@@ -351,8 +510,11 @@ void generate(struct generator *gen)
     output_line(gen, "start:");
     output_line(gen, "    switch (start_state) {");
     uint32_t nfa_offset = gen->combined->automaton.number_of_states;
-    generate_action_automaton(gen, &gen->deterministic->action_map, 0, 0, nfa_offset, NORMAL_AUTOMATON);
-    generate_action_automaton(gen, &gen->deterministic->bracket_action_map, a->number_of_states, nfa_offset, gen->combined->automaton.number_of_states, BRACKET_AUTOMATON);
+    generate_action_automaton(gen, &gen->deterministic->action_map, 0, 0,
+     nfa_offset, NORMAL_AUTOMATON);
+    generate_action_automaton(gen, &gen->deterministic->bracket_action_map,
+     a->number_of_states, nfa_offset, gen->combined->automaton.number_of_states,
+     BRACKET_AUTOMATON);
     output_line(gen, "    }");
     // TODO: Free all remaining token runs here.
     output_line(gen, "    printf(\"error!\\n\");");
@@ -430,10 +592,11 @@ void generate(struct generator *gen)
         output_line(gen, "        switch (choice) {");
         for (uint32_t j = 0; j < rule->number_of_operators; ++j) {
             struct operator op = rule->operators[j];
-            set_unsigned_number_substitution(gen, "operator-index", j);
+            set_unsigned_number_substitution(gen, "choice-index",
+             j + rule->number_of_choices);
             set_signed_number_substitution(gen, "operator-precedence",
              op.precedence);
-            output_line(gen, "        case %%operator-index:");
+            output_line(gen, "        case %%choice-index:");
             output_line(gen, "            *precedence = %%operator-precedence;");
             if (op.fixity == PREFIX)
                 output_line(gen, "            *fixity_associativity = CONSTRUCT_PREFIX;");
@@ -462,6 +625,25 @@ void generate(struct generator *gen)
         output_line(gen, "    case %%rule-index: return %%number-of-slots;");
     }
     output_line(gen, "    default: return 0;");
+    output_line(gen, "    }");
+    output_line(gen, "}");
+    output_line(gen, "static void left_right_operand_slots_lookup(uint32_t rule, uint32_t *left, uint32_t *right, uint32_t *operand, void *context) {");
+    output_line(gen, "    switch (rule) {");
+    for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        set_unsigned_number_substitution(gen, "rule-index", i);
+        set_unsigned_number_substitution(gen, "left-slot",
+         rule->left_slot_index);
+        set_unsigned_number_substitution(gen, "right-slot",
+         rule->right_slot_index);
+        set_unsigned_number_substitution(gen, "operand-slot",
+         rule->operand_slot_index);
+        output_line(gen, "    case %%rule-index:");
+        output_line(gen, "        *left = %%left-slot;");
+        output_line(gen, "        *right = %%right-slot;");
+        output_line(gen, "        *operand = %%operand-slot;");
+        output_line(gen, "        break;");
+    }
     output_line(gen, "    }");
     output_line(gen, "}");
     output_line(gen, "#endif");
@@ -629,7 +811,7 @@ static void generate_actions(struct generator *gen, struct action_map *map,
             break;
         set_unsigned_number_substitution(gen, "action-id", map->actions[i]);
         set_unsigned_number_substitution(gen, "action-slot", CONSTRUCT_ACTION_GET_SLOT(map->actions[i]));
-        FORMAT_ACTION(map->actions[i]);
+//        FORMAT_ACTION(map->actions[i]);
         output_line(gen, "            construct_action_apply(&construct_state, %%action-id);");
     }
 }

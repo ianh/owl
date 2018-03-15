@@ -70,8 +70,9 @@ struct rule {
     uint32_t number_of_operators;
 
     // Slots are places where children can appear in the parse tree.  Each
-    // reference to a rule or named token class creates a slot with that name.
-    // For example, this rule has three slots:
+    // reference to a rule or named token class creates a slot with that name,
+    // and operators create slots for their operands. For example, this rule has
+    // six slots:
     //
     //   expression =
     //     identifier : variable
@@ -83,11 +84,21 @@ struct rule {
     //     '+' : plus
     //     '-' : minus
     //
-    // ...one for 'identifier', one for 'number' and one for 'expression'.  Note
-    // that slots with the same name ('expression') are combined together.
+    // ...'identifier', 'number', and 'expression' for the three rule
+    // references, 'left' and 'right' for the infix operators, and 'operand' for
+    // the postfix operator.  Note that slots with the same name ('expression')
+    // are combined together.
     struct slot *slots;
     uint32_t slots_allocated_bytes;
     uint32_t number_of_slots;
+
+    // For rules with infix operators -- these are the slots for the right and
+    // left operands.
+    uint32_t right_slot_index;
+    uint32_t left_slot_index;
+
+    // For rules with prefix and postfix operators.
+    uint32_t operand_slot_index;
 
     // Brackets are pieces of the rule that are enclosed in guard brackets.
     struct bracket *brackets;
@@ -110,7 +121,6 @@ struct rule {
 // That means there can't be more than 4096 (2^12) of them.
 #define MAX_NUMBER_OF_SLOTS 4096
 #define MAX_NUMBER_OF_CHOICES 4096
-#define MAX_NUMBER_OF_OPERATORS 4096
 
 struct choice {
     // The name; for example, a choice specified as `'int' : integer` will have

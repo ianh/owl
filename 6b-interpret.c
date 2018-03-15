@@ -39,8 +39,7 @@ struct interpret_node;
 
 static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
  struct interpret_node *next_sibling, struct interpret_node **slots,
- struct interpret_node *operand, struct interpret_node *left,
- struct interpret_node *right, struct interpret_context *context);
+ struct interpret_context *context);
 static struct interpret_node *finish_token(struct interpret_node *next_sibling,
  struct interpret_context *context);
 
@@ -53,6 +52,8 @@ static struct interpret_node *finish_token(struct interpret_node *next_sibling,
     precedence = precedence_lookup(rule, choice, context); \
  } while (0)
 #define NUMBER_OF_SLOTS_LOOKUP number_of_slots_lookup
+#define LEFT_RIGHT_OPERAND_SLOTS_LOOKUP(rule, left, right, operand, info) \
+ (left_right_operand_slots_lookup(rule, &(left), &(right), &(operand), info))
 
 static uint32_t rule_lookup(uint32_t parent, uint32_t slot,
  struct interpret_context *context);
@@ -63,6 +64,8 @@ static int precedence_lookup(uint32_t rule, uint32_t choice,
  struct interpret_context *context);
 static size_t number_of_slots_lookup(uint32_t rule,
  struct interpret_context *context);
+static void left_right_operand_slots_lookup(uint32_t rule, uint32_t *left,
+ uint32_t *right, uint32_t *operand, struct interpret_context *context);
 
 #include "x-tokenize.h"
 #include "x-construct-parse-tree.h"
@@ -95,12 +98,10 @@ struct interpret_node {
     // For rules.
     uint32_t rule_index;
     uint32_t choice_index;
+    bool is_operator;
 
     size_t number_of_slots;
     struct interpret_node **slots;
-    struct interpret_node *operand;
-    struct interpret_node *left;
-    struct interpret_node *right;
 
     // For tokens.
     union {
@@ -182,8 +183,9 @@ static void print_parse_tree(struct interpret_context *ctx,
         printf("@%.*s", (int)slot->name_length, slot->name);
     if (rule->number_of_choices) {
         // TODO: Indicate more explicitly that this is an operator?
-        if (node->operand || node->left || node->right) {
-            struct operator *op = &rule->operators[node->choice_index];
+        if (node->choice_index > rule->number_of_choices) {
+            struct operator *op = &rule->operators[node->choice_index -
+             rule->number_of_choices];
             printf(" : %.*s", (int)op->name_length, op->name);
         } else {
             struct choice *choice = &rule->choices[node->choice_index];
@@ -191,9 +193,6 @@ static void print_parse_tree(struct interpret_context *ctx,
         }
     }
     printf("\n");
-    print_parse_tree(ctx, node->operand, 0, indent + 1);
-    print_parse_tree(ctx, node->left, 0, indent + 1);
-    print_parse_tree(ctx, node->right, 0, indent + 1);
     for (uint32_t i = 0; i < rule->number_of_slots; ++i) {
         struct slot *slot = &rule->slots[i];
         if (!node->slots[i])
@@ -457,8 +456,7 @@ static void write_number_token(size_t offset, size_t length, double number,
 
 static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
  struct interpret_node *next_sibling, struct interpret_node **slots,
- struct interpret_node *operand, struct interpret_node *left,
- struct interpret_node *right, struct interpret_context *context)
+ struct interpret_context *context)
 {
     struct interpret_node *node = calloc(1, sizeof(struct interpret_node));
     node->rule_index = rule;
@@ -469,9 +467,6 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
      sizeof(struct interpret_node *));
     memcpy(node->slots, slots,
      sizeof(struct interpret_node *) * node->number_of_slots);
-    node->operand = operand;
-    node->left = left;
-    node->right = right;
     return node;
 }
 
@@ -497,10 +492,12 @@ static uint32_t root_rule(struct interpret_context *context)
     return context->grammar->root_rule;
 }
 
-static int fixity_associativity_lookup(uint32_t rule, uint32_t choice,
+static int fixity_associativity_lookup(uint32_t rule_index, uint32_t choice,
  struct interpret_context *context)
 {
-    struct operator op = context->grammar->rules[rule].operators[choice];
+    struct rule *rule = &context->grammar->rules[rule_index];
+    assert(choice >= rule->number_of_choices);
+    struct operator op = rule->operators[choice - rule->number_of_choices];
     switch (op.fixity) {
     case PREFIX:
         return CONSTRUCT_PREFIX;
@@ -519,14 +516,25 @@ static int fixity_associativity_lookup(uint32_t rule, uint32_t choice,
     }
 }
 
-static int precedence_lookup(uint32_t rule, uint32_t choice,
+static int precedence_lookup(uint32_t rule_index, uint32_t choice,
  struct interpret_context *context)
 {
-    return context->grammar->rules[rule].operators[choice].precedence;
+    struct rule *rule = &context->grammar->rules[rule_index];
+    assert(choice >= rule->number_of_choices);
+    return rule->operators[choice - rule->number_of_choices].precedence;
 }
 
 static size_t number_of_slots_lookup(uint32_t rule,
  struct interpret_context *context)
 {
     return context->grammar->rules[rule].number_of_slots;
+}
+
+static void left_right_operand_slots_lookup(uint32_t rule_index, uint32_t *left,
+ uint32_t *right, uint32_t *operand, struct interpret_context *context)
+{
+    struct rule *rule = &context->grammar->rules[rule_index];
+    *left = rule->left_slot_index;
+    *right = rule->right_slot_index;
+    *operand = rule->operand_slot_index;
 }

@@ -18,6 +18,8 @@ struct rename {
 // Substitution fails if we try to substitute a rule with an index less than
 // `min_rule_index`.
 struct substitution_result { bool failed; uint32_t failed_slot_index; };
+static struct substitution_result successful_substitution_result;
+
 static struct substitution_result substitute_slots(struct grammar *grammar,
  struct rule *rule, uint32_t min_rule_index, struct automaton *a,
  struct automaton *automaton_for_rule, struct rename *renames,
@@ -156,13 +158,16 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                     to_state = start;
                 }
                 // Embed the operator automaton and hook it up according to the
-                // rules above.
+                // rules above.  Offset the "choice index" by
+                // rule->number_of_choices to indicate this is an operator
+                // instead of a normal choice.
+                uint32_t op_index = j + rule->number_of_choices;
                 state_id op_start = embed(automaton, &op->automaton,
                  to_state, SYMBOL_EPSILON,
-                 CONSTRUCT_ACTION(ACTION_END_OPERATOR, j));
+                 CONSTRUCT_ACTION(ACTION_END_OPERATOR, op_index));
                 automaton_add_transition_with_action(automaton, from_state,
                  op_start, SYMBOL_EPSILON,
-                 CONSTRUCT_ACTION(ACTION_BEGIN_OPERATOR, j));
+                 CONSTRUCT_ACTION(ACTION_BEGIN_OPERATOR, op_index));
             }
             automaton_set_start_state(automaton, start);
             automaton_mark_accepting_state(automaton, end);
@@ -203,7 +208,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
      automaton_create_state(&result->bracket_automaton);
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = &grammar->rules[i];
-        if (rule->number_of_brackets == 0)
+        if (rule->is_token || rule->number_of_brackets == 0)
             continue;
 
         // Create a combined bracket automaton for this particular rule.  Embed
@@ -343,7 +348,7 @@ static struct substitution_result substitute_slots(struct grammar *grammar,
             }
         }
     }
-    return (struct substitution_result){0};
+    return successful_substitution_result;
 }
 
 static void update_number_of_symbols(struct automaton *a)

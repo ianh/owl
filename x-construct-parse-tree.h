@@ -14,13 +14,11 @@
 #endif
 
 #ifndef FINISH_NODE
-#define FINISH_NODE(rule, choice, next_sibling, slots, operand, left, \
- right, info) 0
+#define FINISH_NODE(rule, choice, next_sibling, slots, info) 0
 #endif
 
 #define FINISH_NODE_STRUCT(n, next_sibling, info) (FINISH_NODE((n)->rule, \
- (n)->choice_index, next_sibling, (n)->slots, (n)->operand, (n)->left, \
- (n)->right, info))
+ (n)->choice_index, next_sibling, (n)->slots, info))
 
 #ifndef FINISH_TOKEN
 #define FINISH_TOKEN(next_sibling, info) 0
@@ -42,9 +40,14 @@
 #error Please define a NUMBER_OF_SLOTS_LOOKUP(rule, info) macro.
 #endif
 
+#ifndef LEFT_RIGHT_OPERAND_SLOTS_LOOKUP
+#error Please define a LEFT_RIGHT_OPERAND_SLOTS_LOOKUP(rule, left, right, \
+ operand, info) macro.
+#endif
+
 #ifndef FIXITY_ASSOCIATIVITY_PRECEDENCE_LOOKUP
 #error Please define a FIXITY_ASSOCIATIVITY_PRECEDENCE_LOOKUP(\
-fixity_associativity_variable, precedence_variable, rule, choice, info) macro.
+ fixity_associativity_variable, precedence_variable, rule, choice, info) macro.
 #endif
 
 #include "x-construct-actions.h"
@@ -66,9 +69,6 @@ struct construct_node {
 
     size_t number_of_slots;
     FINISHED_NODE_T *slots;
-    FINISHED_NODE_T operand;
-    FINISHED_NODE_T left;
-    FINISHED_NODE_T right;
 
     RULE_T rule;
 
@@ -89,6 +89,10 @@ struct construct_expression {
     struct construct_expression *parent;
     struct construct_node *first_operator;
     struct construct_node *first_value;
+
+    uint32_t operand_slot_index;
+    uint32_t left_slot_index;
+    uint32_t right_slot_index;
 
     RULE_T rule;
 
@@ -144,18 +148,21 @@ static struct construct_node *construct_node_alloc(struct construct_state *s,
 }
 
 static struct construct_expression *construct_expression_alloc(struct
- construct_state *s)
+ construct_state *s, RULE_T rule)
 {
+    struct construct_expression *expr;
     if (s->expression_freelist) {
-        struct construct_expression *expr = s->expression_freelist;
+        expr = s->expression_freelist;
         s->expression_freelist = expr->parent;
         memset(expr, 0, sizeof(struct construct_expression));
-        return expr;
+    } else {
+        expr = calloc(1, sizeof(struct construct_expression));
+        if (!expr)
+            abort();
     }
-    struct construct_expression *expr =
-     calloc(1, sizeof(struct construct_expression));
-    if (!expr)
-        abort();
+    LEFT_RIGHT_OPERAND_SLOTS_LOOKUP(rule, expr->left_slot_index,
+     expr->right_slot_index, expr->operand_slot_index, s->info);
+    expr->rule = rule;
     return expr;
 }
 
@@ -205,7 +212,7 @@ static void construct_expression_reduce(struct construct_state *s,
         struct construct_node *first_value = expr->first_value;
         struct construct_node *last_value = first_value;
         struct construct_node *last_operator = op;
-        FINISHED_NODE_T operand = op->operand;
+        FINISHED_NODE_T operand = op->slots[expr->operand_slot_index];
         struct construct_node *combined_op = construct_node_alloc(s, op->rule);
         combined_op->choice_index = op->choice_index;
         combined_op->slot_index = op->slot_index;
@@ -247,7 +254,7 @@ static void construct_expression_reduce(struct construct_state *s,
         }
         expr->first_operator = last_operator;
         expr->first_value = combined_op;
-        combined_op->operand = operand;
+        combined_op->slots[expr->operand_slot_index] = operand;
     } else if (op->fixity_associativity == CONSTRUCT_INFIX_LEFT ||
      op->fixity_associativity == CONSTRUCT_INFIX_RIGHT) {
         expr->first_operator = op->next;
@@ -256,8 +263,10 @@ static void construct_expression_reduce(struct construct_state *s,
         op->next = right->next;
         expr->first_value = op;
 
-        op->left = FINISH_NODE_STRUCT(left, op->left, s->info);
-        op->right = FINISH_NODE_STRUCT(right, op->right, s->info);
+        op->slots[expr->left_slot_index] = FINISH_NODE_STRUCT(left,
+         op->slots[expr->left_slot_index], s->info);
+        op->slots[expr->right_slot_index] = FINISH_NODE_STRUCT(right,
+         op->slots[expr->right_slot_index], s->info);
         construct_node_free(s, left);
         construct_node_free(s, right);
     } else {
@@ -266,7 +275,8 @@ static void construct_expression_reduce(struct construct_state *s,
         op->next = value->next;
         expr->first_value = op;
 
-        op->operand = FINISH_NODE_STRUCT(value, op->operand, s->info);
+        op->slots[expr->operand_slot_index] = FINISH_NODE_STRUCT(value,
+         op->slots[expr->operand_slot_index], s->info);
         construct_node_free(s, value);
     }
 }
@@ -275,14 +285,13 @@ static void construct_begin(struct construct_state *s,
  enum construct_root_type type)
 {
     s->root_type = type;
+    uint32_t r = ROOT_RULE(s->info);
     if (type == CONSTRUCT_EXPRESSION_ROOT) {
-        struct construct_expression *expr = construct_expression_alloc(s);
+        struct construct_expression *expr = construct_expression_alloc(s, r);
         expr->parent = s->current_expression;
-        expr->rule = ROOT_RULE(s->info);
         s->current_expression = expr;
     } else {
-        struct construct_node *node;
-        node = construct_node_alloc(s, ROOT_RULE(s->info));
+        struct construct_node *node = construct_node_alloc(s, r);
         node->next = s->under_construction;
         s->under_construction = node;
     }
@@ -336,11 +345,11 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
         break;
     }
     case CONSTRUCT_ACTION_END_EXPRESSION_SLOT: {
-        struct construct_expression *expr = construct_expression_alloc(s);
+        struct construct_expression *expr = construct_expression_alloc(s,
+         RULE_LOOKUP(s->under_construction->rule,
+         CONSTRUCT_ACTION_GET_SLOT(action), s->info));
         expr->parent = s->current_expression;
         s->current_expression = expr;
-        expr->rule = RULE_LOOKUP(s->under_construction->rule,
-         CONSTRUCT_ACTION_GET_SLOT(action), s->info);
         expr->slot_index = CONSTRUCT_ACTION_GET_SLOT(action);
         break;
     }
