@@ -196,7 +196,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         // 'operand' for prefix and postfix operators.
         for (uint32_t i = 0; i < rule->number_of_operators; ++i) {
             struct operator *operator = &rule->operators[i];
-            if (operator->fixity == INFIX) {
+            if (operator->fixity == INFIX && operator->associativity != FLAT) {
                 rule->left_slot_index = add_slot(&context, rule, "left",
                  strlen("left"), rule_index);
                 rule->right_slot_index = add_slot(&context, rule, "right",
