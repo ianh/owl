@@ -305,10 +305,6 @@ static void build_body_expression(struct context *ctx,
          add_keyword_token(ctx, rule, expr->ident, TOKEN_NORMAL));
         break;
     }
-    case PARSED_EMPTY: {
-        automaton_add_transition(automaton, b.entry, b.exit, SYMBOL_EPSILON);
-        break;
-    }
     case PARSED_PARENS: {
         struct parsed_expr parens = parsed_expr_get(tree, expr->expr);
         build_body_expression(ctx, automaton, &parens, b);
@@ -459,6 +455,10 @@ static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
     size_t length;
     const char *string = bluebird_tree_get_identifier(ctx->tree,
      ident.identifier, &length);
+    if (length == 0) {
+        // Zero-length keywords are treated as epsilons.
+        return SYMBOL_EPSILON;
+    }
     uint32_t token_index = find_token(rule->keyword_tokens,
      rule->number_of_keyword_tokens, string, length, type);
     if (token_index >= rule->number_of_keyword_tokens) {

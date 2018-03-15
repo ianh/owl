@@ -24,6 +24,7 @@ static void output_stdout(struct generator *g, const char *string, size_t len);
 int main(int argc, char *argv[])
 {
     const char *string =
+    //"a = '' x*  x = 'x'";
     //"a = b*  b = 'x'";
     //"a = 'a' 'b' 'c'";
     //"a = b  b = 'x'";

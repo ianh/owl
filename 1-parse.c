@@ -336,7 +336,7 @@ static parsed_id parse_expr_item(struct bluebird_tree *ctx, parsed_id next_expr)
     if (ctx->string[ctx->offset] == '\'') {
         if (ctx->offset > 1 && ctx->string[ctx->offset - 1] == '\'') {
             ctx->offset -= 2;
-            return parsed_expr_add(next_expr, 0, 0, PARSED_EMPTY, 0, 0, 0, 0, 0,
+            return parsed_expr_add(next_expr, 0, 0, PARSED_LITERAL, 0, 0, 0, 0, 0,
              0, ctx);
         }
         parsed_id ident = parse_ident(ctx, 0);
@@ -518,6 +518,10 @@ uint32_t bluebird_tree_identify_string(struct bluebird_tree *tree,
 
 const char *bluebird_tree_get_identifier(struct bluebird_tree *tree, uint32_t id, size_t *length)
 {
+    if (id == 0) {
+        *length = 0;
+        return 0;
+    }
     *length = tree->id_lengths[id];
     return tree->string + tree->id_offsets[id];
 }
