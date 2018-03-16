@@ -30,6 +30,15 @@
 #define WRITE_STRING_TOKEN(...)
 #endif
 
+#ifndef ALLOW_DASHES_IN_IDENTIFIERS
+#define ALLOW_DASHES_IN_IDENTIFIERS(...) false
+#endif
+
+// FIXME: I'm not sure where to put this "function".
+#define SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(combined) \
+ (find_token((combined)->tokens, (combined)->number_of_keyword_tokens, "-", 1, \
+  TOKEN_DONT_CARE) >= (combined)->number_of_keyword_tokens)
+
 #if !defined(IDENTIFIER_TOKEN) || !defined(NUMBER_TOKEN) || \
  !defined(STRING_TOKEN) || !defined(BRACKET_TRANSITION_TOKEN)
 #error The built-in tokenizer needs definitions of basic tokens to work.
@@ -93,8 +102,10 @@ static bool char_starts_identifier(char c)
     return char_is_alphabetic(c) || c == '_';
 }
 
-static bool char_continues_identifier(char c)
+static bool char_continues_identifier(char c, void *info)
 {
+    if (ALLOW_DASHES_IN_IDENTIFIERS(info) && c == '-')
+        return true;
     return char_is_numeric(c) || char_starts_identifier(c);
 }
 
@@ -162,7 +173,8 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
             // Identifier.
             size_t identifier_offset = offset + 1;
             // TODO: Also allow dash if it isn't a keyword.
-            while (char_continues_identifier(text[identifier_offset]))
+            while (char_continues_identifier(text[identifier_offset],
+             tokenizer->info))
                 identifier_offset++;
             if (identifier_offset - offset > token_length) {
                 token_length = identifier_offset - offset;

@@ -477,6 +477,7 @@ void generate(struct generator *gen)
 #define WRITE_NUMBER_TOKEN %%write-number-token
 #define WRITE_IDENTIFIER_TOKEN %%write-identifier-token
 #define WRITE_STRING_TOKEN %%write-string-token
+#define ALLOW_DASHES_IN_IDENTIFIERS(...) %%allow-dashes-in-identifiers
 #define IDENTIFIER_TOKEN %%identifier-token
 #define NUMBER_TOKEN %%number-token
 #define STRING_TOKEN %%string-token
@@ -485,6 +486,10 @@ void generate(struct generator *gen)
     const char *tokenizer_source;
 #define TOKENIZE_BODY(...) tokenizer_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
 #include "x-tokenize.h"
+    if (SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(gen->combined))
+        set_literal_substitution(gen, "allow-dashes-in-identifiers", "true");
+    else
+        set_literal_substitution(gen, "allow-dashes-in-identifiers", "false");
     output_formatted_source(gen, tokenizer_source);
     output_line(gen, "static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context);");
     output_line(gen, "static void fixity_associativity_precedence_lookup(int *fixity_associativity, int *precedence, uint32_t rule, uint32_t choice, void *context);");
@@ -565,7 +570,6 @@ void generate(struct generator *gen)
     output_line(gen, "    }");
      */
     output_line(gen, "    tree->root_id = build_parse_tree(token_run, tree);");
-    output_line(gen, "    parsed_%%root-rule_print(tree, tree->root_id, \"%%root-rule\", 0);");
     output_line(gen, "    return tree;");
     output_line(gen, "}");
     output_line(gen, "void bluebird_tree_destroy(struct bluebird_tree *tree) {");

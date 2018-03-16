@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
     //const char *text_to_parse = "a + (b - c) * d / e + f + g * h";
     //const char *text_to_parse = "(((x)))";
     //const char *text_to_parse = "test = a | b*  a = identifier  b = number";
-    const char *text_to_parse = "a = [ x (a@b | a1 'a2' a3) y ] | (c | b)* : eee  .operators infix left  p : p  .operators prefix pre : pre";
+    const char *text_to_parse = "test-name = [ x (a@b | a1 'a2' a3) y ] | (c | b)* : eee  .operators infix left  p : p  .operators prefix pre : pre";
     //const char *text_to_parse = "q + (x + y) + z + ((d + ((w))) + r) + k";
     //const char *text_to_parse = "a = (b)";
 #if DEBUG_OUTPUT

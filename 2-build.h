@@ -182,7 +182,8 @@ struct bracket {
 // The `token_type` enum encodes whether this token is a start or end token
 // (which can only appear at the start or end of a guard bracket) or a normal
 // token (which cannot appear at the start or end of a guard bracket).
-enum token_type { TOKEN_NORMAL, TOKEN_START, TOKEN_END };
+// The TOKEN_DONT_CARE option is used to search for tokens of any type.
+enum token_type { TOKEN_NORMAL, TOKEN_START, TOKEN_END, TOKEN_DONT_CARE };
 struct token {
     const char *string;
     size_t length;

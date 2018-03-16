@@ -423,6 +423,8 @@ static const char *token_type_string(enum token_type type)
         return "a start";
     case TOKEN_END:
         return "an end";
+    default:
+        return "";
     }
 }
 
@@ -436,7 +438,7 @@ uint32_t find_token(struct token *tokens, uint32_t number_of_tokens,
             continue;
         if (memcmp(token->string, string, length))
             continue;
-        if (token->type != type) {
+        if (type != TOKEN_DONT_CARE && token->type != type) {
             // TODO: Show location in original grammar text.
             fprintf(stderr, "error: token '%.*s' can't be used as both %s and "
              "%s keyword\n", (int)length, string,

@@ -10,6 +10,9 @@
 #define WRITE_IDENTIFIER_TOKEN write_identifier_token
 #define WRITE_STRING_TOKEN write_string_token
 
+#define ALLOW_DASHES_IN_IDENTIFIERS(info) \
+ (((struct tokenizer_info *)info)->allow_dashes_in_identifiers)
+
 #define IDENTIFIER_TOKEN \
  (((struct tokenizer_info *)tokenizer->info)->identifier_symbol)
 #define NUMBER_TOKEN (((struct tokenizer_info *)tokenizer->info)->number_symbol)
@@ -30,6 +33,7 @@ struct tokenizer_info {
     symbol_id identifier_symbol;
     symbol_id number_symbol;
     symbol_id string_symbol;
+    bool allow_dashes_in_identifiers;
 };
 
 struct interpret_node;
@@ -218,6 +222,8 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
         .identifier_symbol = token_symbol(combined, "identifier"),
         .number_symbol = token_symbol(combined, "number"),
         .string_symbol = token_symbol(combined, "string"),
+        .allow_dashes_in_identifiers =
+         SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(combined),
     };
     struct bluebird_default_tokenizer tokenizer = {
         .text = text,
