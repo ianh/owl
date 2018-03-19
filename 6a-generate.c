@@ -127,6 +127,9 @@ void generate(struct generator *gen)
     output_line(gen, "// Destroys a bluebird_tree, freeing its resources back to the system.");
     output_line(gen, "void bluebird_tree_destroy(struct bluebird_tree *);");
     output_line(gen, "");
+    output_line(gen, "// Prints a representation of the tree to stdout.");
+    output_line(gen, "void bluebird_tree_print(struct bluebird_tree *);");
+    output_line(gen, "");
     output_line(gen, "// Returns the root parsed_id.");
     output_line(gen, "parsed_id bluebird_tree_root_id(struct bluebird_tree *tree);");
     output_line(gen, "");
@@ -425,6 +428,13 @@ void generate(struct generator *gen)
         output_line(gen, "    }");
         output_line(gen, "}");
     }
+    output_line(gen, "void bluebird_tree_print(struct bluebird_tree *tree) {");
+    output_line(gen, "    parsed_%%root-rule_print(tree, tree->root_id, \"%%root-rule\", 0);");
+    output_line(gen, "}");
+
+    output_line(gen, "parsed_id bluebird_tree_root_id(struct bluebird_tree *tree) {");
+    output_line(gen, "    return tree->root_id;");
+    output_line(gen, "}");
 
     set_unsigned_number_substitution(gen, "identifier-token", 0xffffffff);
     set_unsigned_number_substitution(gen, "number-token", 0xffffffff);
@@ -492,7 +502,6 @@ void generate(struct generator *gen)
     output_formatted_source(gen, tokenizer_source);
     output_line(gen, "static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context);");
     output_line(gen, "static void fixity_associativity_precedence_lookup(int *fixity_associativity, int *precedence, uint32_t rule, uint32_t choice, void *context);");
-    output_line(gen, "static int precedence_lookup(uint32_t rule, uint32_t choice, void *context);");
     output_line(gen, "static size_t number_of_slots_lookup(uint32_t rule, void *context);");
     output_line(gen, "static void left_right_operand_slots_lookup(uint32_t rule, uint32_t *left, uint32_t *right, uint32_t *operand, void *context);");
 
@@ -509,7 +518,6 @@ void generate(struct generator *gen)
      fixity_associativity_precedence_lookup(&local, &precedence, rule, choice, context); \
      fixity_associativity = local; \
  } while (0)
-#define PRECEDENCE_LOOKUP precedence_lookup
 #define NUMBER_OF_SLOTS_LOOKUP number_of_slots_lookup
 #define LEFT_RIGHT_OPERAND_SLOTS_LOOKUP(rule, left, right, operand, info) \
  (left_right_operand_slots_lookup(rule, &(left), &(right), &(operand), info))
@@ -569,7 +577,6 @@ void generate(struct generator *gen)
     output_line(gen, "    }");
      */
     output_line(gen, "    tree->root_id = build_parse_tree(token_run, tree);");
-    output_line(gen, "    parsed_%%root-rule_print(tree, tree->root_id, \"%%root-rule\", 0);");
     output_line(gen, "    return tree;");
     output_line(gen, "}");
     output_line(gen, "void bluebird_tree_destroy(struct bluebird_tree *tree) {");

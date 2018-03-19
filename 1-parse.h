@@ -31,13 +31,14 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string);
 // Destroys a bluebird_tree, freeing its resources back to the system.
 void bluebird_tree_destroy(struct bluebird_tree *);
 
+// Prints a representation of the tree to stdout.
+void bluebird_tree_print(struct bluebird_tree *);
+
 // Returns the root parsed_id.
 parsed_id bluebird_tree_root_id(struct bluebird_tree *tree);
 
 // As a shortcut, returns the parsed_grammar struct corresponding to the root parsed_id.
 struct parsed_grammar bluebird_tree_get_parsed_grammar(struct bluebird_tree *tree);
-
-void bluebird_tree_print(struct bluebird_tree *tree);
 
 struct parsed_grammar {
     struct bluebird_tree *_tree;
@@ -80,9 +81,9 @@ struct parsed_operator {
 };
 
 enum parsed_fixity_type {
-    PARSED_POSTFIX,
-    PARSED_PREFIX,
-    PARSED_INFIX,
+    PARSED_POSTFIX_OP,
+    PARSED_PREFIX_OP,
+    PARSED_INFIX_OP,
 };
 struct parsed_fixity {
     struct bluebird_tree *_tree;
@@ -93,10 +94,10 @@ struct parsed_fixity {
 };
 
 enum parsed_assoc_type {
-    PARSED_FLAT,
-    PARSED_LEFT,
-    PARSED_RIGHT,
-    PARSED_NONASSOC,
+    PARSED_FLAT_OP,
+    PARSED_LEFT_OP,
+    PARSED_RIGHT_OP,
+    PARSED_NONASSOC_OP,
 };
 struct parsed_assoc {
     struct bluebird_tree *_tree;
@@ -125,8 +126,8 @@ struct parsed_expr {
     parsed_id rename;
     parsed_id string;
     parsed_id expr;
-    parsed_id left;
-    parsed_id right;
+    parsed_id begin_token;
+    parsed_id end_token;
     parsed_id operand;
 };
 
@@ -246,10 +247,6 @@ struct bluebird_tree {
     size_t used_string_tokens;
     size_t string_tokens_capacity;
 };
-parsed_id bluebird_tree_root_id(struct bluebird_tree *tree)
-{
-    return tree->root_id;
-}
 static void add_identifier_token(struct bluebird_tree *tree, const char *identifier_param, size_t length_param) {
     size_t index = tree->number_of_identifier_tokens++;
     if (tree->number_of_identifier_tokens > tree->identifier_tokens_capacity) {
@@ -417,8 +414,8 @@ struct parsed_expr parsed_expr_get(struct bluebird_tree *tree, parsed_id id) {
         .rename = read_tree(&id, tree),
         .string = read_tree(&id, tree),
         .expr = read_tree(&id, tree),
-        .left = read_tree(&id, tree),
-        .right = read_tree(&id, tree),
+        .begin_token = read_tree(&id, tree),
+        .end_token = read_tree(&id, tree),
         .operand = read_tree(&id, tree),
     };
 }
@@ -518,7 +515,6 @@ static parsed_id finish_token(uint32_t rule, parsed_id next_sibling, void *info)
     write_tree(tree, next_sibling);
     switch (rule) {
     case 8U: {
-        parsed_id id = tree->next_id;
         tree->used_identifier_tokens++;
         if (tree->used_identifier_tokens > tree->number_of_identifier_tokens)
             abort();
@@ -527,7 +523,6 @@ static parsed_id finish_token(uint32_t rule, parsed_id next_sibling, void *info)
         break;
     }
     case 9U: {
-        parsed_id id = tree->next_id;
         tree->used_number_tokens++;
         if (tree->used_number_tokens > tree->number_of_number_tokens)
             abort();
@@ -536,7 +531,6 @@ static parsed_id finish_token(uint32_t rule, parsed_id next_sibling, void *info)
         break;
     }
     case 10U: {
-        parsed_id id = tree->next_id;
         tree->used_string_tokens++;
         if (tree->used_string_tokens > tree->number_of_string_tokens)
             abort();
@@ -633,14 +627,14 @@ static void parsed_fixity_print(struct bluebird_tree *tree, parsed_id id, const 
         if (strcmp("fixity", slot_name))
             printf("@%s", slot_name);
         switch (it.type) {
-        case PARSED_POSTFIX:
-            printf(" : POSTFIX");
+        case PARSED_POSTFIX_OP:
+            printf(" : POSTFIX_OP");
             break;
-        case PARSED_PREFIX:
-            printf(" : PREFIX");
+        case PARSED_PREFIX_OP:
+            printf(" : PREFIX_OP");
             break;
-        case PARSED_INFIX:
-            printf(" : INFIX");
+        case PARSED_INFIX_OP:
+            printf(" : INFIX_OP");
             break;
         }
         printf("\n");
@@ -656,17 +650,17 @@ static void parsed_assoc_print(struct bluebird_tree *tree, parsed_id id, const c
         if (strcmp("assoc", slot_name))
             printf("@%s", slot_name);
         switch (it.type) {
-        case PARSED_FLAT:
-            printf(" : FLAT");
+        case PARSED_FLAT_OP:
+            printf(" : FLAT_OP");
             break;
-        case PARSED_LEFT:
-            printf(" : LEFT");
+        case PARSED_LEFT_OP:
+            printf(" : LEFT_OP");
             break;
-        case PARSED_RIGHT:
-            printf(" : RIGHT");
+        case PARSED_RIGHT_OP:
+            printf(" : RIGHT_OP");
             break;
-        case PARSED_NONASSOC:
-            printf(" : NONASSOC");
+        case PARSED_NONASSOC_OP:
+            printf(" : NONASSOC_OP");
             break;
         }
         printf("\n");
@@ -714,8 +708,8 @@ static void parsed_expr_print(struct bluebird_tree *tree, parsed_id id, const ch
         parsed_identifier_print(tree, it.rename, "rename", indent + 1);
         parsed_string_print(tree, it.string, "string", indent + 1);
         parsed_expr_print(tree, it.expr, "expr", indent + 1);
-        parsed_string_print(tree, it.left, "left", indent + 1);
-        parsed_string_print(tree, it.right, "right", indent + 1);
+        parsed_string_print(tree, it.begin_token, "begin_token", indent + 1);
+        parsed_string_print(tree, it.end_token, "end_token", indent + 1);
         parsed_expr_print(tree, it.operand, "operand", indent + 1);
         it = parsed_expr_next(it);
     }
@@ -758,6 +752,9 @@ static void parsed_string_print(struct bluebird_tree *tree, parsed_id id, const 
 }
 void bluebird_tree_print(struct bluebird_tree *tree) {
     parsed_grammar_print(tree, tree->root_id, "grammar", 0);
+}
+parsed_id bluebird_tree_root_id(struct bluebird_tree *tree) {
+    return tree->root_id;
 }
 #define IGNORE_TOKEN_WRITE(...)
 static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *text, void *info);
@@ -907,7 +904,6 @@ static _Bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenize
 }
 static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context);
 static void fixity_associativity_precedence_lookup(int *fixity_associativity, int *precedence, uint32_t rule, uint32_t choice, void *context);
-static int precedence_lookup(uint32_t rule, uint32_t choice, void *context);
 static size_t number_of_slots_lookup(uint32_t rule, void *context);
 static void left_right_operand_slots_lookup(uint32_t rule, uint32_t *left, uint32_t *right, uint32_t *operand, void *context);
 enum construct_fixity_associativity {

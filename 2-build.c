@@ -140,11 +140,11 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             struct parsed_fixity fixity = parsed_fixity_get(tree, ops.fixity);
             enum fixity rule_fixity;
             switch (fixity.type) {
-            case PARSED_PREFIX:
+            case PARSED_PREFIX_OP:
                 rule_fixity = PREFIX; break;
-            case PARSED_POSTFIX:
+            case PARSED_POSTFIX_OP:
                 rule_fixity = POSTFIX; break;
-            case PARSED_INFIX:
+            case PARSED_INFIX_OP:
                 rule_fixity = INFIX; break;
             default:
                 abort();
@@ -153,13 +153,13 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             enum associativity rule_associativity = 0;
             if (!assoc.empty) {
                 switch (assoc.type) {
-                case PARSED_LEFT:
+                case PARSED_LEFT_OP:
                     rule_associativity = LEFT; break;
-                case PARSED_RIGHT:
+                case PARSED_RIGHT_OP:
                     rule_associativity = RIGHT; break;
-                case PARSED_FLAT:
+                case PARSED_FLAT_OP:
                     rule_associativity = FLAT; break;
-                case PARSED_NONASSOC:
+                case PARSED_NONASSOC_OP:
                     rule_associativity = NONASSOC; break;
                 default:
                     abort();
@@ -326,9 +326,9 @@ static void build_body_expression(struct context *ctx,
         automaton_move(&bracket_automaton, &bracket->automaton);
         automaton_destroy(&bracket_automaton);
         bracket->symbol = ctx->next_symbol++;
-        bracket->start_symbol = add_keyword_token(ctx, rule, expr->left,
+        bracket->start_symbol = add_keyword_token(ctx, rule, expr->begin_token,
          TOKEN_START);
-        bracket->end_symbol = add_keyword_token(ctx, rule, expr->right,
+        bracket->end_symbol = add_keyword_token(ctx, rule, expr->end_token,
          TOKEN_END);
         automaton_add_transition(automaton, b.entry, b.exit, bracket->symbol);
         break;
