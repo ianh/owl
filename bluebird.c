@@ -7,11 +7,14 @@
 #include "6a-generate.h"
 #include "6b-interpret.h"
 
+#define DEBUG_OUTPUT 0
+
 // TODO:
 // - code generation
 // - self hosting
 //  - write a blog post or something about how the old parser worked?
 // - ambiguity checking
+// - don't output unreachable nfa states
 // - fancy interpreter output
 // - json interpreter output
 // - clean up memory leaks
@@ -24,6 +27,7 @@ static void output_stdout(struct generator *g, const char *string, size_t len);
 int main(int argc, char *argv[])
 {
     const char *string =
+    //"a = 'x'*";
     //"a = '' x*  x = 'x'";
     //"a = b*  b = 'x'";
     //"a = 'a' 'b' 'c'";
@@ -43,13 +47,36 @@ int main(int argc, char *argv[])
     // */
     //"expr = identifier `ident`  postfix $ '*' `zero-or-more`  infix flat $ '|' `choice`  infix flat $ test `test`  test = [ '(' [ expr@nested ] ')' ]";
     //"expr = identifier `ident`  number `number`  infix flat $ '+' `plus`";
-    "grammar = rule*   rule = identifier '=' body   body = expr | (expr ':' identifier)+ operators*   operators = '.operators' fixity operator+   operator = expr ':' identifier   fixity =    'postfix' `postfix`    'prefix' `prefix`    'infix' assoc `infix`   assoc =    'flat' `flat`    'left' `left`    'right' `right`    'nonassoc' `nonassoc`    expr =     identifier ('@' identifier@rename)? `ident`     string `literal`     [ '(' [ expr ] ')' ] `parens`     [ '[' [ identifier@left expr? identifier@right ] ']' ] `bracketed`    postfix $     '*' `zero-or-more`     '+' `one-or-more`     '?' `optional`    infix flat $     '' `concatenation`    infix flat $     '|' `choice`";
+    //"grammar = rule*   rule = identifier '=' body   body = expr | (expr ':' identifier)+ operators*   operators = '.operators' fixity operator+   operator = expr ':' identifier   fixity =    'postfix' `postfix`    'prefix' `prefix`    'infix' assoc `infix`   assoc =    'flat' `flat`    'left' `left`    'right' `right`    'nonassoc' `nonassoc`    expr =     identifier ('@' identifier@rename)? `ident`     string `literal`     [ '(' [ expr ] ')' ] `parens`     [ '[' [ identifier@left expr? identifier@right ] ']' ] `bracketed`    postfix $     '*' `zero-or-more`     '+' `one-or-more`     '?' `optional`    infix flat $     '' `concatenation`    infix flat $     '|' `choice`";
+    //"grammar = rule*   rule = identifier '=' body   body = expr | (expr ':' identifier)+ operators*   operators = '.operators' fixity operator+   operator = expr ':' identifier   fixity =    'postfix' : postfix    'prefix' : prefix    'infix' assoc : infix   assoc =    'flat' : flat    'left' : left    'right' : right    'nonassoc' : nonassoc    expr =     identifier ('@' identifier@rename)? : ident     string : literal     [ '(' expr ')' ] : parens     [ '[' string@left expr? string@right ']' ] : bracketed   .operators postfix     '*' : zero-or-more     '+' : one-or-more     '?' : optional    .operators infix flat     '' : concatenation    .operators infix flat     '|' : choice";
+///*
+    "grammar = rule* "
+    "rule = identifier '=' body "
+    "body = expr | (expr ':' identifier)+ operators* "
+    "operators = '.operators' fixity operator+ "
+    "operator = expr ':' identifier "
+    "fixity =    'postfix' : postfix-op    'prefix' : prefix-op    'infix' assoc : infix-op "
+    "assoc =    'flat' : flat-op    'left' : left-op    'right' : right-op    'nonassoc' : nonassoc-op "
+    "expr = "
+    "identifier ('@' identifier@rename)? : ident "
+    "string : literal "
+    "[ '(' expr ')' ] : parens "
+    "[ '[' string@begin-token expr? string@end-token ']' ] : bracketed "
+    ".operators postfix "
+    "'*' : zero-or-more "
+    "'+' : one-or-more "
+    "'?' : optional "
+    ".operators infix flat "
+    "'' : concatenation "
+    ".operators infix flat "
+    "'|' : choice ";
+ //*/
+    //"a = [ '(' a ')' ] | [ '(' b ')' ] b = [ '(' a ')' ] | [ '(' b ')' ]";
     //"a = [s[a]e] | [s[b]e] b = [s[a]e] | [s[b]e]";
     //"a = b b b = c c c = d d d = e e e = f f f = g g g = h h h = i i i = j j j = k k k = l l l = m m m = n n n = o o o = p p p = q q q = r r r = s s s = t t t = u u u = 'v'";// v v = w w w = x x x = y y y = z";
-    struct bluebird_tree *tree = bluebird_tree_create_from_string(string,
-     strlen(string));
+    struct bluebird_tree *tree = bluebird_tree_create_from_string(string);
 #if DEBUG_OUTPUT
-    print_grammar(tree, bluebird_tree_root(tree), 0);
+    bluebird_tree_print(tree);
 #endif
 
     struct grammar grammar = {0};
@@ -145,7 +172,7 @@ int main(int argc, char *argv[])
     //const char *text_to_parse = "a + (b - c) * d / e + f + g * h";
     //const char *text_to_parse = "(((x)))";
     //const char *text_to_parse = "test = a | b*  a = identifier  b = number";
-    const char *text_to_parse = "test-name = [ x (a@b | a1 'a2' a3) y ] | (c | b)* : eee  .operators infix left  p : p  .operators prefix pre : pre";
+    const char *text_to_parse = "test = [ 'x' (a@b | a1 'a2' a3) 'y' ] | (c | b)* : eee  .operators infix left  p : p  .operators prefix pre : pre";
     //const char *text_to_parse = "q + (x + y) + z + ((d + ((w))) + r) + k";
     //const char *text_to_parse = "a = (b)";
 #if DEBUG_OUTPUT

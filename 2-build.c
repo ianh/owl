@@ -42,7 +42,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         .grammar = grammar,
         .tree = tree,
     };
-    parsed_id root = bluebird_tree_root(tree);
+    parsed_id root = bluebird_tree_root_id(tree);
     struct parsed_grammar g = parsed_grammar_get(tree, root);
 
     // First, create rule structs for each rule in the grammar.  We have to do
@@ -51,13 +51,12 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
     grammar->root_rule = 0;
     struct parsed_rule parsed_rule = parsed_rule_get(tree, g.rule);
     while (!parsed_rule.empty) {
-        size_t name_length = 0;
-        const char *name = bluebird_tree_get_identifier(tree,
-         parsed_ident_get(tree, parsed_rule.ident).identifier, &name_length);
-        uint32_t index = add_rule(&context, name, name_length);
+        struct parsed_identifier name =
+         parsed_identifier_get(tree, parsed_rule.identifier);
+        uint32_t index = add_rule(&context, name.identifier, name.length);
         if (index == UINT32_MAX) {
             fprintf(stderr, "error: there are multiple rules named '%.*s'\n",
-             (int)name_length, name);
+             (int)name.length, name.identifier);
             exit(-1);
         }
         parsed_rule = parsed_rule_next(parsed_rule);
@@ -76,13 +75,12 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
     // Now fill in the rules according to the contents of each parsed rule.
     for (parsed_rule = parsed_rule_get(tree, g.rule); !parsed_rule.empty;
      parsed_rule = parsed_rule_next(parsed_rule)) {
-        size_t name_length = 0;
-        const char *name = bluebird_tree_get_identifier(tree,
-         parsed_ident_get(tree, parsed_rule.ident).identifier, &name_length);
+        struct parsed_identifier name =
+         parsed_identifier_get(tree, parsed_rule.identifier);
 
         // Look up rules by name (instead of just counting up by index) because
         // it's less likely to break in a confusing way.
-        uint32_t rule_index = find_rule(&context, name, name_length);
+        uint32_t rule_index = find_rule(&context, name.identifier, name.length);
         if (rule_index == UINT32_MAX)
             abort();
         struct rule *rule = &grammar->rules[rule_index];
@@ -93,7 +91,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         context.next_symbol = 0;
 
         struct parsed_body body = parsed_body_get(tree, parsed_rule.body);
-        if (!body.ident) {
+        if (!body.identifier) {
             // This is a simple rule with no choices.  Create the automaton
             // directly.
             struct parsed_expr expr = parsed_expr_get(tree, body.expr);
@@ -104,8 +102,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         // This rule has multiple choices.  Add them to the rule as choice
         // structs.
         struct parsed_expr expr = parsed_expr_get(tree, body.expr);
-        struct parsed_ident choice_identifier;
-        choice_identifier = parsed_ident_get(tree, body.ident);
+        struct parsed_identifier choice_identifier;
+        choice_identifier = parsed_identifier_get(tree, body.identifier);
         while (!expr.empty) {
             if (rule->number_of_choices >= MAX_NUMBER_OF_CHOICES) {
                 // TODO: Show location in original grammar text.
@@ -118,11 +116,11 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
              &rule->choices_allocated_bytes,
              sizeof(struct choice) * rule->number_of_choices);
             struct choice *choice = &rule->choices[choice_index];
-            choice->name = bluebird_tree_get_identifier(tree,
-             choice_identifier.identifier, &choice->name_length);
+            choice->name = choice_identifier.identifier;
+            choice->name_length = choice_identifier.length;
             build_body_automaton(&context, &choice->automaton, &expr);
             expr = parsed_expr_next(expr);
-            choice_identifier = parsed_ident_next(choice_identifier);
+            choice_identifier = parsed_identifier_next(choice_identifier);
         }
 
         // Create operator structs from each operator.
@@ -168,23 +166,24 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 }
             }
             // Then add each operator at this precedence to the rule.
-            struct parsed_expr op_expr = parsed_expr_get(tree, ops.expr);
-            struct parsed_ident op_choice = parsed_ident_get(tree, ops.ident);
-            while (!op_expr.empty) {
+            struct parsed_operator op = parsed_operator_get(tree, ops.operator);
+            while (!op.empty) {
+                struct parsed_expr op_expr = parsed_expr_get(tree, op.expr);
+                struct parsed_identifier op_choice =
+                 parsed_identifier_get(tree, op.identifier);
                 uint32_t op_index = rule->number_of_operators++;
                 rule->operators = grow_array(rule->operators,
                  &rule->operators_allocated_bytes,
                  sizeof(struct operator) * rule->number_of_operators);
                 struct operator *operator = &rule->operators[op_index];
-                operator->name = bluebird_tree_get_identifier(tree,
-                 op_choice.identifier, &operator->name_length);
+                operator->name = op_choice.identifier;
+                operator->name_length = op_choice.length;
                 operator->fixity = rule_fixity;
                 operator->associativity = rule_associativity;
                 operator->precedence = precedence;
                 build_body_automaton(&context, &operator->automaton,
                  &op_expr);
-                op_expr = parsed_expr_next(op_expr);
-                op_choice = parsed_ident_next(op_choice);
+                op = parsed_operator_next(op);
             }
             // Each new 'operators' section has a lower precedence than the
             // previous one.
@@ -275,16 +274,17 @@ static void build_body_expression(struct context *ctx,
         break;
     }
     case PARSED_IDENT: {
-        struct parsed_ident ident = parsed_ident_get(tree, expr->ident);
-        struct parsed_ident name = parsed_ident_get(tree, expr->name);
-        size_t rule_name_length;
-        const char *rule_name = bluebird_tree_get_identifier(tree,
-         ident.identifier, &rule_name_length);
-        size_t slot_name_length = rule_name_length;
+        struct parsed_identifier ident =
+         parsed_identifier_get(tree, expr->identifier);
+        struct parsed_identifier name =
+         parsed_identifier_get(tree, expr->rename);
+        const char *rule_name = ident.identifier;
+        size_t rule_name_length = ident.length;
         const char *slot_name = rule_name;
+        size_t slot_name_length = rule_name_length;
         if (!name.empty) {
-            slot_name = bluebird_tree_get_identifier(tree, name.identifier,
-             &slot_name_length);
+            slot_name = name.identifier;
+            slot_name_length = name.length;
         }
         uint32_t rule_index = find_rule(ctx, rule_name, rule_name_length);
         if (rule_index == UINT32_MAX) {
@@ -302,7 +302,7 @@ static void build_body_expression(struct context *ctx,
     }
     case PARSED_LITERAL: {
         automaton_add_transition(automaton, b.entry, b.exit,
-         add_keyword_token(ctx, rule, expr->ident, TOKEN_NORMAL));
+         add_keyword_token(ctx, rule, expr->string, TOKEN_NORMAL));
         break;
     }
     case PARSED_PARENS: {
@@ -453,23 +453,20 @@ uint32_t find_token(struct token *tokens, uint32_t number_of_tokens,
 static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
  parsed_id id, enum token_type type)
 {
-    struct parsed_ident ident = parsed_ident_get(ctx->tree, id);
-    size_t length;
-    const char *string = bluebird_tree_get_identifier(ctx->tree,
-     ident.identifier, &length);
-    if (length == 0) {
+    struct parsed_string keyword = parsed_string_get(ctx->tree, id);
+    if (keyword.length <= 2) {
         // Zero-length keywords are treated as epsilons.
         return SYMBOL_EPSILON;
     }
     uint32_t token_index = find_token(rule->keyword_tokens,
-     rule->number_of_keyword_tokens, string, length, type);
+     rule->number_of_keyword_tokens, keyword.string + 1, keyword.length - 2, type);
     if (token_index >= rule->number_of_keyword_tokens) {
         rule->number_of_keyword_tokens = token_index + 1;
         rule->keyword_tokens = grow_array(rule->keyword_tokens,
          &rule->keyword_tokens_allocated_bytes,
          sizeof(struct token) * rule->number_of_keyword_tokens);
-        rule->keyword_tokens[token_index].string = string;
-        rule->keyword_tokens[token_index].length = length;
+        rule->keyword_tokens[token_index].string = keyword.string + 1;
+        rule->keyword_tokens[token_index].length = keyword.length - 2;
         rule->keyword_tokens[token_index].type = type;
         rule->keyword_tokens[token_index].symbol = ctx->next_symbol++;
     }

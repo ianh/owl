@@ -314,7 +314,7 @@ void generate(struct generator *gen)
     }
     output_line(gen, "static parsed_id finish_node(uint32_t rule, uint32_t choice, parsed_id next_sibling, parsed_id *slots, void *info) {");
     output_line(gen, "    struct bluebird_tree *tree = info;");
-    output_line(gen, "    printf(\"finishing node (%lu): %u / %u\\n\", tree->next_id, rule, choice);");
+//    output_line(gen, "    printf(\"finishing node (%lu): %u / %u\\n\", tree->next_id, rule, choice);");
     output_line(gen, "    parsed_id id = tree->next_id;");
     output_line(gen, "    write_tree(tree, next_sibling);");
     output_line(gen, "    switch (rule) {");
@@ -324,12 +324,12 @@ void generate(struct generator *gen)
             continue;
         set_unsigned_number_substitution(gen, "rule-index", i);
         output_line(gen, "    case %%rule-index: {");
-        output_line(gen, "        printf(\"next = %lu\\n\", next_sibling);");
+//        output_line(gen, "        printf(\"next = %lu\\n\", next_sibling);");
         if (rule->number_of_choices > 0)
             output_line(gen, "        write_tree(tree, choice);");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
             set_unsigned_number_substitution(gen, "slot-index", j);
-            output_line(gen, "        printf(\"slot %%slot-index = %lu\\n\", slots[%%slot-index]);");
+//            output_line(gen, "        printf(\"slot %%slot-index = %lu\\n\", slots[%%slot-index]);");
             output_line(gen, "        write_tree(tree, slots[%%slot-index]);");
         }
         output_line(gen, "        break;");
@@ -342,7 +342,7 @@ void generate(struct generator *gen)
     output_line(gen, "}");
     output_line(gen, "static parsed_id finish_token(uint32_t rule, parsed_id next_sibling, void *info) {");
     output_line(gen, "    struct bluebird_tree *tree = info;");
-    output_line(gen, "    printf(\"finishing token (%lu): %u\\n\", tree->next_id, rule);");
+//    output_line(gen, "    printf(\"finishing token (%lu): %u\\n\", tree->next_id, rule);");
     output_line(gen, "    parsed_id id = tree->next_id;");
     output_line(gen, "    write_tree(tree, next_sibling);");
     output_line(gen, "    switch (rule) {");
@@ -354,7 +354,6 @@ void generate(struct generator *gen)
         set_substitution(gen, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
         output_line(gen, "    case %%rule-index: {");
-        output_line(gen, "        parsed_id id = tree->next_id;");
         output_line(gen, "        tree->used_%%rule_tokens++;");
         output_line(gen, "        if (tree->used_%%rule_tokens > tree->number_of_%%rule_tokens)");
         output_line(gen, "            abort();");
@@ -570,6 +569,7 @@ void generate(struct generator *gen)
     output_line(gen, "    }");
      */
     output_line(gen, "    tree->root_id = build_parse_tree(token_run, tree);");
+    output_line(gen, "    parsed_%%root-rule_print(tree, tree->root_id, \"%%root-rule\", 0);");
     output_line(gen, "    return tree;");
     output_line(gen, "}");
     output_line(gen, "void bluebird_tree_destroy(struct bluebird_tree *tree) {");
