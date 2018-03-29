@@ -611,7 +611,7 @@ void generate(struct generator *gen)
      gen->combined->final_nfa_state);
     output_line(gen, "static parsed_id build_parse_tree(struct bluebird_token_run *run, struct bluebird_tree *tree) {");
     output_line(gen, "    struct construct_state construct_state = { .info = tree };");
-    output_line(gen, "    struct state_stack stack = { 0 };");
+    output_line(gen, "    struct state_stack stack = {0};");
     if (gen->combined->root_rule_is_expression)
         output_line(gen, "    construct_begin(&construct_state, CONSTRUCT_EXPRESSION_ROOT);");
     else

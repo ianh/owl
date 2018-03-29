@@ -4427,7 +4427,7 @@ state_120U: {
 }
 static parsed_id build_parse_tree(struct bluebird_token_run *run, struct bluebird_tree *tree) {
     struct construct_state construct_state = { .info = tree };
-    struct state_stack stack = { 0 };
+    struct state_stack stack = {0};
     construct_begin(&construct_state, CONSTRUCT_NORMAL_ROOT);
     uint16_t token_index = run->number_of_tokens;
     uint32_t start_state = 247U;
