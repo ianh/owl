@@ -54,6 +54,21 @@ void determinize_bracket_transitions(struct bracket_transitions *result,
 struct action_map_entry *action_map_find(struct action_map *map,
  state_id target_nfa_state, state_id dfa_state, symbol_id dfa_symbol);
 
+// "Disambiguation" is just determinization where actions are treated like
+// symbols.  We use it in ambiguity checking to remove redundant action
+// transitions and guarantee that state-level ambiguity is equivalent to
+// action-level ambiguity.
+struct disambiguated_grammar {
+    struct automaton automaton;
+    struct automaton bracket_automaton;
+};
+
+void disambiguate(struct combined_grammar *grammar,
+ struct disambiguated_grammar *result, struct bracket_transitions *transitions);
+
+void disambiguate_bracket_transitions(struct bracket_transitions *result,
+ struct combined_grammar *grammar);
+
 // Step 2 (build) uses this function to determinize and minimize rules.
 void determinize_minimize(struct automaton *input, struct automaton *result);
 

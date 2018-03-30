@@ -16,6 +16,11 @@ struct epsilon_closure;
 struct state;
 struct transition;
 
+enum automaton_epsilon_closure_mode {
+    FOLLOW_ACTION_TRANSITIONS,
+    IGNORE_ACTION_TRANSITIONS,
+};
+
 struct automaton {
     struct state *states;
     uint32_t states_allocated_bytes;
@@ -26,6 +31,7 @@ struct automaton {
     // Used during determinization to iterate over all possible symbols.
     symbol_id number_of_symbols;
 
+    enum automaton_epsilon_closure_mode epsilon_closure_mode;
     struct epsilon_closure *epsilon_closure_for_state;
 };
 
@@ -68,7 +74,9 @@ void automaton_mark_accepting_state(struct automaton *a, state_id state);
 // mark the state as accepting or set it as a start state.
 state_id automaton_create_state(struct automaton *a);
 
-void automaton_compute_epsilon_closure(struct automaton *a);
+void automaton_compute_epsilon_closure(struct automaton *a,
+ enum automaton_epsilon_closure_mode mode);
+void automaton_invalidate_epsilon_closure(struct automaton *a);
 void automaton_reverse(struct automaton *a, struct automaton *reversed);
 void automaton_print(struct automaton *a);
 

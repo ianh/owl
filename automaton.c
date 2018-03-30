@@ -5,20 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void invalidate_epsilon_closure(struct automaton *a)
-{
-    if (a->epsilon_closure_for_state == 0)
-        return;
-    for (uint32_t i = 0; i < a->number_of_states; ++i) {
-        struct epsilon_closure *closure = &a->epsilon_closure_for_state[i];
-        state_array_destroy(&closure->reachable);
-        free(closure->action_indexes);
-        free(closure->actions);
-    }
-    free(a->epsilon_closure_for_state);
-    a->epsilon_closure_for_state = 0;
-}
-
 static void state_add_transition(struct state *s, state_id target,
  symbol_id symbol, uint16_t action)
 {
@@ -54,7 +40,7 @@ static void grow_states(struct automaton *a, uint32_t state)
 void automaton_add_transition_with_action(struct automaton *a, state_id source,
  state_id target, symbol_id symbol, uint16_t action)
 {
-    invalidate_epsilon_closure(a);
+    automaton_invalidate_epsilon_closure(a);
     state_id max_state = source;
     if (target > source)
         max_state = target;
@@ -152,7 +138,7 @@ void automaton_move(struct automaton *from, struct automaton *to)
 
 void automaton_clear(struct automaton *a)
 {
-    invalidate_epsilon_closure(a);
+    automaton_invalidate_epsilon_closure(a);
     for (uint32_t i = 0; i < a->number_of_states; ++i)
         free(a->states[i].transitions);
     memset(a->states, 0, a->states_allocated_bytes);

@@ -20,8 +20,13 @@ static uint32_t *state_table_add(struct state_table *table, state_id state);
 static uint32_t state_table_lookup(struct state_table *table, state_id state,
  uint32_t hash);
 
-void automaton_compute_epsilon_closure(struct automaton *a)
+void automaton_compute_epsilon_closure(struct automaton *a,
+ enum automaton_epsilon_closure_mode mode)
 {
+    if (a->epsilon_closure_mode != mode) {
+        a->epsilon_closure_mode = mode;
+        automaton_invalidate_epsilon_closure(a);
+    }
     if (a->epsilon_closure_for_state != 0)
         return;
     // Ensure we've actually created a start state.
@@ -30,6 +35,8 @@ void automaton_compute_epsilon_closure(struct automaton *a)
     a->epsilon_closure_for_state = calloc(n, sizeof(struct epsilon_closure));
     struct state_array worklist = {0};
     struct state_table visited = {0};
+    bool ignore_action_transitions =
+     a->epsilon_closure_mode == IGNORE_ACTION_TRANSITIONS;
     for (state_id i = 0; i < n; ++i) {
         struct epsilon_closure *closure = &a->epsilon_closure_for_state[i];
         state_array_push(&worklist, i);
@@ -41,6 +48,8 @@ void automaton_compute_epsilon_closure(struct automaton *a)
             for (uint32_t j = 0; j < number_of_transitions; ++j) {
                 struct transition transition = state->transitions[j];
                 if (transition.symbol != SYMBOL_EPSILON)
+                    continue;
+                if (ignore_action_transitions && transition.action != 0)
                     continue;
                 state_id target = transition.target;
                 state_id action = transition.action;
@@ -94,6 +103,20 @@ static bool closure_entry_add(struct state_table *table,
     }
     closure_action_add(closure, 0);
     return true;
+}
+
+void automaton_invalidate_epsilon_closure(struct automaton *a)
+{
+    if (a->epsilon_closure_for_state == 0)
+        return;
+    for (uint32_t i = 0; i < a->number_of_states; ++i) {
+        struct epsilon_closure *closure = &a->epsilon_closure_for_state[i];
+        state_array_destroy(&closure->reachable);
+        free(closure->action_indexes);
+        free(closure->actions);
+    }
+    free(a->epsilon_closure_for_state);
+    a->epsilon_closure_for_state = 0;
 }
 
 static void closure_action_add(struct epsilon_closure *closure, uint16_t action)
