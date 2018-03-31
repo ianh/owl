@@ -172,7 +172,6 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
         } else if (char_starts_identifier(c)) {
             // Identifier.
             size_t identifier_offset = offset + 1;
-            // TODO: Also allow dash if it isn't a keyword.
             while (char_continues_identifier(text[identifier_offset],
              tokenizer->info))
                 identifier_offset++;

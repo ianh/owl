@@ -74,7 +74,8 @@ static bool closure_entry_add(struct state_table *table,
 {
     uint32_t *action_index = state_table_add(table, state);
     if (!action_index) {
-        // TODO: Report ambiguity?
+        // There are two separate paths to this state.  We don't need to keep
+        // track of both.
         return false;
     }
     uint32_t index = closure->reachable.number_of_states;

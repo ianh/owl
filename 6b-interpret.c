@@ -186,7 +186,6 @@ static void print_parse_tree(struct interpret_context *ctx,
      memcmp(slot->name, rule->name, rule->name_length)))
         printf("@%.*s", (int)slot->name_length, slot->name);
     if (rule->number_of_choices) {
-        // TODO: Indicate more explicitly that this is an operator?
         if (node->choice_index > rule->number_of_choices) {
             struct operator *op = &rule->operators[node->choice_index -
              rule->number_of_choices];
