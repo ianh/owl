@@ -48,7 +48,7 @@ static state_id deterministic_state_for_subset(struct subset_table *table,
 // Find the set of transition symbols corresponding to an accepting
 // deterministic state.
 static struct bitset transition_symbols_from_state(struct automaton *a,
- struct subset_table *subsets, state_id state);
+ struct subset_table *subsets, uint32_t index);
 
 static int compare_actions(const void *a, const void *b);
 
@@ -73,7 +73,7 @@ struct context {
 
     struct bracket_transitions in_transitions;
     struct bracket_transitions *out_transitions;
-    symbol_id next_transition_symbol;
+    symbol_id first_transition_symbol;
 
     struct action_map *action_map;
 
@@ -84,6 +84,7 @@ static void determinize_automaton(struct context context)
 {
     struct automaton *a = context.input;
     struct automaton *result = context.result;
+    automaton_clear(result);
     struct bracket_transitions in_transitions = context.in_transitions;
 
     automaton_compute_epsilon_closure(a, (context.options & DISAMBIGUATE) ?
@@ -91,12 +92,6 @@ static void determinize_automaton(struct context context)
 
     struct subset_table subsets = {0};
     struct worklist worklist = {0};
-
-    struct bitset bracket_symbols = bitset_create_empty(a->number_of_symbols);
-    for (uint32_t i = 0; i < in_transitions.number_of_transitions; ++i) {
-        struct bracket_transition transition = in_transitions.transitions[i];
-        bitset_union(&bracket_symbols, &transition.transition_symbols);
-    }
 
     state_id next_state = 0;
     struct state_array next_subset = {0};
@@ -114,8 +109,10 @@ static void determinize_automaton(struct context context)
     automaton_set_start_state(result, deterministic_state_for_subset(&subsets,
      &worklist, &next_subset, &next_state));
 
+    symbol_id next_transition_symbol = context.first_transition_symbol;
     while (worklist.number_of_subsets > 0) {
 #if 0
+//        if (context.options & DISAMBIGUATE) {
         printf("worklist\n");
         for (uint32_t i = 0; i < worklist.number_of_subsets; ++i) {
             printf("%u (%p): ", worklist.subset_states[i], worklist.subsets[i]);
@@ -125,6 +122,7 @@ static void determinize_automaton(struct context context)
             printf("\n");
         }
         printf("end worklist\n");
+//        }
 #endif
 
         uint32_t worklist_index = --worklist.number_of_subsets;
@@ -141,7 +139,7 @@ static void determinize_automaton(struct context context)
         // There are three kinds of transitions we potentially need to visit.
         // First, we visit normal symbol transitions.
         for (symbol_id symbol = 0; symbol < a->number_of_symbols; ++symbol) {
-            if (bitset_contains(&bracket_symbols, symbol)) {
+            if (symbol >= context.first_transition_symbol) {
                 // We handle bracket symbols separately below.
                 continue;
             }
@@ -200,6 +198,8 @@ static void determinize_automaton(struct context context)
                 struct state s = a->states[subset->states[i]];
                 for (uint32_t j = 0; j < s.number_of_transitions; ++j) {
                     struct transition transition = s.transitions[j];
+                    if (transition.symbol != SYMBOL_EPSILON)
+                        continue;
                     if (transition.action == 0)
                         continue;
                     uint32_t k = number_of_actions++;
@@ -219,6 +219,8 @@ static void determinize_automaton(struct context context)
                     struct state s = a->states[subset->states[i]];
                     for (uint32_t j = 0; j < s.number_of_transitions; ++j) {
                         struct transition transition = s.transitions[j];
+                        if (transition.symbol != SYMBOL_EPSILON)
+                            continue;
                         if (transition.action != actions[n])
                             continue;
                         follow_subset_transition(a, transition.target,
@@ -249,7 +251,7 @@ static void determinize_automaton(struct context context)
             ts->transitions = grow_array(ts->transitions,
              &ts->transitions_allocated_bytes, ts->number_of_transitions *
              sizeof(struct bracket_transition));
-            state->transition_symbol = context.next_transition_symbol++;
+            state->transition_symbol = next_transition_symbol++;
             ts->transitions[j].deterministic_transition_symbol =
              state->transition_symbol;
             ts->transitions[j].transition_symbols =
@@ -403,12 +405,12 @@ static void find_bracket_transitions(struct context context,
          sizeof(struct bracket_transition), compare_bracket_transitions);
         if (equal_bracket_transitions(&transitions, result))
             break;
-#if DEBUG_OUTPUT
+#if 1
         printf("-\n");
         for (uint32_t i = 0; i < result->number_of_transitions; ++i) {
             struct bracket_transition t = result->transitions[i];
             printf("%x: ", t.deterministic_transition_symbol);
-            for (uint32_t j = 0; j < grammar->bracket_automaton.number_of_symbols; ++j) {
+            for (uint32_t j = 0; j < t.transition_symbols.number_of_elements; ++j) {
                 if (bitset_contains(&t.transition_symbols, j))
                     printf("%x ", j);
             }
@@ -421,31 +423,32 @@ static void find_bracket_transitions(struct context context,
     automaton_destroy(&a);
 }
 
-void disambiguate(struct combined_grammar *grammar,
- struct disambiguated_grammar *result, struct bracket_transitions *transitions)
+void disambiguate(struct automaton *input, struct automaton *input_bracket,
+ struct automaton *result, struct automaton *result_bracket,
+ symbol_id first_bracket_transition_symbol)
 {
+    struct bracket_transitions transitions = {0};
+    find_bracket_transitions((struct context){
+        .input = input_bracket,
+        .first_transition_symbol = first_bracket_transition_symbol,
+        .options = DISAMBIGUATE,
+    }, &transitions);
     determinize_automaton((struct context){
-        .input = &grammar->automaton,
-        .result = &result->automaton,
-        .in_transitions = *transitions,
+        .input = input,
+        .result = result,
+        .in_transitions = transitions,
+        .first_transition_symbol = first_bracket_transition_symbol,
         .options = DISAMBIGUATE,
     });
     determinize_automaton((struct context){
-        .input = &grammar->bracket_automaton,
-        .result = &result->bracket_automaton,
-        .in_transitions = *transitions,
+        .input = input_bracket,
+        .result = result_bracket,
+        .in_transitions = transitions,
+        .first_transition_symbol = first_bracket_transition_symbol,
         .options = MARK_ACCEPTING_BRACKET_STATES | DISAMBIGUATE,
     });
-}
-
-void disambiguate_bracket_transitions(struct bracket_transitions *result,
- struct combined_grammar *grammar)
-{
-    find_bracket_transitions((struct context){
-        .input = &grammar->bracket_automaton,
-        .next_transition_symbol =  grammar->number_of_tokens,
-        .options = DISAMBIGUATE,
-    }, result);
+    bracket_transitions_destroy(&transitions);
+    // TODO: Destroy transitions
 }
 
 void determinize(struct combined_grammar *grammar,
@@ -455,12 +458,14 @@ void determinize(struct combined_grammar *grammar,
         .input = &grammar->automaton,
         .result = &result->automaton,
         .in_transitions = *transitions,
+        .first_transition_symbol = grammar->number_of_tokens,
         .action_map = &result->action_map,
     });
     determinize_automaton((struct context){
         .input = &grammar->bracket_automaton,
         .result = &result->bracket_automaton,
         .in_transitions = *transitions,
+        .first_transition_symbol = grammar->number_of_tokens,
         .action_map = &result->bracket_action_map,
         .options = MARK_ACCEPTING_BRACKET_STATES,
     });
@@ -476,7 +481,7 @@ void determinize_bracket_transitions(struct bracket_transitions *result,
 {
     find_bracket_transitions((struct context){
         .input = &grammar->bracket_automaton,
-        .next_transition_symbol =  grammar->number_of_tokens,
+        .first_transition_symbol = grammar->number_of_tokens,
     }, result);
 }
 
@@ -492,6 +497,12 @@ struct action_map_entry *action_map_find(struct action_map *map,
      sizeof(struct action_map_entry), compare_action_map_entries);
 }
 
+void bracket_transitions_destroy(struct bracket_transitions *transitions)
+{
+    free(transitions->transitions);
+    memset(transitions, 0, sizeof(*transitions));
+}
+
 // This is Brzozowski's algorithm.
 void determinize_minimize(struct automaton *input, struct automaton *result)
 {
@@ -499,11 +510,12 @@ void determinize_minimize(struct automaton *input, struct automaton *result)
     struct automaton dfa = {0};
     automaton_reverse(input, &reversed);
     determinize_automaton((struct context){ .input = &reversed, .result = &dfa,
-     .options = IGNORE_START_STATE });
+     .first_transition_symbol = UINT32_MAX, .options = IGNORE_START_STATE });
     automaton_clear(&reversed);
     automaton_reverse(&dfa, &reversed);
     determinize_automaton((struct context){ .input = &reversed,
-     .result = result, .options = IGNORE_START_STATE });
+     .result = result, .first_transition_symbol = UINT32_MAX,
+     .options = IGNORE_START_STATE });
     automaton_destroy(&reversed);
     automaton_destroy(&dfa);
 }
@@ -589,10 +601,10 @@ static int compare_state_ids(const void *aa, const void *bb)
 }
 
 static struct bitset transition_symbols_from_state(struct automaton *a,
- struct subset_table *subsets, state_id state)
+ struct subset_table *subsets, uint32_t index)
 {
     struct bitset symbols = bitset_create_empty(a->number_of_symbols);
-    struct state_array *subset = subsets->subsets[state];
+    struct state_array *subset = subsets->subsets[index];
     for (uint32_t i = 0; i < subset->number_of_states; ++i) {
         struct state s = a->states[subset->states[i]];
         if (!s.accepting)

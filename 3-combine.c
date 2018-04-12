@@ -1,5 +1,6 @@
 #include "3-combine.h"
 
+#include "4-determinize.h"
 #include "x-construct-actions.h"
 #include <assert.h>
 #include <stdio.h>
@@ -26,6 +27,8 @@ static struct substitution_result substitute_slots(struct grammar *grammar,
  size_t number_of_renames);
 
 static void update_number_of_symbols(struct automaton *a);
+static void equalize_number_of_symbols(struct automaton *a,
+ struct automaton *b);
 // Returns the start state of the embedded automaton.
 static state_id embed(struct automaton *into, struct automaton *from,
  state_id out_state, symbol_id out_symbol, uint16_t out_action);
@@ -204,8 +207,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     }
 
     // Fourth pass: build and substitute the bracket automata from each rule.
-    result->bracket_automaton.start_state =
-     automaton_create_state(&result->bracket_automaton);
+    struct automaton combined_bracket_automaton = {0};
+    automaton_set_start_state(&combined_bracket_automaton, 0);
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = &grammar->rules[i];
         if (rule->is_token || rule->number_of_brackets == 0)
@@ -235,29 +238,40 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
         // Embed the rule's bracket automaton into the larger result bracket
         // automaton.  We do this by hand instead of using `embed` to make sure
         // we preserve accepting states and their transition symbols.
-        uint32_t m = result->bracket_automaton.number_of_states;
+        uint32_t m = combined_bracket_automaton.number_of_states;
         for (uint32_t j = 0; j < bracket_automaton.number_of_states; ++j) {
             struct state s = bracket_automaton.states[j];
             for (uint32_t k = 0; k < s.number_of_transitions; ++k) {
-                automaton_add_transition_with_action(&result->bracket_automaton,
-                 j + m, s.transitions[k].target + m, s.transitions[k].symbol,
-                 s.transitions[k].action);
+               automaton_add_transition_with_action(&combined_bracket_automaton,
+                j + m, s.transitions[k].target + m, s.transitions[k].symbol,
+                s.transitions[k].action);
             }
             if (s.accepting) {
-                automaton_mark_accepting_state(&result->bracket_automaton,
-                 j + m);
-                result->bracket_automaton.states[j + m].transition_symbol =
-                 s.transition_symbol;
+               automaton_mark_accepting_state(&combined_bracket_automaton,
+                j + m);
+               combined_bracket_automaton.states[j + m].transition_symbol =
+                s.transition_symbol;
             }
         }
-        automaton_add_transition(&result->bracket_automaton,
+        automaton_add_transition(&combined_bracket_automaton,
          result->bracket_automaton.start_state,
          bracket_automaton.start_state + m, SYMBOL_EPSILON);
         automaton_destroy(&bracket_automaton);
     }
 
-    // Return the root rule's automaton as our result.
-    automaton_move(&automaton_for_rule[grammar->root_rule], &result->automaton);
+    // Before we can call `disambiguate`, we need these automata to have the
+    // same `number_of_symbols` so they can share bracket transition bitsets.
+    // (This may be a sign that the two automata should be combined into one.)
+    equalize_number_of_symbols(&automaton_for_rule[grammar->root_rule],
+     &combined_bracket_automaton);
+
+    // Produce the final automata by "disambiguating" the combined automata.
+    // This removes redundant epsilon transitions so our ambiguity checking
+    // algorithm works properly.
+    disambiguate(&automaton_for_rule[grammar->root_rule],
+     &combined_bracket_automaton, &result->automaton,
+     &result->bracket_automaton, result->number_of_tokens);
+
     // Make sure we have a single final state so we have somewhere to start when
     // walking backwards and running transition actions.
     result->final_nfa_state = automaton_create_state(&result->automaton);
@@ -276,22 +290,16 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     for (uint32_t i = 0; i < result->number_of_tokens; ++i)
         result->tokens[i].symbol = i;
 
-    // We need the two result automata to share the same `number_of_symbols` so
-    // they can share bracket transition bitsets.  (This may be a sign that the
-    // two automata should be combined into one.)
-    update_number_of_symbols(&result->automaton);
-    update_number_of_symbols(&result->bracket_automaton);
-    uint32_t number_of_symbols = result->automaton.number_of_symbols;
-    if (result->bracket_automaton.number_of_symbols > number_of_symbols)
-        number_of_symbols = result->bracket_automaton.number_of_symbols;
-    result->automaton.number_of_symbols = number_of_symbols;
-    result->bracket_automaton.number_of_symbols = number_of_symbols;
+    // Equalize the number of symbols again -- we'll be using bracket transition
+    // bitsets again when we fully determinize the automata.
+    equalize_number_of_symbols(&result->automaton, &result->bracket_automaton);
 
     for (uint32_t i = 0; i < n; ++i) {
         free(renames_for_rule[i]);
         free(bracket_symbols_for_rule[i]);
         automaton_destroy(&automaton_for_rule[i]);
     }
+    automaton_destroy(&combined_bracket_automaton);
     free(renames_for_rule);
     free(bracket_symbols_for_rule);
     free(automaton_for_rule);
@@ -362,6 +370,18 @@ static void update_number_of_symbols(struct automaton *a)
                 a->number_of_symbols = symbol + 1;
         }
     }
+}
+
+static void equalize_number_of_symbols(struct automaton *a,
+ struct automaton *b)
+{
+    update_number_of_symbols(a);
+    update_number_of_symbols(b);
+    uint32_t number_of_symbols = a->number_of_symbols;
+    if (b->number_of_symbols > number_of_symbols)
+        number_of_symbols = b->number_of_symbols;
+    a->number_of_symbols = number_of_symbols;
+    b->number_of_symbols = number_of_symbols;
 }
 
 static state_id embed(struct automaton *into, struct automaton *from,

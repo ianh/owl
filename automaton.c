@@ -76,7 +76,8 @@ void automaton_reverse(struct automaton *a, struct automaton *reversed)
         struct state *s = &a->states[i];
         for (uint32_t j = 0; j < s->number_of_transitions; ++j) {
             struct transition *t = &s->transitions[j];
-            automaton_add_transition(reversed, t->target, i, t->symbol);
+            automaton_add_transition_with_action(reversed, t->target, i,
+             t->symbol, t->action);
         }
         if (s->accepting)
             automaton_add_transition(reversed, start_state, i, SYMBOL_EPSILON);

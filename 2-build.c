@@ -320,11 +320,16 @@ static void build_body_expression(struct context *ctx,
         // because more brackets could be created inside build_body_automaton,
         // invalidating the pointer.  Write into a stack value instead, then
         // move its contents into place.
-        struct automaton bracket_automaton = {0};
-        build_body_automaton(ctx, &bracket_automaton, &bracket_expr);
         struct bracket *bracket = &rule->brackets[bracket_index];
-        automaton_move(&bracket_automaton, &bracket->automaton);
-        automaton_destroy(&bracket_automaton);
+        if (bracket_expr.empty) {
+            automaton_set_start_state(&bracket->automaton, 0);
+            automaton_mark_accepting_state(&bracket->automaton, 0);
+        } else {
+            struct automaton bracket_automaton = {0};
+            build_body_automaton(ctx, &bracket_automaton, &bracket_expr);
+            automaton_move(&bracket_automaton, &bracket->automaton);
+            automaton_destroy(&bracket_automaton);
+        }
         bracket->symbol = ctx->next_symbol++;
         bracket->start_symbol = add_keyword_token(ctx, rule, expr->begin_token,
          TOKEN_START);

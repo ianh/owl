@@ -4,34 +4,46 @@
 #include "1-parse.h"
 #include "2-build.h"
 #include "4-determinize.h"
+#include "5-check-for-ambiguity.h"
 #include "6a-generate.h"
 #include "6b-interpret.h"
 
-#define DEBUG_OUTPUT 0
+#define DEBUG_OUTPUT 1
 
 // TODO:
-// - code generation
-// - self hosting
-//  - write a blog post or something about how the old parser worked?
 // - ambiguity checking
 // - don't output unreachable nfa states
+//  - this probably means filtering out intermediate states from the epsilon
+//    closure
 // - fancy interpreter output
 // - json interpreter output
 // - clean up memory leaks
 // - get rid of RULE_LOOKUP?
 // - check if all the input is properly validated
+// - error messages that include line/column/visuals
 // - perf optimization?
+
+// ASIDE:
+// - write a blog post or something about how the old parser worked?
 
 static void output_stdout(struct generator *g, const char *string, size_t len);
 
 int main(int argc, char *argv[])
 {
     const char *string =
+    //"a = b* [ '(' b* ')' ] | b [ '(' b | c ')' ]  b = 'x'  c = 'x'";
+    //"a = [ '(' b ')' ] | [ '(' c ')' ]  b = 'x'  c = 'x'*";
+    //"a = b | c  b = [ '(' 'x' ')' ]  c = [ '(' 'x'* ')' ]";
+    "a = [ '(' b* ')' ] | [ '(' c? ')' ]  b = 'x'?  c = 'y'?";
+    //"a = b? b?  b = 'x'";
+    //"a = [ '(' a ')' ]";
     //"a = 'x'*";
     //"a = '' x*  x = 'x'";
     //"a = b*  b = 'x'";
     //"a = 'a' 'b' 'c'";
     //"a = b  b = 'x'";
+    //"a = b b  b = 'x'?";
+    //"a = identifier | number";
     //"a = b@x [ '(' [ a@x ] ')' ]  b = a";
     //"a = identifier ('+' identifier)*";
     //"a = identifier `ident`  infix flat $ '+' `plus`";
@@ -49,7 +61,7 @@ int main(int argc, char *argv[])
     //"expr = identifier `ident`  number `number`  infix flat $ '+' `plus`";
     //"grammar = rule*   rule = identifier '=' body   body = expr | (expr ':' identifier)+ operators*   operators = '.operators' fixity operator+   operator = expr ':' identifier   fixity =    'postfix' `postfix`    'prefix' `prefix`    'infix' assoc `infix`   assoc =    'flat' `flat`    'left' `left`    'right' `right`    'nonassoc' `nonassoc`    expr =     identifier ('@' identifier@rename)? `ident`     string `literal`     [ '(' [ expr ] ')' ] `parens`     [ '[' [ identifier@left expr? identifier@right ] ']' ] `bracketed`    postfix $     '*' `zero-or-more`     '+' `one-or-more`     '?' `optional`    infix flat $     '' `concatenation`    infix flat $     '|' `choice`";
     //"grammar = rule*   rule = identifier '=' body   body = expr | (expr ':' identifier)+ operators*   operators = '.operators' fixity operator+   operator = expr ':' identifier   fixity =    'postfix' : postfix    'prefix' : prefix    'infix' assoc : infix   assoc =    'flat' : flat    'left' : left    'right' : right    'nonassoc' : nonassoc    expr =     identifier ('@' identifier@rename)? : ident     string : literal     [ '(' expr ')' ] : parens     [ '[' string@left expr? string@right ']' ] : bracketed   .operators postfix     '*' : zero-or-more     '+' : one-or-more     '?' : optional    .operators infix flat     '' : concatenation    .operators infix flat     '|' : choice";
-///*
+/*
     "grammar = rule* "
     "rule = identifier '=' body "
     "body = expr | (expr ':' identifier)+ operators* "
@@ -151,10 +163,13 @@ int main(int argc, char *argv[])
     }
 #endif
 
+#if DEBUG_OUTPUT
+    printf("------\n");
+#endif
     struct bracket_transitions bracket_transitions = {0};
     determinize_bracket_transitions(&bracket_transitions, &combined);
 #if DEBUG_OUTPUT
-    printf("---\n");
+    printf("------\n");
 #endif
 
     struct deterministic_grammar deterministic = {0};
@@ -164,7 +179,12 @@ int main(int argc, char *argv[])
     automaton_print(&deterministic.bracket_automaton);
 #endif
 
+    printf("- ambiguity start -\n");
+    check_for_ambiguity(&combined, &bracket_transitions);
+    printf("- ambiguity end -\n");
+
     //const char *text_to_parse = "x x x x x x";
+    const char *text_to_parse = "x";
     //const char *text_to_parse = "a + (b / c) + c";
     //const char *text_to_parse = "a | b | c | d | e";
     //const char *text_to_parse = "a + b + c + d + 3";
@@ -172,7 +192,7 @@ int main(int argc, char *argv[])
     //const char *text_to_parse = "a + (b - c) * d / e + f + g * h";
     //const char *text_to_parse = "(((x)))";
     //const char *text_to_parse = "test = a | b*  a = identifier  b = number";
-    const char *text_to_parse = "test = [ 'x' (a@b | a1 'a2' a3) 'y' ] | (c | b)* : eee  .operators infix left  p : p  .operators prefix pre : pre";
+    //const char *text_to_parse = "test = [ 'x' (a@b | a1 'a2' a3) 'y' ] | (c | b)* : eee  .operators infix left  p : p  .operators prefix pre : pre";
     //const char *text_to_parse = "q + (x + y) + z + ((d + ((w))) + r) + k";
     //const char *text_to_parse = "a = (b)";
 #if DEBUG_OUTPUT

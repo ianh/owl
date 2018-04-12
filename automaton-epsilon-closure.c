@@ -5,13 +5,15 @@
 struct state_table {
     state_id *states;
     uint32_t *state_hashes;
-    uint32_t *state_action_indexes;
+    uint32_t *state_indexes;
     bool *used;
 
     uint32_t available_size;
     uint32_t used_size;
 };
 
+static uint32_t append_to_action_path(struct state_table *table,
+ struct epsilon_closure *closure, state_id previous_state, uint16_t action);
 static bool closure_entry_add(struct state_table *table,
  struct epsilon_closure *closure, state_id previous_state, state_id state,
  uint16_t action);
@@ -64,7 +66,7 @@ void automaton_compute_epsilon_closure(struct automaton *a,
     state_array_destroy(&worklist);
     free(visited.states);
     free(visited.state_hashes);
-    free(visited.state_action_indexes);
+    free(visited.state_indexes);
     free(visited.used);
 }
 
@@ -72,38 +74,62 @@ static bool closure_entry_add(struct state_table *table,
  struct epsilon_closure *closure, state_id previous_state, state_id state,
  uint16_t action)
 {
-    uint32_t *action_index = state_table_add(table, state);
-    if (!action_index) {
-        // There are two separate paths to this state.  We don't need to keep
-        // track of both.
+    uint32_t *state_index = state_table_add(table, state);
+    if (*state_index != UINT32_MAX) {
+        // There are two separate paths to this state.  Keep track of the second
+        // one so we can report it during ambiguity checking.
+        if (closure->ambiguous_action_indexes[*state_index] == UINT32_MAX) {
+            closure->ambiguous_action_indexes[*state_index] =
+             append_to_action_path(table, closure, previous_state, action);
+            printf("duplicate path! i=%u ai=%u p=%u s=%u a=%u\n", *state_index, closure->ambiguous_action_indexes[*state_index], previous_state, state, action);
+            return true;
+        }
         return false;
     }
-    uint32_t index = closure->reachable.number_of_states;
+    *state_index = closure->reachable.number_of_states;
     state_array_push(&closure->reachable, state);
     closure->action_indexes = grow_array(closure->action_indexes,
      &closure->action_indexes_allocated_bytes,
      closure->reachable.number_of_states * sizeof(uint32_t));
-    *action_index = closure->number_of_actions;
-    closure->action_indexes[index] = closure->number_of_actions;
+    closure->ambiguous_action_indexes =
+     grow_array(closure->ambiguous_action_indexes,
+      &closure->ambiguous_action_indexes_allocated_bytes,
+      closure->reachable.number_of_states * sizeof(uint32_t));
+    closure->action_indexes[*state_index] = append_to_action_path(table,
+     closure, previous_state, action);
+    closure->ambiguous_action_indexes[*state_index] = UINT32_MAX;
+    return true;
+}
+
+static uint32_t append_to_action_path(struct state_table *table,
+ struct epsilon_closure *closure, state_id previous_state, uint16_t action)
+{
+    uint32_t action_index = closure->number_of_actions;
     if (action)
         closure_action_add(closure, action);
     uint32_t previous = state_table_lookup(table, previous_state,
-     fnv(&previous_state, sizeof(state)));
-    uint32_t previous_action_index = table->state_action_indexes[previous];
-    if (table->used[previous] && previous_action_index != UINT32_MAX) {
-        if (!action) {
-            *action_index = previous_action_index;
-            closure->action_indexes[index] = previous_action_index;
-            return true;
-        }
-        uint32_t i = previous_action_index;
+     fnv(&previous_state, sizeof(previous_state)));
+    uint32_t previous_state_index = table->state_indexes[previous];
+    if (table->used[previous] && previous_state_index != UINT32_MAX) {
+        uint32_t i = closure->action_indexes[previous_state_index];
+        if (!action)
+            return i;
         while (closure->actions[i]) {
             closure_action_add(closure, closure->actions[i]);
             i++;
         }
     }
     closure_action_add(closure, 0);
-    return true;
+    return action_index;
+}
+
+static void closure_action_add(struct epsilon_closure *closure, uint16_t action)
+{
+    uint32_t index = closure->number_of_actions++;
+    closure->actions = grow_array(closure->actions,
+     &closure->actions_allocated_bytes,
+     closure->number_of_actions * sizeof(uint16_t));
+    closure->actions[index] = action;
 }
 
 void automaton_invalidate_epsilon_closure(struct automaton *a)
@@ -120,15 +146,6 @@ void automaton_invalidate_epsilon_closure(struct automaton *a)
     a->epsilon_closure_for_state = 0;
 }
 
-static void closure_action_add(struct epsilon_closure *closure, uint16_t action)
-{
-    uint32_t index = closure->number_of_actions++;
-    closure->actions = grow_array(closure->actions,
-     &closure->actions_allocated_bytes,
-     closure->number_of_actions * sizeof(uint16_t));
-    closure->actions[index] = action;
-}
-
 static uint32_t *state_table_add(struct state_table *table, state_id state)
 {
     if (3 * table->available_size <= 4 * (table->used_size + 1)) {
@@ -138,32 +155,32 @@ static uint32_t *state_table_add(struct state_table *table, state_id state)
             n = 4;
         table->states = calloc(n, sizeof(state_id));
         table->state_hashes = calloc(n, sizeof(uint32_t));
-        table->state_action_indexes = calloc(n, sizeof(uint32_t));
+        table->state_indexes = calloc(n, sizeof(uint32_t));
         table->used = calloc(n, sizeof(bool));
         table->available_size = n;
         table->used_size = 0;
         for (uint32_t i = 0; i < old.available_size; ++i) {
             if (!old.used[i])
                 continue;
-            uint32_t *action_index = state_table_add(table, old.states[i]);
-            *action_index = old.state_action_indexes[i];
+            uint32_t *state_index = state_table_add(table, old.states[i]);
+            *state_index = old.state_indexes[i];
         }
         free(old.states);
         free(old.state_hashes);
-        free(old.state_action_indexes);
+        free(old.state_indexes);
         free(old.used);
     }
 
     uint32_t hash = fnv(&state, sizeof(state));
     uint32_t index = state_table_lookup(table, state, hash);
-    if (table->used[index])
-        return 0;
-    table->states[index] = state;
-    table->state_hashes[index] = hash;
-    table->state_action_indexes[index] = UINT32_MAX;
-    table->used[index] = true;
-    table->used_size++;
-    return &table->state_action_indexes[index];
+    if (!table->used[index]) {
+        table->states[index] = state;
+        table->state_hashes[index] = hash;
+        table->state_indexes[index] = UINT32_MAX;
+        table->used[index] = true;
+        table->used_size++;
+    }
+    return &table->state_indexes[index];
 }
 
 static uint32_t state_table_lookup(struct state_table *table, state_id state,

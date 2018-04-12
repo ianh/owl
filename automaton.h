@@ -57,6 +57,13 @@ struct epsilon_closure {
     uint32_t *action_indexes;
     uint32_t action_indexes_allocated_bytes;
 
+    // If there are at least two paths to a single reachable state, we store a
+    // second one here.  If the original state is reachable and the end state is
+    // co-reachable, we have an ambiguity we can report.
+    // If there's just one path, we store UINT32_MAX here.
+    uint32_t *ambiguous_action_indexes;
+    uint32_t ambiguous_action_indexes_allocated_bytes;
+
     uint16_t *actions;
     uint32_t actions_allocated_bytes;
     uint32_t number_of_actions;
