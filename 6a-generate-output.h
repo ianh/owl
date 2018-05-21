@@ -1,6 +1,7 @@
 #ifndef _6A_GENERATE_OUTPUT_H_
 #define _6A_GENERATE_OUTPUT_H_
 
+#include <stddef.h>
 #include <stdint.h>
 
 struct generator_output;
@@ -30,6 +31,5 @@ void set_signed_number_substitution(struct generator_output *output,
  const char *variable, int32_t value);
 void set_literal_substitution(struct generator_output *output,
  const char *variable, const char *value);
-
 
 #endif

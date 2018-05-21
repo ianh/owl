@@ -14,11 +14,12 @@
 #endif
 
 #ifndef FINISH_NODE
-#define FINISH_NODE(rule, choice, next_sibling, slots, info) 0
+#define FINISH_NODE(rule, choice, next_sibling, slots, start, end, info) 0
 #endif
 
 #define FINISH_NODE_STRUCT(n, next_sibling, info) (FINISH_NODE((n)->rule, \
- (n)->choice_index, next_sibling, (n)->slots, info))
+ (n)->choice_index, next_sibling, (n)->slots, (n)->start_location, \
+ (n)->end_location, info))
 
 #ifndef FINISH_TOKEN
 #define FINISH_TOKEN(rule, next_sibling, info) 0
@@ -74,7 +75,6 @@ struct construct_node {
 
     // In parent rule.
     uint16_t slot_index;
-
     uint16_t choice_index;
 
     // For operators.
@@ -241,6 +241,8 @@ static void construct_expression_reduce(struct construct_state *s,
             reversed_values = last_value;
             last_value = next_value;
         }
+        combined_op->start_location = first_value->start_location;
+        combined_op->end_location = last_value->end_location;
         // Now we can build the operand list in the proper order.
         assert(last_value);
         operand = FINISH_NODE_STRUCT(last_value, operand, s->info);
@@ -263,6 +265,8 @@ static void construct_expression_reduce(struct construct_state *s,
         op->next = right->next;
         expr->first_value = op;
 
+        op->start_location = left->start_location;
+        op->end_location = right->end_location;
         op->slots[expr->left_slot_index] = FINISH_NODE_STRUCT(left,
          op->slots[expr->left_slot_index], s->info);
         op->slots[expr->right_slot_index] = FINISH_NODE_STRUCT(right,
@@ -275,6 +279,10 @@ static void construct_expression_reduce(struct construct_state *s,
         op->next = value->next;
         expr->first_value = op;
 
+        if (value->start_location < op->start_location)
+            op->start_location = value->start_location;
+        if (value->end_location > op->end_location)
+            op->end_location = value->end_location;
         op->slots[expr->operand_slot_index] = FINISH_NODE_STRUCT(value,
          op->slots[expr->operand_slot_index], s->info);
         construct_node_free(s, value);
@@ -332,7 +340,8 @@ static FINISHED_NODE_T construct_finish(struct construct_state *s)
     return finished;
 }
 
-static void construct_action_apply(struct construct_state *s, uint16_t action)
+static void construct_action_apply(struct construct_state *s, uint16_t action,
+ size_t offset)
 {
     switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
     case CONSTRUCT_ACTION_END_SLOT: {
@@ -341,6 +350,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
           CONSTRUCT_ACTION_GET_SLOT(action), s->info));
         node->next = s->under_construction;
         node->slot_index = CONSTRUCT_ACTION_GET_SLOT(action);
+        node->end_location = offset;
         s->under_construction = node;
         break;
     }
@@ -355,6 +365,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
     }
     case CONSTRUCT_ACTION_BEGIN_SLOT: {
         struct construct_node *node = s->under_construction;
+        node->start_location = offset;
         s->under_construction = node->next;
         FINISHED_NODE_T *finished;
         finished = &s->under_construction->slots[node->slot_index];
@@ -393,6 +404,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = construct_node_alloc(s, expr->rule);
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
+        node->end_location = offset;
         node->rule = expr->rule;
         node->next = s->under_construction;
         s->under_construction = node;
@@ -402,6 +414,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = construct_node_alloc(s, expr->rule);
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
+        node->end_location = offset;
         node->rule = expr->rule;
         enum construct_fixity_associativity fixity_associativity;
         int precedence;
@@ -416,6 +429,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
     case CONSTRUCT_ACTION_BEGIN_OPERAND: {
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = s->under_construction;
+        node->start_location = offset;
         s->under_construction = node->next;
         node->next = expr->first_value;
         expr->first_value = node;
@@ -424,6 +438,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action)
     case CONSTRUCT_ACTION_BEGIN_OPERATOR: {
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = s->under_construction;
+        node->start_location = offset;
         s->under_construction = node->next;
         while (construct_expression_should_reduce(s, expr, node))
             construct_expression_reduce(s, expr);

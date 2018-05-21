@@ -53,7 +53,7 @@ TOKENIZE_BODY
 struct bluebird_token_run {
     struct bluebird_token_run *prev;
     uint16_t number_of_tokens;
-    uint16_t number_of_lengths;
+    uint16_t lengths_size;
     uint8_t lengths[TOKEN_RUN_LENGTH * 2];
     TOKEN_T tokens[TOKEN_RUN_LENGTH];
     STATE_T states[TOKEN_RUN_LENGTH];
@@ -109,12 +109,64 @@ static bool char_continues_identifier(char c, void *info)
     return char_is_numeric(c) || char_starts_identifier(c);
 }
 
+static bool encode_length(struct bluebird_token_run *run,
+ uint16_t *lengths_size, size_t length)
+{
+    uint8_t mark = 0;
+    while (*lengths_size < sizeof(run->lengths)) {
+        run->lengths[*lengths_size] = mark | (length & 0x7f);
+        mark = 0x80;
+        length >>= 7;
+        (*lengths_size)++;
+        if (length == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool encode_token_length(struct bluebird_token_run *run,
+ uint16_t *lengths_size, size_t length, size_t whitespace)
+{
+    uint16_t size = *lengths_size;
+    if (encode_length(run, lengths_size, length) &&
+     encode_length(run, lengths_size, whitespace))
+        return true;
+    *lengths_size = size;
+    return false;
+}
+
+static size_t decode_length(struct bluebird_token_run *run,
+ uint16_t *length_offset)
+{
+    size_t length = 0;
+    size_t shift_amount = 0;
+    while (*length_offset < sizeof(run->lengths) &&
+     shift_amount < sizeof(size_t) * 8) {
+        size_t l = run->lengths[(*length_offset)--];
+        length += (l & 0x7f) << shift_amount;
+        shift_amount += 7;
+        if (!(l & 0x80))
+            return length;
+    }
+    // A length was improperly encoded.
+    abort();
+}
+
+static size_t decode_token_length(struct bluebird_token_run *run,
+ uint16_t *length_offset, size_t *string_offset)
+{
+    size_t whitespace = decode_length(run, length_offset);
+    size_t length = decode_length(run, length_offset);
+    *string_offset -= whitespace + length;
+    return length;
+}
+
 static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
  *tokenizer, struct bluebird_token_run **previous_run)
 {
     struct bluebird_token_run *run = malloc(sizeof(struct bluebird_token_run));
     uint16_t number_of_tokens = 0;
-    uint16_t number_of_lengths = 0;
+    uint16_t lengths_size = 0;
     const char *text = tokenizer->text;
     size_t whitespace = tokenizer->whitespace;
     size_t offset = tokenizer->offset;
@@ -134,19 +186,18 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
          text + offset, tokenizer->info);
         if (token_length > 0)
             is_token = true;
+        double number = 0;
         if (char_is_numeric(c) ||
          (c == '.' && char_is_numeric(text[offset + 1]))) {
             // Number.
             const char *start = (const char *)text + offset;
             char *rest = 0;
-            double number = strtod(start, &rest);
+            number = strtod(start, &rest);
             if (rest > start) {
                 token_length = rest - start;
                 is_token = true;
                 end_token = false;
                 token = NUMBER_TOKEN;
-                WRITE_NUMBER_TOKEN(offset, token_length, number,
-                 tokenizer->info);
             }
         } else if (c == '\'' || c == '"') {
             // String.
@@ -157,8 +208,6 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
                     is_token = true;
                     end_token = false;
                     token = STRING_TOKEN;
-                    WRITE_STRING_TOKEN(offset, token_length, offset + 1,
-                     string_offset - offset - 1, tokenizer->info);
                     break;
                 }
                 if (text[string_offset] == '\\') {
@@ -180,7 +229,6 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
                 is_token = true;
                 end_token = false;
                 token = IDENTIFIER_TOKEN;
-                WRITE_IDENTIFIER_TOKEN(offset, token_length, tokenizer->info);
             }
         }
         if (!is_token || token == SYMBOL_EPSILON) {
@@ -191,17 +239,26 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
             free(run);
             return false;
         }
-        run->tokens[number_of_tokens] = token;
-        if (end_token) {
-            if (number_of_tokens + 1 >= TOKEN_RUN_LENGTH)
-                break;
-            run->tokens[number_of_tokens + 1] = BRACKET_TRANSITION_TOKEN;
-            number_of_tokens++;
+        if (!encode_token_length(run, &lengths_size, token_length, whitespace))
+            break;
+        if (token == IDENTIFIER_TOKEN) {
+            WRITE_IDENTIFIER_TOKEN(offset, token_length, tokenizer->info);
+        } else if (token == NUMBER_TOKEN) {
+            WRITE_NUMBER_TOKEN(offset, token_length, number, tokenizer->info);
+        } else if (token == STRING_TOKEN) {
+            WRITE_STRING_TOKEN(offset, token_length, offset + 1,
+             token_length - 2, tokenizer->info);
         }
-        // Encode the length here.
+        run->tokens[number_of_tokens] = token;
         whitespace = 0;
         number_of_tokens++;
         offset += token_length;
+        if (end_token) {
+            if (number_of_tokens >= TOKEN_RUN_LENGTH)
+                break;
+            run->tokens[number_of_tokens] = BRACKET_TRANSITION_TOKEN;
+            number_of_tokens++;
+        }
     }
     if (number_of_tokens == 0) {
         tokenizer->offset = offset;
@@ -213,7 +270,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
     tokenizer->whitespace = whitespace;
     run->prev = *previous_run;
     run->number_of_tokens = number_of_tokens;
-    run->number_of_lengths = number_of_lengths;
+    run->lengths_size = lengths_size;
     *previous_run = run;
     return true;
 }
