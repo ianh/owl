@@ -448,7 +448,6 @@ void disambiguate(struct automaton *input, struct automaton *input_bracket,
         .options = MARK_ACCEPTING_BRACKET_STATES | DISAMBIGUATE,
     });
     bracket_transitions_destroy(&transitions);
-    // TODO: Destroy transitions
 }
 
 void determinize(struct combined_grammar *grammar,
