@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 struct document;
 struct label;
@@ -46,6 +47,6 @@ struct label {
     bool starts_with_newline;
 };
 
-void output_document(struct document *document);
+void output_document(FILE *file, struct document *document);
 
 #endif

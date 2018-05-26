@@ -334,7 +334,7 @@ static int compare_labels(const void *a, const void *b)
 
 void interpret(struct grammar *grammar, struct combined_grammar *combined,
  struct bracket_transitions *transitions,
- struct deterministic_grammar *deterministic, const char *text)
+ struct deterministic_grammar *deterministic, const char *text, FILE *output)
 {
     if (deterministic->automaton.number_of_states > (1UL << 31) ||
      deterministic->bracket_automaton.number_of_states > (1UL << 31)) {
@@ -442,7 +442,7 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
         };
         document.number_of_color_codes = 5;
     }
-    output_document(&document);
+    output_document(output, &document);
 }
 
 static void fill_run_states(struct interpret_context *ctx,

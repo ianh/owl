@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
         char *input_string = read_string(input_file);
         fclose(input_file);
         interpret(&grammar, &combined, &bracket_transitions, &deterministic,
-         input_string);
+         input_string, output_file);
         free(input_string);
     }
 
