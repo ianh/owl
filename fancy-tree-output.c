@@ -245,7 +245,7 @@ static bool advance_label(struct line *line, struct document *document,
         return false;
     size_t end_offset = 0;
     if (l.start >= r.start) {
-        if (row > 0 && label_index > 0) {
+        if (row > 0 && label_index > line->row_ranges[row].start) {
             // Apply minimum inter-label spacing.
             struct label prev = document->rows[row].labels[label_index - 1];
             // TODO: Which is better?
