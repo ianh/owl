@@ -17,7 +17,6 @@
 //  - this probably means filtering out intermediate states from the epsilon
 //    closure
 // - fancy interpreter output
-// - json interpreter output
 // - clean up memory leaks
 // - get rid of RULE_LOOKUP?
 // - check if all the input is properly validated
@@ -39,16 +38,16 @@ static void write_to_output(const char *string, size_t len);
 int main(int argc, char *argv[])
 {
     bool needs_help = false;
-    const char *grammar_filename = 0;
+    char *grammar_string = 0;
     const char *input_filename = 0;
     const char *output_filename = 0;
     bool compile = false;
-    bool json_output = false;
     bool color_output = false;
     enum {
         NO_PARAMETER,
         INPUT_FILE_PARAMETER,
         OUTPUT_FILE_PARAMETER,
+        GRAMMAR_TEXT_PARAMETER,
     } parameter_state = NO_PARAMETER;
     for (int i = 1; i < argc; ++i) {
         const char *short_name = "";
@@ -76,25 +75,36 @@ int main(int argc, char *argv[])
                     return 1;
                 }
                 parameter_state = OUTPUT_FILE_PARAMETER;
+            } else if (!strcmp(short_name, "g") ||
+             !strcmp(long_name, "grammar")) {
+                if (grammar_string) {
+                    fprintf(stderr, "error: bluebird only supports one grammar "
+                     "at a time.\n");
+                    return 1;
+                }
+                parameter_state = GRAMMAR_TEXT_PARAMETER;
             } else if (!strcmp(short_name, "c") ||
              !strcmp(long_name, "compile"))
                 compile = true;
             else if (!strcmp(short_name, "C") || !strcmp(long_name, "color"))
                 color_output = true;
-            else if (!strcmp(short_name, "j") || !strcmp(long_name, "json"))
-                json_output = true;
             else if (long_name[0] || short_name[0]) {
                 fprintf(stderr, "error: unknown option: %s%s\n",
                  long_name[0] ? "--" : "-",
                  long_name[0] ? long_name : short_name);
                 needs_help = true;
-            } else if (!grammar_filename)
-                grammar_filename = argv[i];
-            else {
-                fprintf(stderr,
-                 "error: multiple grammar files were specified:\n");
-                fprintf(stderr, " %s\n", grammar_filename);
-                fprintf(stderr, " %s\n", argv[i]);
+            } else if (!grammar_string) {
+                FILE *grammar_file = fopen(argv[i], "r");
+                if (!grammar_file) {
+                    fprintf(stderr, "error: couldn't open file:\n");
+                    fprintf(stderr, " %s\n", argv[i]);
+                    return 1;
+                }
+                grammar_string = read_string(grammar_file);
+                fclose(grammar_file);
+            } else {
+                fprintf(stderr, "error: bluebird only supports one grammar at "
+                 "a time.\n");
                 return 1;
             }
             break;
@@ -116,32 +126,38 @@ int main(int argc, char *argv[])
             output_filename = argv[i];
             parameter_state = NO_PARAMETER;
             break;
+        case GRAMMAR_TEXT_PARAMETER: {
+            if (short_name[0] || long_name[0]) {
+                fprintf(stderr, "error: missing grammar text.\n");
+                needs_help = true;
+                break;
+            }
+            size_t len = strlen(argv[i]);
+            if (len + 1 < len)
+                abort();
+            grammar_string = malloc(len + 1);
+            memcpy(grammar_string, argv[i], len + 1);
+            parameter_state = NO_PARAMETER;
+            break;
+        }
         }
         if (needs_help)
             break;
     }
-    if (!needs_help && !grammar_filename) {
-        fprintf(stderr, "error: missing grammar filename.\n");
+    if (!needs_help && !grammar_string) {
+        fprintf(stderr, "error: missing grammar.\n");
         needs_help = true;
     }
     if (needs_help) {
         fprintf(stderr, "usage: bluebird [--compile] [options] grammar.bb\n");
-        fprintf(stderr, " -i file  --input file   read from file instead of standard input\n");
-        fprintf(stderr, " -o file  --output file  write to file instead of standard output\n");
-        fprintf(stderr, " -j       --json         output parse trees as JSON instead of fancy ASCII art\n");
-        fprintf(stderr, " -c       --compile      output a C header file instead of parsing input\n");
-        fprintf(stderr, " -C       --color        force the use of color in parse tree output\n");
-        fprintf(stderr, " -h       --help         output this help text\n");
+        fprintf(stderr, " -i file     --input file       read from file instead of standard input\n");
+        fprintf(stderr, " -o file     --output file      write to file instead of standard output\n");
+        fprintf(stderr, " -g grammar  --grammar grammar  specify the grammar text on the command line\n");
+        fprintf(stderr, " -c          --compile          output a C header file instead of parsing input\n");
+        fprintf(stderr, " -C          --color            force the use of color in parse tree output\n");
+        fprintf(stderr, " -h          --help             output this help text\n");
         return 1;
     }
-    FILE *grammar_file = fopen(grammar_filename, "r");
-    if (!grammar_file) {
-        fprintf(stderr, "error: couldn't open file:\n");
-        fprintf(stderr, " %s\n", grammar_filename);
-        return 1;
-    }
-    char *grammar_string = read_string(grammar_file);
-    fclose(grammar_file);
 
     if (output_filename) {
         output_file = fopen(output_filename, "w");

@@ -489,6 +489,9 @@ static uint32_t add_rule(struct context *ctx, const char *name, size_t len)
      sizeof(struct rule) * ctx->grammar->number_of_rules);
     ctx->grammar->rules[index].name = name;
     ctx->grammar->rules[index].name_length = len;
+    ctx->grammar->rules[index].operand_slot_index = UINT32_MAX;
+    ctx->grammar->rules[index].left_slot_index = UINT32_MAX;
+    ctx->grammar->rules[index].right_slot_index = UINT32_MAX;
     return index;
 }
 

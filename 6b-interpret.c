@@ -116,6 +116,13 @@ struct interpret_node {
     size_t number_of_slots;
     struct interpret_node **slots;
 
+    // Used for fancy tree output:
+    // Sorted by start_location.  Only includes children of type NODE_RULE.
+    size_t number_of_children;
+    struct interpret_node **children;
+    // How deep this subtree is (longest path of NODE_RULE children).
+    uint32_t depth;
+
     // For tokens.
     union {
         struct {
@@ -142,7 +149,8 @@ static void follow_transition_reversed(struct interpret_context *ctx,
  state_id *last_nfa_state, uint32_t state, uint32_t token, size_t start,
  size_t end);
 
-static uint32_t push_action_offset(struct interpret_context *, size_t offset);
+static size_t push_action_offsets(struct interpret_context *ctx, size_t start,
+ size_t end);
 
 #if 1
 static void print_token_runs(struct interpret_context *ctx,
@@ -207,7 +215,7 @@ static void print_parse_tree(struct interpret_context *ctx,
             printf(" : %.*s", (int)choice->name_length, choice->name);
         }
     }
-    printf("  %lu - %lu", node->start_location, node->end_location);
+    printf("  %u - %u", SIZE_MAX - node->start_location, SIZE_MAX - node->end_location);
     printf("\n");
     for (uint32_t i = 0; i < rule->number_of_slots; ++i) {
         struct slot *slot = &rule->slots[i];
@@ -221,41 +229,15 @@ static void print_parse_tree(struct interpret_context *ctx,
 #endif
 
 // XXX begin terrible code
-uint32_t max_tree_depth(struct interpret_node *node)
-{
-    if (!node)
-        return 0;
-    if (node->type != NODE_RULE)
-        return 0;
-    uint32_t max_depth = 1;
-    for (uint32_t i = 0; i < node->number_of_slots; ++i) {
-        uint32_t depth = max_tree_depth(node->slots[i]);
-        if (depth + 1 > max_depth)
-            max_depth = depth + 1;
-    }
-    return max_depth;
-}
-void find_number_of_labels(struct interpret_node *node, uint32_t depth,
+static void find_number_of_labels(struct interpret_node *node, uint32_t depth,
  struct document *document)
 {
-    if (!node)
+    if (!node || node->type != NODE_RULE)
         return;
-    if (node->type != NODE_RULE)
-        return;
-    if (depth == 0)
-        return;
-    for (uint32_t i = 0; i < node->number_of_slots; ++i) {
-        struct interpret_node *slot = node->slots[i];
-        while (slot) {
-            if (slot->type != NODE_RULE) {
-                slot = slot->next_sibling;
-                continue;
-            }
-            find_number_of_labels(slot, depth - 1, document);
-            document->rows[depth].number_of_labels++;
-            slot = slot->next_sibling;
-        }
-    }
+    if (depth + 1 < document->number_of_rows)
+        document->rows[depth + 1].number_of_labels++;
+    for (uint32_t i = 0; i < node->number_of_children; ++i)
+        find_number_of_labels(node->children[i], depth - 1, document);
 }
 static void append_string(char **string, uint32_t *length, uint32_t *bytes,
  const char *append, size_t append_length)
@@ -265,70 +247,92 @@ static void append_string(char **string, uint32_t *length, uint32_t *bytes,
     *string = grow_array(*string, bytes, *length);
     memcpy(*string + index, append, append_length);
 }
-static void fill_rows(struct interpret_context *ctx, struct interpret_node *node,
- struct rule *rule, uint32_t depth, uint32_t n, struct document *document)
+
+// TODO: put some of these parameters into ctx
+static void fill_rows(struct interpret_context *ctx,
+ struct interpret_node *node, struct rule *rule1, uint32_t depth, uint32_t n,
+ uint32_t *offset, struct document *document)
 {
-    if (!node)
+    if (!node || node->type != NODE_RULE)
         return;
-    if (node->type != NODE_RULE)
+#define DECODE(x) (n - (uint32_t)(SIZE_MAX - (x)) - 1)
+    uint32_t location_cursor = DECODE(node->start_location);
+    uint32_t start = location_cursor + *offset;
+    if (depth + 1 < document->number_of_rows)
+        (*offset)++;
+    for (size_t i = 0; i < node->number_of_children; ++i) {
+        struct interpret_node *child = node->children[i];
+        printf("start = %u, cursor = %u\n", DECODE(child->start_location), location_cursor);
+        while (DECODE(child->start_location) > location_cursor) {
+            printf("-> %u\n", location_cursor);
+            struct label *l = &document->rows[0].labels[location_cursor / 2];
+            l->start = location_cursor + *offset;
+            l->end = location_cursor + *offset + 1;
+            l->color = depth + 1;
+            location_cursor += 2;
+        }
+        if (depth > 0)
+            fill_rows(ctx, child, rule1, depth - 1, n, offset, document);
+        else while (DECODE(child->end_location) > location_cursor) {
+            printf("-> %u\n", location_cursor);
+            struct label *l = &document->rows[0].labels[location_cursor / 2];
+            l->start = location_cursor + *offset;
+            l->end = location_cursor + *offset + 1;
+            l->color = depth + 1;
+            location_cursor += 2;
+        }
+        location_cursor = DECODE(child->end_location);
+    }
+    while (DECODE(node->end_location) > location_cursor) {
+        // TODO: Don't duplicate
+        printf("-> %u\n", location_cursor);
+        struct label *l = &document->rows[0].labels[location_cursor / 2];
+        l->start = location_cursor + *offset;
+        l->end = location_cursor + *offset + 1;
+        l->color = depth + 1;
+        location_cursor += 2;
+    }
+    if (depth + 1 >= document->number_of_rows)
         return;
-    if (depth == 0)
-        return;
-    for (uint32_t i = 0; i < node->number_of_slots; ++i) {
-        struct interpret_node *slot = node->slots[i];
-        struct slot *s = &rule->slots[i];
-        while (slot) {
-            if (slot->type != NODE_RULE) {
-                slot = slot->next_sibling;
-                continue;
-            }
-            struct rule *rule = &ctx->grammar->rules[slot->rule_index];
-            uint32_t j = document->rows[depth].number_of_labels++;
+    (*offset)++;
+    // TODO: get this working again
+//    struct slot *s = &rule->slots[i];
+    struct rule *rule = &ctx->grammar->rules[node->rule_index];
+    uint32_t j = document->rows[depth + 1].number_of_labels++;
 
-            char *str = 0;
-            uint32_t len = 0;
-            uint32_t bytes = 0;
-            append_string(&str, &len, &bytes, rule->name, rule->name_length);
-//            if (s && (s->name_length != rule->name_length ||
-//             memcmp(s->name, rule->name, rule->name_length))) {
-//                append_string(&str, &len, &bytes, "@", 1);
-//                append_string(&str, &len, &bytes, s->name, s->name_length);
-//            }
-            if (rule->number_of_choices) {
-                append_string(&str, &len, &bytes, ":", 1);
-                if (slot->choice_index >= rule->number_of_choices) {
-                    struct operator *op = &rule->operators[slot->choice_index -
-                     rule->number_of_choices];
-                    append_string(&str, &len, &bytes, op->name,
-                     op->name_length);
-                } else {
-                    struct choice *choice = &rule->choices[slot->choice_index];
-                    append_string(&str, &len, &bytes, choice->name,
-                     choice->name_length);
-                }
-            }
-
-            document->rows[depth].labels[j] = (struct label){
-                .text = str, // TODO: No leak!
-                .length = len,
-                .start = n - (uint32_t)(SIZE_MAX - slot->start_location) - 1,
-                .end = n - (uint32_t)(SIZE_MAX - slot->end_location) - 1,
-            };
-            fill_rows(ctx, slot, rule, depth - 1, n, document);
-            slot = slot->next_sibling;
+    char *str = 0;
+    uint32_t len = 0;
+    uint32_t bytes = 0;
+    append_string(&str, &len, &bytes, rule->name, rule->name_length);
+    if (rule->number_of_choices) {
+        append_string(&str, &len, &bytes, ":", 1);
+        if (node->choice_index >= rule->number_of_choices) {
+            struct operator *op = &rule->operators[node->choice_index -
+             rule->number_of_choices];
+            append_string(&str, &len, &bytes, op->name,
+             op->name_length);
+        } else {
+            struct choice *choice = &rule->choices[node->choice_index];
+            append_string(&str, &len, &bytes, choice->name,
+             choice->name_length);
         }
     }
-}
-static int compare_labels(const void *a, const void *b)
-{
-    struct label la = *(struct label *)a;
-    struct label lb = *(struct label *)b;
-    if (la.start < lb.start)
-        return -1;
-    else if (la.start > lb.start)
-        return 1;
-    else
-        return 0;
+    // TODO: get this working again
+//    if (s && i != rule->operand_slot_index &&
+//     i != rule->left_slot_index &&
+//     i != rule->right_slot_index &&
+//     (s->name_length != rule->name_length ||
+//     memcmp(s->name, rule->name, rule->name_length))) {
+//        append_string(&str, &len, &bytes, "@", 1);
+//        append_string(&str, &len, &bytes, s->name, s->name_length);
+//    }
+
+    document->rows[depth + 1].labels[j] = (struct label){
+        .text = str, // TODO: No leak!
+        .length = len,
+        .start = start,
+        .end = location_cursor + *offset - 1,
+    };
 }
 // XXX end terrible code
 
@@ -369,20 +373,31 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
         exit(-1);
     }
     print_token_runs(&context, token_run);
+    push_action_offsets(&context, 0, 0);
     struct interpret_node *root = build_parse_tree(&context, token_run);
     // TODO: Error handling.
     print_parse_tree(&context, root, 0, 0);
     for (uint32_t i = 0; i < context.next_action_offset; ++i) {
         printf("%u. %lu\n", i, context.offset_table[i]);
     }
-    uint32_t depth = max_tree_depth(root);
+    uint32_t depth = root->depth;
     struct document document = {
         .rows = calloc(depth, sizeof(struct row)),
         .number_of_rows = depth,
         .number_of_columns = 80,
     };
-    uint32_t row0_allocated_bytes = 0;
     uint32_t n = context.next_action_offset;
+    document.rows[0].number_of_labels = n / 2;
+    find_number_of_labels(root, depth - 1, &document);
+    for (uint32_t i = 0; i < document.number_of_rows; ++i) {
+        document.rows[i].labels = calloc(document.rows[i].number_of_labels,
+         sizeof(struct label));
+        if (i > 0) {
+            // We use `number_of_labels` to keep track of the next label index
+            // for non-zero rows.
+            document.rows[i].number_of_labels = 0;
+        }
+    }
     for (uint32_t i = 0; i < n; ++i) {
         if (n - i - 1 <= i)
             break;
@@ -390,40 +405,38 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
         context.offset_table[n - i - 1] = context.offset_table[i];
         context.offset_table[i] = t;
     }
-    for (uint32_t i = 1; i < n; ++i) {
-        if (context.offset_table[i] != context.offset_table[i - 1]) {
-            uint32_t index = document.rows[0].number_of_labels++;
-            document.rows[0].labels = grow_array(document.rows[0].labels,
-             &row0_allocated_bytes, document.rows[0].number_of_labels *
-             sizeof(struct label));
-            document.rows[0].labels[index] = (struct label){
-                .text = context.tokenizer->text + context.offset_table[i - 1],
-                .length = context.offset_table[i] - context.offset_table[i - 1],
-                .start = i - 1,
-                .end = i,
-            };
+    for (uint32_t i = 0; i < n / 2; ++i) {
+        uint32_t index = i * 2;
+
+        // Find a newline.
+        size_t newline_offset = context.offset_table[index];
+        for (size_t j = context.offset_table[index + 1];
+         j > context.offset_table[index]; --j) {
+            if (context.tokenizer->text[j - 1] == '\n') {
+                newline_offset = j;
+                break;
+            }
         }
+        document.rows[0].labels[i] = (struct label){
+            .text = context.tokenizer->text + newline_offset,
+            .length = context.offset_table[index + 1] - newline_offset,
+            .start = index,
+            .end = index + 1,
+            .starts_with_newline =
+             newline_offset != context.offset_table[index],
+        };
     }
-    uint32_t index = document.rows[0].number_of_labels++;
-    document.rows[0].labels = grow_array(document.rows[0].labels,
-     &row0_allocated_bytes, document.rows[0].number_of_labels *
-     sizeof(struct label));
-    document.rows[0].labels[index] = (struct label){
-        .text = "",
-        .length = 0,
-        .start = n - 1,
-        .end = n,
-    };
-    find_number_of_labels(root, depth - 1, &document);
-    for (uint32_t i = 1; i < document.number_of_rows; ++i) {
-        document.rows[i].labels = calloc(document.rows[i].number_of_labels,
-         sizeof(struct label));
-        document.rows[i].number_of_labels = 0;
-    }
-    fill_rows(&context, root, &context.grammar->rules[context.grammar->root_rule], depth - 1, n, &document);
+    uint32_t offset = 0;
+    fill_rows(&context, root,
+     &context.grammar->rules[context.grammar->root_rule], depth - 1, n, &offset,
+     &document);
+//    document.rows[0].labels[n / 2] = (struct label){
+//        .text = "",
+//        .length = 0,
+//        .start = n + offset,
+//        .end = n + offset + 1,
+//    };
     for (uint32_t i = 0; i < document.number_of_rows; ++i) {
-        qsort(document.rows[i].labels, document.rows[i].number_of_labels,
-         sizeof(struct label), compare_labels);
         printf("row %u:\n", i);
         for (uint32_t j = 0; j < document.rows[i].number_of_labels; ++j) {
             struct label l = document.rows[i].labels[j];
@@ -488,11 +501,10 @@ static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
  struct bluebird_token_run *run)
 {
     ctx->construct_state.info = ctx;
+    construct_begin(&ctx->construct_state, SIZE_MAX,
+     ctx->combined->root_rule_is_expression ?
+     CONSTRUCT_EXPRESSION_ROOT : CONSTRUCT_NORMAL_ROOT);
     state_id nfa_state = ctx->combined->final_nfa_state;
-    if (ctx->combined->root_rule_is_expression)
-        construct_begin(&ctx->construct_state, CONSTRUCT_EXPRESSION_ROOT);
-    else
-        construct_begin(&ctx->construct_state, CONSTRUCT_NORMAL_ROOT);
     size_t whitespace = ctx->tokenizer->whitespace;
     size_t offset = ctx->tokenizer->offset - whitespace;
     while (run) {
@@ -505,18 +517,16 @@ static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
                 len = decode_token_length(run, &length_offset, &offset);
             follow_transition_reversed(ctx, &nfa_state, run->states[i],
              run->tokens[i], end, end + whitespace);
-            if (len > 0) {
-                push_action_offset(ctx, end);
-                push_action_offset(ctx, end - len);
-            }
+            if (len > 0)
+                push_action_offsets(ctx, end, end - len);
             whitespace = end - offset - len;
         }
         run = run->prev;
     }
-    // TODO: is this correct?
     follow_transition_reversed(ctx, &nfa_state, UINT32_MAX, UINT32_MAX,
      offset, offset + whitespace);
-    return construct_finish(&ctx->construct_state);
+    return construct_finish(&ctx->construct_state,
+     SIZE_MAX - ctx->next_action_offset + 1);
 }
 
 static symbol_id token_symbol(struct combined_grammar *grammar, const char *s)
@@ -613,21 +623,15 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         case CONSTRUCT_ACTION_BEGIN_EXPRESSION_SLOT:
         case CONSTRUCT_ACTION_BEGIN_OPERAND:
         case CONSTRUCT_ACTION_BEGIN_OPERATOR:
-            action_offset = push_action_offset(ctx, offset);
+            action_offset = ctx->next_action_offset - 1;
             break;
         case CONSTRUCT_ACTION_END_SLOT:
         case CONSTRUCT_ACTION_END_EXPRESSION_SLOT:
         case CONSTRUCT_ACTION_END_OPERAND:
         case CONSTRUCT_ACTION_END_OPERATOR:
-            if (offset != start) {
-                // Add offsets for the whitespace.
-                // TODO: Detect newlines.
-                push_action_offset(ctx, offset);
-                offset = start;
-                push_action_offset(ctx, offset);
-                printf("whitespace: %u - %u\n", start, end);
-            }
-            action_offset = push_action_offset(ctx, offset);
+            if (offset != start)
+                offset = push_action_offsets(ctx, offset, start);
+            action_offset = ctx->next_action_offset - 1;
             break;
         }
         printf("action: %u\n", offset);
@@ -635,14 +639,8 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         construct_action_apply(&ctx->construct_state, map->actions[k],
          SIZE_MAX - action_offset);
     }
-    if (offset != start) {
-        // Add offsets for the whitespace.
-        // TODO: Detect newlines.
-        // TODO: Don't copy and paste this.
-        push_action_offset(ctx, offset);
-        offset = start;
-        push_action_offset(ctx, offset);
-    }
+    if (offset != start)
+        offset = push_action_offsets(ctx, offset, start);
     if (bracket_automaton && state ==
      ctx->deterministic->bracket_automaton.start_state) {
         nfa_state = state_array_pop(&ctx->stack);
@@ -650,14 +648,21 @@ static void follow_transition_reversed(struct interpret_context *ctx,
     *last_nfa_state = nfa_state;
 }
 
-static uint32_t push_action_offset(struct interpret_context *ctx, size_t offset)
+static void push_action_offset(struct interpret_context *ctx, size_t offset)
 {
     uint32_t action_offset = ctx->next_action_offset++;
     ctx->offset_table = grow_array(ctx->offset_table,
      &ctx->offset_table_allocated_bytes,
      ctx->next_action_offset * sizeof(size_t));
     ctx->offset_table[action_offset] = offset;
-    return action_offset;
+}
+
+static size_t push_action_offsets(struct interpret_context *ctx, size_t start,
+ size_t end)
+{
+    push_action_offset(ctx, start);
+    push_action_offset(ctx, end);
+    return end;
 }
 
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
@@ -717,16 +722,24 @@ static void write_number_token(size_t offset, size_t length, double number,
     ctx->tokens = node;
 }
 
+static int compare_start_locations(const void *a, const void *b)
+{
+    struct interpret_node *na = *(struct interpret_node **)a;
+    struct interpret_node *nb = *(struct interpret_node **)b;
+    if (na->start_location < nb->start_location)
+        return -1;
+    else if (na->start_location > nb->start_location)
+        return 1;
+    else
+        return 0;
+}
+
 static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
  struct interpret_node *next_sibling, struct interpret_node **slots,
  size_t start_location, size_t end_location, struct interpret_context *context)
 {
-    // TODO: We don't need to construct this intermediate data structure.
-    // - If we're building JSON, we can just build the JSON string as a linked
-    //   list.
-    // - If we're doing fancy output, we can write nodes directly into the rows
-    //   of the document.
     struct interpret_node *node = calloc(1, sizeof(struct interpret_node));
+    node->type = NODE_RULE;
     node->rule_index = rule;
     node->choice_index = choice;
     node->next_sibling = next_sibling;
@@ -735,8 +748,38 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
     node->number_of_slots = context->grammar->rules[rule].number_of_slots;
     node->slots = calloc(node->number_of_slots,
      sizeof(struct interpret_node *));
+    if (!node->slots)
+        abort();
     memcpy(node->slots, slots,
      sizeof(struct interpret_node *) * node->number_of_slots);
+    uint32_t max_depth = 0;
+    for (size_t i = 0; i < node->number_of_slots; ++i) {
+        struct interpret_node *slot = node->slots[i];
+        for (; slot; slot = slot->next_sibling) {
+            if (slot->type != NODE_RULE)
+                continue;
+            node->number_of_children++;
+            if (slot->depth > max_depth)
+                max_depth = slot->depth;
+        }
+    }
+    node->depth = max_depth + 1;
+    node->children = calloc(node->number_of_children,
+     sizeof(struct interpret_node *));
+    if (!node->children)
+        abort();
+    size_t index = 0;
+    for (size_t i = 0; i < node->number_of_slots; ++i) {
+        struct interpret_node *slot = node->slots[i];
+        for (; slot; slot = slot->next_sibling) {
+            if (slot->type != NODE_RULE)
+                continue;
+            node->children[index] = slot;
+            index++;
+        }
+    }
+    qsort(node->children, node->number_of_children,
+     sizeof(struct interpret_node *), compare_start_locations);
     return node;
 }
 

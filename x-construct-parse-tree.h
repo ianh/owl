@@ -289,7 +289,7 @@ static void construct_expression_reduce(struct construct_state *s,
     }
 }
 
-static void construct_begin(struct construct_state *s,
+static void construct_begin(struct construct_state *s, size_t offset,
  enum construct_root_type type)
 {
     s->root_type = type;
@@ -301,10 +301,12 @@ static void construct_begin(struct construct_state *s,
     } else {
         struct construct_node *node = construct_node_alloc(s, r);
         node->next = s->under_construction;
+        node->end_location = offset;
         s->under_construction = node;
     }
 }
-static FINISHED_NODE_T construct_finish(struct construct_state *s)
+static FINISHED_NODE_T construct_finish(struct construct_state *s,
+ size_t offset)
 {
     FINISHED_NODE_T finished = 0;
     if (s->root_type == CONSTRUCT_EXPRESSION_ROOT) {
@@ -322,6 +324,7 @@ static FINISHED_NODE_T construct_finish(struct construct_state *s)
     } else {
         struct construct_node *node = s->under_construction;
         s->under_construction = node->next;
+        node->start_location = offset;
         finished = FINISH_NODE_STRUCT(node, 0, s->info);
         construct_node_free(s, node);
     }

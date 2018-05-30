@@ -36,7 +36,7 @@ struct line {
 #define LINE_WRAP_MARGIN 2
 // If a label overflows to the next line, leave a minimum amount of space so the
 // "-" is guaranteed to appear.
-#define OVERFLOW_INDICATOR_MARGIN 2
+#define OVERFLOW_INDICATOR_MARGIN 1
 
 static void output_line(FILE *file, struct line *line,
  struct document *document);
@@ -165,10 +165,6 @@ static void output_line(FILE *file, struct line *line,
                 continue;
             if (end_offset == PAST_END)
                 end_offset = line->end_offset;
-            if (offset + 1 < end_offset) {
-                fputs(" ", file);
-                offset++;
-            }
             while (offset < end_offset) {
                 fputs("-", file);
                 offset++;
@@ -225,7 +221,7 @@ static bool advance_line(struct line *line, struct document *document)
             // incomplete -- the end offset won't appear in the offsets array.
             // Check to see if we've reached the end of the label, and if we
             // have, we complete the layout here.
-            if (l.end < line->offset_range.end)
+            if (l.end <= line->offset_range.end)
                 advance_label(line, document, i, rr.end - 1);
         }
         if (rr.end == document->rows[i].number_of_labels)
