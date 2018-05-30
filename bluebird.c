@@ -9,7 +9,7 @@
 #include "6b-interpret.h"
 #include "fancy-tree-output.h"
 
-#define DEBUG_OUTPUT 1
+#define DEBUG_OUTPUT 0
 
 // TODO:
 // - ambiguity checking
