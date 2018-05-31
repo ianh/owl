@@ -88,6 +88,8 @@ struct interpret_context {
     struct construct_state construct_state;
     struct interpret_node *tokens;
 
+    struct document document;
+
     // Table mapping abstract offsets to concrete offsets.
     size_t *offset_table;
     uint32_t offset_table_allocated_bytes;
@@ -231,7 +233,6 @@ static void print_parse_tree(struct interpret_context *ctx,
 }
 #endif
 
-// XXX begin terrible code
 static void find_number_of_labels(struct interpret_node *node, uint32_t depth,
  struct document *document)
 {
@@ -242,6 +243,7 @@ static void find_number_of_labels(struct interpret_node *node, uint32_t depth,
     for (uint32_t i = 0; i < node->number_of_children; ++i)
         find_number_of_labels(node->children[i], depth - 1, document);
 }
+
 static void append_string(char **string, uint32_t *length, uint32_t *bytes,
  const char *append, size_t append_length)
 {
@@ -250,47 +252,49 @@ static void append_string(char **string, uint32_t *length, uint32_t *bytes,
     *string = grow_array(*string, bytes, *length);
     memcpy(*string + index, append, append_length);
 }
-// TODO: put some of these parameters into ctx
+
+static uint32_t offset_labels(struct document *document, uint32_t start,
+ uint32_t end, uint32_t offset, uint32_t color)
+{
+    uint32_t n = start;
+    while (n < end) {
+        struct label *l = &document->rows[0].labels[n / 2];
+        l->start = n + offset;
+        l->end = n + offset + 1;
+        l->color = color;
+        n += 2;
+    }
+    return n;
+}
+
 static void fill_rows(struct interpret_context *ctx,
- struct interpret_node *node, uint32_t depth, uint32_t n, uint32_t *offset,
- struct document *document)
+ struct interpret_node *node, uint32_t depth, uint32_t *offset)
 {
     if (!node || node->type != NODE_RULE)
         return;
+    uint32_t n = ctx->next_action_offset;
 #define DECODE(x) (n - (uint32_t)(SIZE_MAX - (x)) - 1)
     uint32_t location_cursor = DECODE(node->start_location);
     uint32_t start = location_cursor + *offset;
-    if (depth + 1 < document->number_of_rows)
+    if (depth + 1 < ctx->document.number_of_rows)
         (*offset)++;
     for (size_t i = 0; i < node->number_of_children; ++i) {
         struct interpret_node *child = node->children[i];
-        while (DECODE(child->start_location) > location_cursor) {
-            struct label *l = &document->rows[0].labels[location_cursor / 2];
-            l->start = location_cursor + *offset;
-            l->end = location_cursor + *offset + 1;
-            l->color = depth + 1;
-            location_cursor += 2;
-        }
+        location_cursor = offset_labels(&ctx->document, location_cursor,
+         DECODE(child->start_location), *offset, depth + 1);
         if (depth == 0)
             abort();
-        fill_rows(ctx, child, depth - 1, n, offset, document);
+        fill_rows(ctx, child, depth - 1, offset);
         location_cursor = DECODE(child->end_location);
     }
-    while (DECODE(node->end_location) > location_cursor) {
-        // TODO: Don't duplicate
-        struct label *l = &document->rows[0].labels[location_cursor / 2];
-        l->start = location_cursor + *offset;
-        l->end = location_cursor + *offset + 1;
-        l->color = depth + 1;
-        location_cursor += 2;
-    }
-    if (depth + 1 >= document->number_of_rows)
+    location_cursor = offset_labels(&ctx->document, location_cursor,
+     DECODE(node->end_location), *offset, depth + 1);
+    if (depth + 1 >= ctx->document.number_of_rows)
         return;
     (*offset)++;
-    // TODO: get this working again
     struct slot *s = node->slot;
     struct rule *rule = &ctx->grammar->rules[node->rule_index];
-    uint32_t j = document->rows[depth + 1].number_of_labels++;
+    uint32_t j = ctx->document.rows[depth + 1].number_of_labels++;
 
     char *str = 0;
     uint32_t len = 0;
@@ -314,19 +318,21 @@ static void fill_rows(struct interpret_context *ctx,
         append_string(&str, &len, &bytes, "@", 1);
         append_string(&str, &len, &bytes, s->name, s->name_length);
     }
-    document->rows[depth + 1].labels[j] = (struct label){
+    ctx->document.rows[depth + 1].labels[j] = (struct label){
         .text = str, // TODO: No leak!
         .length = len,
         .start = start,
         .end = location_cursor + *offset - 1,
     };
 }
-// XXX end terrible code
 
-void interpret(struct grammar *grammar, struct combined_grammar *combined,
- struct bracket_transitions *transitions,
- struct deterministic_grammar *deterministic, const char *text, FILE *output)
+void interpret(struct interpreter *interpreter, const char *text, FILE *output)
 {
+    struct grammar *grammar = interpreter->grammar;
+    struct combined_grammar *combined = interpreter->combined;
+    struct bracket_transitions *transitions = interpreter->transitions;
+    struct deterministic_grammar *deterministic = interpreter->deterministic;
+
     if (deterministic->automaton.number_of_states > (1UL << 31) ||
      deterministic->bracket_automaton.number_of_states > (1UL << 31)) {
         fprintf(stderr, "error: automaton has too many states.\n");
@@ -370,27 +376,28 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
 #endif
     uint32_t depth = root->depth;
     uint32_t number_of_rows = depth;
-    if (context.grammar->rules[context.grammar->root_rule].number_of_choices) {
-        // If the root rule has choices, show the root node in the tree so you
-        // know which choice it was.  Otherwise, we hide the root to avoid an
-        // extra nesting level across the entire output.
+    if (depth == 1 ||
+     context.grammar->rules[context.grammar->root_rule].number_of_choices > 0) {
+        // If the root rule is the only rule that matched, or if it has choices,
+        // then show the root node in the tree.  Otherwise, we hide the root to
+        // avoid an extra nesting level across the entire output.
         number_of_rows++;
     }
-    struct document document = {
+    context.document = (struct document){
         .rows = calloc(number_of_rows, sizeof(struct row)),
         .number_of_rows = number_of_rows,
-        .number_of_columns = 80,
     };
     uint32_t n = context.next_action_offset;
-    document.rows[0].number_of_labels = n / 2;
-    find_number_of_labels(root, depth - 1, &document);
-    for (uint32_t i = 0; i < document.number_of_rows; ++i) {
-        document.rows[i].labels = calloc(document.rows[i].number_of_labels,
+    context.document.rows[0].number_of_labels = n / 2;
+    find_number_of_labels(root, depth - 1, &context.document);
+    for (uint32_t i = 0; i < context.document.number_of_rows; ++i) {
+        context.document.rows[i].labels =
+         calloc(context.document.rows[i].number_of_labels,
          sizeof(struct label));
         if (i > 0) {
             // We use `number_of_labels` to keep track of the next label index
             // for non-zero rows.
-            document.rows[i].number_of_labels = 0;
+            context.document.rows[i].number_of_labels = 0;
         }
     }
     for (uint32_t i = 0; i < n; ++i) {
@@ -419,11 +426,11 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
             // Don't print a trailing newline.  The "n / 2 - 2" (instead of
             // "n / 2 - 1") is because there's a "dummy" token at the end of the
             // first row.
-            document.rows[0].labels[i].start = index;
-            document.rows[0].labels[i].end = index + 1;
+            context.document.rows[0].labels[i].start = index;
+            context.document.rows[0].labels[i].end = index + 1;
             continue;
         }
-        document.rows[0].labels[i] = (struct label){
+        context.document.rows[0].labels[i] = (struct label){
             .text = context.tokenizer->text + newline_offset,
             .length = context.offset_table[index + 1] - newline_offset,
             .start = index,
@@ -433,38 +440,19 @@ void interpret(struct grammar *grammar, struct combined_grammar *combined,
         };
     }
     uint32_t offset = 0;
-    fill_rows(&context, root, depth - 1, n, &offset, &document);
+    fill_rows(&context, root, depth - 1, &offset);
     uint32_t location_cursor = DECODE(root->end_location);
-    while (location_cursor < n) {
-        // TODO: Don't duplicate
-        struct label *l = &document.rows[0].labels[location_cursor / 2];
-        l->start = location_cursor + offset;
-        l->end = location_cursor + offset + 1;
-        location_cursor += 2;
-    }
+    offset_labels(&context.document, location_cursor, n, offset, 0);
 #if 0
-    for (uint32_t i = 0; i < document.number_of_rows; ++i) {
+    for (uint32_t i = 0; i < context.document.number_of_rows; ++i) {
         printf("row %u:\n", i);
-        for (uint32_t j = 0; j < document.rows[i].number_of_labels; ++j) {
-            struct label l = document.rows[i].labels[j];
+        for (uint32_t j = 0; j < context.document.rows[i].number_of_labels; ++j) {
+            struct label l = context.document.rows[i].labels[j];
             printf(" %.*s %u - %u\n", (int)l.length, l.text, l.start, l.end);
         }
     }
 #endif
-    // TODO: Link with ncurses so we can do this terminal handling properly.
-    if (getenv("TERM")) {
-        document.reset_color_code = "\033[0m";
-        document.line_indicator_color_code = "\033[90m";
-        document.color_codes = (const char *[]){
-            "\033[38;5;168m",
-            "\033[38;5;113m",
-            "\033[38;5;68m",
-            "\033[38;5;214m",
-            "\033[38;5;97m",
-        };
-        document.number_of_color_codes = 5;
-    }
-    output_document(output, &document);
+    output_document(output, &context.document, interpreter->terminal_info);
 }
 
 static void fill_run_states(struct interpret_context *ctx,

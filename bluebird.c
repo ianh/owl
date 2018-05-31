@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <string.h>
-
 #include "1-parse.h"
 #include "2-build.h"
 #include "4-determinize.h"
@@ -8,6 +5,11 @@
 #include "6a-generate.h"
 #include "6b-interpret.h"
 #include "fancy-tree-output.h"
+#include <dlfcn.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
 #define DEBUG_OUTPUT 0
 
@@ -32,11 +34,14 @@
 // - write a blog post or something about how the old parser worked?
 
 static FILE *output_file = 0;
+static long terminal_columns();
+static int terminal_colors();
 static char *read_string(FILE *file);
 static void write_to_output(const char *string, size_t len);
 
 int main(int argc, char *argv[])
 {
+    // Parse arguments.
     bool needs_help = false;
     char *grammar_string = 0;
     const char *input_filename = 0;
@@ -149,16 +154,17 @@ int main(int argc, char *argv[])
         needs_help = true;
     }
     if (needs_help) {
-        fprintf(stderr, "usage: bluebird [--compile] [options] grammar.bb\n");
+        fprintf(stderr, "usage: bluebird [options] grammar.bb\n");
         fprintf(stderr, " -i file     --input file       read from file instead of standard input\n");
         fprintf(stderr, " -o file     --output file      write to file instead of standard output\n");
-        fprintf(stderr, " -g grammar  --grammar grammar  specify the grammar text on the command line\n");
         fprintf(stderr, " -c          --compile          output a C header file instead of parsing input\n");
-        fprintf(stderr, " -C          --color            force the use of color in parse tree output\n");
+        fprintf(stderr, " -g grammar  --grammar grammar  specify the grammar text on the command line\n");
+        fprintf(stderr, " -C          --color            force 256-color parse tree output\n");
         fprintf(stderr, " -h          --help             output this help text\n");
         return 1;
     }
 
+    struct terminal_info terminal_info = { .columns = 80 };
     if (output_filename) {
         output_file = fopen(output_filename, "w");
         if (!output_file) {
@@ -166,9 +172,46 @@ int main(int argc, char *argv[])
             fprintf(stderr, " %s\n", output_filename);
             return 1;
         }
-    } else
+    } else {
         output_file = stdout;
+        terminal_info.columns = terminal_columns();
+        if (terminal_info.columns < 0)
+            terminal_info.columns = 80;
+        if (!color_output) {
+            int colors = terminal_colors();
+            if (colors >= 256)
+                color_output = true;
+            else if (colors >= 8) {
+                terminal_info.reset = "\033[0m";
+                terminal_info.line_indicator = "\033[90m";
+                terminal_info.row_colors = (const char *[]){
+                    "\033[31m",
+                    "\033[32m",
+                    "\033[33m",
+                    "\033[34m",
+                    "\033[35m",
+                    "\033[36m",
+                };
+                terminal_info.number_of_row_colors = 6;
+            }
+        }
+    }
+    if (color_output) {
+        // Enable 256-color output if the terminal supports it, or if it's been
+        // specified as a parameter.
+        terminal_info.reset = "\033[0m";
+        terminal_info.line_indicator = "\033[90m";
+        terminal_info.row_colors = (const char *[]){
+            "\033[38;5;168m",
+            "\033[38;5;113m",
+            "\033[38;5;68m",
+            "\033[38;5;214m",
+            "\033[38;5;97m",
+        };
+        terminal_info.number_of_row_colors = 5;
+    }
 
+    // This is the part where things actually happen.
     struct bluebird_tree *tree;
     tree = bluebird_tree_create_from_string(grammar_string);
 #if DEBUG_OUTPUT
@@ -208,8 +251,14 @@ int main(int argc, char *argv[])
         }
         char *input_string = read_string(input_file);
         fclose(input_file);
-        interpret(&grammar, &combined, &bracket_transitions, &deterministic,
-         input_string, output_file);
+        struct interpreter interpreter = {
+            .grammar = &grammar,
+            .combined = &combined,
+            .deterministic = &deterministic,
+            .transitions = &bracket_transitions,
+            .terminal_info = terminal_info,
+        };
+        interpret(&interpreter, input_string, output_file);
         free(input_string);
     }
 
@@ -217,6 +266,61 @@ int main(int argc, char *argv[])
     bluebird_tree_destroy(tree);
     free(grammar_string);
     return 0;
+}
+
+static long terminal_columns()
+{
+#ifdef TIOCGWINSZ
+    struct winsize winsize = {0};
+    if (!ioctl(STDOUT_FILENO, TIOCGWINSZ, (char *)&winsize))
+        return (long)winsize.ws_col;
+#endif
+    char *env = getenv("COLUMNS");
+    if (!env || *env == '\0')
+        return -1;
+    char *endptr = env;
+    long columns = strtol(env, &endptr, 10);
+    if (*endptr != '\0')
+        return -1;
+    return columns;
+}
+
+static int terminal_colors()
+{
+    if (!isatty(STDOUT_FILENO))
+        return 1;
+    // Try some different names that "ncurses" goes by on various platforms.
+    // Each name is annotated with the platform it was added to support.
+    char *libs[] = {
+        // Ubuntu 18.04 amd64
+        "libncurses.so.5",
+
+        // Arch Linux 2018.05.01 amd64
+        "libncursesw.so",
+
+        // macOS 10.12.6
+        "libncurses.dylib",
+
+        // These are here just in case...
+        "libncursesw.so.6",
+        "libncurses.so",
+        "libncurses.so.6",
+    };
+    for (int i = 0; i < sizeof(libs) / sizeof(libs[0]); ++i) {
+        void *handle = dlopen(libs[i], RTLD_LAZY | RTLD_LOCAL);
+        if (!handle)
+            continue;
+        int (*setupterm)(char *, int, int *) = dlsym(handle, "setupterm");
+        int (*tigetnum)(char *) = dlsym(handle, "tigetnum");
+        int value = -1;
+        int err;
+        if (setupterm && tigetnum && !setupterm(0, STDOUT_FILENO, &err))
+            value = tigetnum("colors");
+        dlclose(handle);
+        if (value > 0)
+            return value;
+    }
+    return 1;
 }
 
 static char *read_string(FILE *file)

@@ -22,6 +22,8 @@ struct line {
 
     bool has_overflow;
     bool is_overflow;
+
+    struct terminal_info terminal_info;
 };
 
 // This is how many dots we leave at the end of wrapped lines.
@@ -40,9 +42,8 @@ struct line {
 
 static void output_line(FILE *file, struct line *line,
  struct document *document);
-static void output_spacing(FILE *file, struct line *line,
- struct document *document, uint32_t row, size_t offset, uint32_t start_index,
- uint32_t end_index);
+static void output_spacing(FILE *file, struct line *line, uint32_t row,
+ size_t offset, uint32_t start_index, uint32_t end_index);
 static bool advance_line(struct line *line, struct document *document);
 static bool advance_label(struct line *line, struct document *document,
  uint32_t row, uint32_t label_index);
@@ -61,17 +62,20 @@ static size_t offset_at(struct line *line, uint32_t index);
 static void expand_offset_range(struct line *line, uint32_t index);
 static void ensure_offsets_capacity(struct line *line, uint32_t capacity);
 
-static void set_color_for_row(FILE *file, struct line *line,
- struct document *document, uint32_t row, uint32_t color);
+static void set_color_for_row(FILE *file, struct line *line, uint32_t row,
+ uint32_t color);
 
-void output_document(FILE *file, struct document *document)
+void output_document(FILE *file, struct document *document,
+ struct terminal_info terminal_info)
 {
     struct line line = {0};
     struct line next_line = {0};
     init_line(&line, document);
     init_line(&next_line, document);
+    line.terminal_info = terminal_info;
+    next_line.terminal_info = terminal_info;
     bool can_break_line = false;
-    long columns = document->number_of_columns;
+    long columns = terminal_info.columns;
     while (true) {
         copy_line(&next_line, &line, document);
         if (!advance_line(&next_line, document)) {
@@ -133,8 +137,8 @@ static void output_line(FILE *file, struct line *line,
         if (rr.start == rr.end)
             continue;
         if (i == 0) {
-            if (document->line_indicator_color_code)
-                fputs(document->line_indicator_color_code, file);
+            if (line->terminal_info.line_indicator)
+                fputs(line->terminal_info.line_indicator, file);
             if (line->is_overflow) {
                 // The second dot is drawn by output_spacing.
                 fputs(" .", file);
@@ -151,15 +155,14 @@ static void output_line(FILE *file, struct line *line,
                 continue;
             if (l.start >= r.start) {
                 // Output the actual text for this label.
-                output_spacing(file, line, document, i, offset, index, l.start);
+                output_spacing(file, line, i, offset, index, l.start);
                 index = l.start;
                 offset = offset_at(line, index);
-                set_color_for_row(file, line, document, i,
-                 l.color ? l.color : i);
+                set_color_for_row(file, line, i, l.color ? l.color : i);
                 fwrite(l.text, 1, l.length, file);
                 offset += l.length;
             } else
-                set_color_for_row(file, line, document, i, i);
+                set_color_for_row(file, line, i, i);
             size_t end_offset = offset_at(line, l.end);
             if (end_offset == BEFORE_START)
                 continue;
@@ -171,16 +174,15 @@ static void output_line(FILE *file, struct line *line,
             }
             index = l.end;
         }
-        output_spacing(file, line, document, i, offset, index, r.end);
-        if (document->reset_color_code)
-            fputs(document->reset_color_code, file);
+        output_spacing(file, line, i, offset, index, r.end);
+        if (line->terminal_info.reset)
+            fputs(line->terminal_info.reset, file);
         fputs("\n", file);
     }
 }
 
-static void output_spacing(FILE *file, struct line *line,
- struct document *document, uint32_t row, size_t offset, uint32_t start_index,
- uint32_t end_index)
+static void output_spacing(FILE *file, struct line *line, uint32_t row,
+ size_t offset, uint32_t start_index, uint32_t end_index)
 {
     uint32_t offset_row = 0;
     struct range r = line->offset_range;
@@ -192,14 +194,14 @@ static void output_spacing(FILE *file, struct line *line,
             end_offset = line->offsets[i - r.start];
         for (size_t j = offset; j < end_offset; ++j) {
             if (row != 0 && offset_row != 0) {
-                set_color_for_row(file, line, document, row, offset_row);
+                set_color_for_row(file, line, row, offset_row);
                 fputs("|", file);
                 offset_row = 0;
             } else if (row == 0 &&
              ((line->has_overflow && j + ELLIPSIS_COUNT >= line->end_offset) ||
              (line->is_overflow && j == 0))) {
-                if (document->line_indicator_color_code)
-                    fputs(document->line_indicator_color_code, file);
+                if (line->terminal_info.line_indicator)
+                    fputs(line->terminal_info.line_indicator, file);
                 fputs(".", file);
             } else
                 fputs(" ", file);
@@ -248,11 +250,6 @@ static bool advance_label(struct line *line, struct document *document,
         if (row > 0 && label_index > line->row_ranges[row].start) {
             // Apply minimum inter-label spacing.
             struct label prev = document->rows[row].labels[label_index - 1];
-            // TODO: Which is better?
-//            if (prev.start >= r.start) {
-//                push_offsets(line, l.start, offset_at(line, prev.start) +
-//                 prev.length + LABEL_PADDING);
-//            }
             if (prev.end >= r.start) {
                 push_offsets(line, l.start, offset_at(line, prev.end) +
                  + LABEL_PADDING);
@@ -388,11 +385,11 @@ void ensure_offsets_capacity(struct line *line, uint32_t capacity)
     line->offsets_capacity = capacity * 2;
 }
 
-static void set_color_for_row(FILE *file, struct line *line,
- struct document *document, uint32_t row, uint32_t color)
+static void set_color_for_row(FILE *file, struct line *line, uint32_t row,
+ uint32_t color)
 {
-    if (color == 0 || !document->color_codes)
+    const char **colors = line->terminal_info.row_colors;
+    if (color == 0 || !colors)
         return;
-    fputs(document->color_codes[(color - 1) % document->number_of_color_codes],
-     file);
+    fputs(colors[(color - 1) % line->terminal_info.number_of_row_colors], file);
 }
