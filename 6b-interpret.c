@@ -276,8 +276,6 @@ static void fill_rows(struct interpret_context *ctx,
 #define DECODE(x) (n - (uint32_t)(SIZE_MAX - (x)) - 1)
     uint32_t location_cursor = DECODE(node->start_location);
     uint32_t start = location_cursor + *offset;
-    if (depth + 1 < ctx->document.number_of_rows)
-        (*offset)++;
     for (size_t i = 0; i < node->number_of_children; ++i) {
         struct interpret_node *child = node->children[i];
         location_cursor = offset_labels(&ctx->document, location_cursor,
