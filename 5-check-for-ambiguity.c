@@ -63,10 +63,7 @@ struct state_path_node {
     enum state_path_node_type type;
     enum state_path_node_flags flags;
     union {
-        struct {
-            uint16_t *a_actions;
-            uint16_t *b_actions;
-        };
+        uint16_t *actions[2];
         symbol_id symbol;
         struct state_path_node *bracket_path;
     };
@@ -209,7 +206,8 @@ static struct state_path_node *find_path_through(struct state_pair_table *table,
 static struct state_path_node *find_ambiguous_path(struct state_pair_table *t);
 
 void check_for_ambiguity(struct combined_grammar *combined,
- struct bracket_transitions *determinized_transitions)
+ struct bracket_transitions *determinized_transitions,
+ struct ambiguities *ambiguities)
 {
     uint32_t tokens = combined->number_of_tokens;
     uint32_t number_of_bracket_transitions = 0;
@@ -280,24 +278,51 @@ void check_for_ambiguity(struct combined_grammar *combined,
 
     struct state_path_node *path = find_ambiguous_path(&table);
     if (path)
-        printf("ambiguity detected!\n");
+        ambiguities->has_ambiguity = true;
+    bool swap = false;
     while (path) {
         printf("-\n");
-        switch (path->type) {
-        case SYMBOL_NODE:
-            printf("symbol: %u\n", path->symbol);
-            break;
-        case ACTION_NODE:
-            for (uint16_t *action = path->a_actions; action && *action; ++action)
-                printf("a action: %u %u\n", (((*action) >> 12) & 0xf), *action & 0xfff);
-            for (uint16_t *action = path->b_actions; action && *action; ++action)
-                printf("b action: %u %u\n", (((*action) >> 12) & 0xf), *action & 0xfff);
-            break;
-        default:
-            break;
+        for (int i = 0; i < 2; ++i) {
+            struct ambiguity_path *out = &ambiguities->paths[swap ? 1 - i : i];
+            switch (path->type) {
+            case SYMBOL_NODE: {
+                uint32_t token = out->number_of_tokens++;
+                out->tokens = grow_array(out->tokens,
+                 &out->tokens_allocated_bytes,
+                 out->number_of_tokens * sizeof(symbol_id));
+                out->tokens[token] = path->symbol;
+                break;
+            }
+            case ACTION_NODE: {
+                uint32_t n = 0;
+                for (uint16_t *a = path->actions[i]; a && *a; ++a)
+                    ++n;
+                for (uint32_t j = 0; j < n; ++j) {
+                    uint16_t *a = (path->flags & REVERSED) ?
+                     &path->actions[i][n - j - 1] : &path->actions[i][j];
+                    uint32_t action = out->number_of_actions++;
+                    out->actions = grow_array(out->actions,
+                     &out->actions_allocated_bytes,
+                     out->number_of_actions * sizeof(uint16_t));
+                    printf("adding action %u %u to %p\n", (((*a) >> 12) & 0xf), *a & 0xfff, out);
+                    out->actions[action] = *a;
+                    out->offsets = grow_array(out->offsets,
+                     &out->offsets_allocated_bytes,
+                     out->number_of_actions * sizeof(size_t));
+                    out->offsets[action] = out->number_of_tokens;
+                }
+                break;
+            }
+            default:
+                break;
+            }
         }
+        if (path->flags & SWAPPED)
+            swap = !swap;
         path = path->next;
     }
+
+//    print_ambiguity(&table);
 
     automaton_destroy(&bracket_reversed);
     automaton_destroy(&reversed);
@@ -399,8 +424,10 @@ static void state_pair_search(struct automaton *automaton,
                         .pair = s,
                         .node = {
                             .type = ACTION_NODE,
-                            .a_actions = ac.actions + ac.action_indexes[i],
-                            .b_actions = bc.actions + bc.action_indexes[i],
+                            .actions = {
+                                ac.actions + ac.action_indexes[i],
+                                bc.actions + bc.action_indexes[j],
+                            },
                             .flags = to.a == ac.reachable.states[i] ? SWAPPED : 0,
                         },
                     };
@@ -416,7 +443,7 @@ static void state_pair_search(struct automaton *automaton,
                     .pair = s,
                     .node = {
                         .type = ACTION_NODE,
-                        .a_actions = ac.actions + ac.action_indexes[i],
+                        .actions = { ac.actions + ac.action_indexes[i], 0 },
                         .flags = to.b == s.b ? SWAPPED : 0,
                     },
                 };
@@ -433,7 +460,7 @@ static void state_pair_search(struct automaton *automaton,
                     .pair = s,
                     .node = {
                         .type = ACTION_NODE,
-                        .b_actions = bc.actions + bc.action_indexes[j],
+                        .actions = { 0, bc.actions + bc.action_indexes[j] },
                         .flags = to.a == s.a ? SWAPPED : 0,
                     },
                 };
@@ -504,11 +531,14 @@ static struct state_path_node *find_path_through(struct state_pair_table *table,
     struct state_path_node *result = 0;
     struct state_path_node **next = &result;
     struct state_pair_edge *edge_list = table->out_edges;
+    bool reverse = false;
     while (table->mark[index] != EMPTY) {
         if (edge_list[index].type == BOUNDARY) {
             if (edge_list == table->out_edges) {
                 edge_list = table->in_edges;
                 index = table_pair_index;
+                reverse = true;
+                printf("flip\n");
                 continue;
             } else
                 return result;
@@ -516,6 +546,9 @@ static struct state_path_node *find_path_through(struct state_pair_table *table,
         if (edge_list[index].node.type != EMPTY_NODE) {
             struct state_path_node *n = malloc(sizeof(struct state_path_node));
             *n = edge_list[index].node;
+            // TODO: reverse the reversedness?
+            if (reverse)
+                n->flags |= REVERSED;
             if (edge_list == table->out_edges) {
                 *next = n;
                 next = &n->next;
@@ -525,6 +558,17 @@ static struct state_path_node *find_path_through(struct state_pair_table *table,
             }
         }
         struct state_pair p = edge_list[index].pair;
+#if 0
+        printf("pair: %u %u -> %u %u  node: %u (%u, %p %p)\n", table->pairs[index].a, table->pairs[index].b, p.a, p.b, edge_list[index].node.type, edge_list[index].node.symbol, edge_list[index].node.actions[0], edge_list[index].node.actions[1]);
+        if (edge_list[index].node.type == ACTION_NODE) {
+            for (uint16_t *a = edge_list[index].node.actions[0]; a && *a; ++a) {
+                printf("a[0] = %u %u\n", (((*a) >> 12) & 0xf), *a & 0xfff);
+            }
+            for (uint16_t *a = edge_list[index].node.actions[1]; a && *a; ++a) {
+                printf("a[1] = %u %u\n", (((*a) >> 12) & 0xf), *a & 0xfff);
+            }
+        }
+#endif
         index = state_pair_table_lookup(table, p, fnv(&p, sizeof(p)));
     }
     // We encountered an empty pair, which means a path doesn't exist.

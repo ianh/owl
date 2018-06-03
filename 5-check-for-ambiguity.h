@@ -4,18 +4,25 @@
 #include "4-determinize.h"
 
 struct ambiguity_path {
-    symbol_id *symbols;
     uint16_t *actions;
-    uint32_t length;
+    uint32_t actions_allocated_bytes;
+    size_t *offsets;
+    uint32_t offsets_allocated_bytes;
+    uint32_t number_of_actions;
+
+    // TODO: the tokens ought to be shared
+    symbol_id *tokens;
+    uint32_t tokens_allocated_bytes;
+    uint32_t number_of_tokens;
 };
 
 struct ambiguities {
-    struct ambiguity_path *paths;
-    uint32_t paths_allocated_bytes;
-    uint32_t number_of_paths;
+    bool has_ambiguity;
+    struct ambiguity_path paths[2];
 };
 
 void check_for_ambiguity(struct combined_grammar *combined,
- struct bracket_transitions *determinized_transitions);
+ struct bracket_transitions *determinized_transitions,
+ struct ambiguities *ambiguities);
 
 #endif

@@ -79,8 +79,10 @@ void automaton_reverse(struct automaton *a, struct automaton *reversed)
             automaton_add_transition_with_action(reversed, t->target, i,
              t->symbol, t->action);
         }
-        if (s->accepting)
+        if (s->accepting) {
             automaton_add_transition(reversed, start_state, i, SYMBOL_EPSILON);
+            reversed->states[i].transition_symbol = s->transition_symbol;
+        }
     }
     automaton_set_start_state(reversed, start_state);
     automaton_mark_accepting_state(reversed, a->start_state);

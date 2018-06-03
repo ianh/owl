@@ -15,14 +15,16 @@
 
 // TODO:
 // - ambiguity checking
+// - update generated code to include offset information
+// - error messages that include line/column/visuals
 // - don't output unreachable nfa states
 //  - this probably means filtering out intermediate states from the epsilon
 //    closure
-// - fancy interpreter output
+// - string escape sequences
 // - clean up memory leaks
 // - get rid of RULE_LOOKUP?
 // - check if all the input is properly validated
-// - error messages that include line/column/visuals
+// - properly lay out / comment source files
 // - perf optimization?
 // - testing!
 //  - add code to generate random words in the grammar together with the
@@ -175,7 +177,7 @@ int main(int argc, char *argv[])
     } else {
         output_file = stdout;
         terminal_info.columns = terminal_columns();
-        if (terminal_info.columns < 0)
+        if (terminal_info.columns <= 0)
             terminal_info.columns = 80;
         if (!color_output) {
             int colors = terminal_colors();
@@ -224,8 +226,28 @@ int main(int argc, char *argv[])
     struct combined_grammar combined = {0};
     combine(&combined, &grammar);
 
+    automaton_print(&combined.automaton);
+    automaton_print(&combined.bracket_automaton);
+    for (uint32_t i = 0; i < combined.number_of_tokens; ++i) {
+        printf("token %x: %.*s\n", i, (int)combined.tokens[i].length,
+               combined.tokens[i].string);
+    }
+
     struct bracket_transitions bracket_transitions = {0};
     determinize_bracket_transitions(&bracket_transitions, &combined);
+
+    struct ambiguities ambiguities = {0};
+    check_for_ambiguity(&combined, &bracket_transitions, &ambiguities);
+    if (ambiguities.has_ambiguity) {
+        struct interpreter interpreter = {
+            .grammar = &grammar,
+            .combined = &combined,
+            .transitions = &bracket_transitions,
+            .terminal_info = terminal_info,
+        };
+        output_ambiguities(&interpreter, &ambiguities, stderr);
+        return 2;
+    }
 
     struct deterministic_grammar deterministic = {0};
     determinize(&combined, &deterministic, &bracket_transitions);

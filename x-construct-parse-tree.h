@@ -228,7 +228,7 @@ static void construct_expression_reduce(struct construct_state *s,
         while (last_operator &&
          last_operator->choice_index == op->choice_index) {
             struct construct_node *next_op = last_operator->next;
-            // TODO: Combine last_operator slots together instead of just
+            // FIXME: Combine last_operator slots together instead of just
             // throwing them away.  To do this, we either need a way to link
             // finished nodes together or a way of storing unfinished nodes in
             // slots.

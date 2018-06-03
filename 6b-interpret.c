@@ -88,6 +88,10 @@ struct interpret_context {
     struct construct_state construct_state;
     struct interpret_node *tokens;
 
+    // Set if we're outputting the result of ambiguity checking (where there are
+    // no real tokens).
+    bool no_tokens;
+
     struct document document;
 
     // Table mapping abstract offsets to concrete offsets.
@@ -231,17 +235,173 @@ static void print_parse_tree(struct interpret_context *ctx,
     print_parse_tree(ctx, node->next_sibling, slot, indent);
 
 }
+
+#define CONSTRUCT_ACTION_NAME(name) PRINT_CONSTRUCT_ACTION_ ## name,
+enum { CONSTRUCT_ACTIONS };
+#undef CONSTRUCT_ACTION_NAME
+static void print_action(uint16_t action, size_t offset)
+{
+    uint16_t slot = CONSTRUCT_ACTION_GET_SLOT(action);
+    switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
+#define CONSTRUCT_ACTION_NAME(name) case PRINT_CONSTRUCT_ACTION_ ## name : printf(#name " %u at %lu\n", slot, offset); break;
+CONSTRUCT_ACTIONS
+#undef CONSTRUCT_ACTION_NAME
+    }
+}
 #endif
 
-static void find_number_of_labels(struct interpret_node *node, uint32_t depth,
- struct document *document)
+static void initialize_document(struct interpret_context *ctx,
+ struct interpret_node *root, uint32_t number_of_token_labels);
+
+static uint32_t offset_labels(struct document *document, uint32_t start,
+ uint32_t end, uint32_t offset, uint32_t color);
+static void fill_rows(struct interpret_context *ctx,
+ struct interpret_node *node, uint32_t depth, uint32_t *offset);
+
+static void output_ambiguity_path(struct interpreter *interpreter,
+ struct ambiguity_path *path, FILE *output)
+{
+    struct interpret_context context = {
+        .grammar = interpreter->grammar,
+        .combined = interpreter->combined,
+        .deterministic = interpreter->deterministic,
+        .transitions = interpreter->transitions,
+
+        .no_tokens = true,
+    };
+    context.construct_state.info = &context;
+    size_t end_offset = 0;
+    if (path->number_of_actions > 0)
+        end_offset = path->offsets[path->number_of_actions - 1] * 4;
+
+    construct_begin(&context.construct_state, end_offset,
+     context.combined->root_rule_is_expression ?
+     CONSTRUCT_EXPRESSION_ROOT : CONSTRUCT_NORMAL_ROOT);
+    uint32_t n = path->number_of_actions;
+    for (uint32_t i = n - 1; i < n; --i) {
+        print_action(path->actions[i], path->offsets[i] * 4);
+    }
+    for (uint32_t i = n - 1; i < n; --i) {
+        construct_action_apply(&context.construct_state, path->actions[i],
+         path->offsets[i] * 4);
+    }
+    struct interpret_node *root = construct_finish(&context.construct_state, 0);
+
+    initialize_document(&context, root, path->number_of_tokens * 2);
+    struct label *token_labels = context.document.rows[0].labels;
+    uint32_t identifier_iterator = 0;
+    uint32_t number_iterator = 0;
+    uint32_t string_iterator = 0;
+    for (uint32_t i = 0; i < path->number_of_tokens; ++i) {
+        token_labels[i * 2] = (struct label){
+            .start = i * 4,
+            .end = i * 4 + 1,
+        };
+        struct token token = context.combined->tokens[path->tokens[i]];
+        if (path->tokens[i] < context.combined->number_of_keyword_tokens) {
+            token_labels[i * 2].text = token.string;
+            token_labels[i * 2].length = token.length;
+        } else {
+            bool is_identifier = token.length == strlen("identifier") &&
+             !memcmp(token.string, "identifier", strlen("identifier"));
+            bool is_number = token.length == strlen("number") &&
+             !memcmp(token.string, "number", strlen("number"));
+            bool is_string = token.length == strlen("string") &&
+             !memcmp(token.string, "string", strlen("string"));
+            char *text = 0;
+            size_t length = 0;
+            do {
+                // This whole business is to avoid adding tokens that will
+                // parse as keywords.  We don't want to confuse anyone by
+                // producing a string that won't actually parse to the right
+                // thing.
+                if (is_identifier) {
+                    size_t underscores = identifier_iterator / 26;
+                    size_t letter = identifier_iterator % 26;
+                    text = realloc(text, underscores + 1);
+                    if (!text)
+                        abort();
+                    for (size_t j = 0; j < underscores; ++j)
+                        text[j] = '_';
+                    text[underscores] = 'a' + letter;
+                    length = underscores + 1;
+                    identifier_iterator++;
+                } else if (is_number) {
+                    length = sprintf(0, "%u", number_iterator);
+                    text = realloc(text, length);
+                    if (!text)
+                        abort();
+                    sprintf(text, "%u", number_iterator);
+                    number_iterator++;
+                } else if (is_string) {
+                    size_t copies = 1 + (string_iterator / 26);
+                    size_t letter = string_iterator % 26;
+                    text = realloc(text, copies + 2);
+                    if (!text)
+                        abort();
+                    for (size_t j = 0; j < copies; ++j)
+                        text[j + 1] = 'a' + letter;
+                    text[0] = '"';
+                    text[copies] = '"';
+                    length = copies + 2;
+                    string_iterator++;
+                }
+            } while (find_token(context.combined->tokens,
+             context.combined->number_of_tokens, text, length, TOKEN_DONT_CARE)
+             < context.combined->number_of_tokens);
+            token_labels[i * 2].text = text;
+            token_labels[i * 2].length = length;
+        }
+        token_labels[i * 2 + 1] = (struct label){
+            .text = " ",
+            .length = 1,
+            .start = i * 4 + 2,
+            .end = i * 4 + i,
+        };
+    }
+
+    uint32_t offset = 0;
+    fill_rows(&context, root, root->depth - 1, &offset);
+    offset_labels(&context.document, (uint32_t)root->end_location,
+     path->number_of_tokens * 4, offset, 0);
+#if 1
+    for (uint32_t i = 0; i < context.document.number_of_rows; ++i) {
+        printf("row %u:\n", i);
+        for (uint32_t j = 0; j < context.document.rows[i].number_of_labels; ++j) {
+            struct label l = context.document.rows[i].labels[j];
+            printf(" %.*s %u - %u\n", (int)l.length, l.text, l.start, l.end);
+        }
+    }
+#endif
+    output_document(output, &context.document, interpreter->terminal_info);
+}
+
+void output_ambiguities(struct interpreter *interpreter,
+ struct ambiguities *ambiguities, FILE *output)
+{
+    output_ambiguity_path(interpreter, &ambiguities->paths[0], output);
+    output_ambiguity_path(interpreter, &ambiguities->paths[1], output);
+}
+
+static void count_row_labels(struct interpret_context *ctx,
+ struct interpret_node *node, uint32_t depth)
 {
     if (!node || node->type != NODE_RULE)
         return;
-    if (depth + 1 < document->number_of_rows)
-        document->rows[depth + 1].number_of_labels++;
+    if (depth + 1 < ctx->document.number_of_rows)
+        ctx->document.rows[depth + 1].number_of_labels++;
     for (uint32_t i = 0; i < node->number_of_children; ++i)
-        find_number_of_labels(node->children[i], depth - 1, document);
+        count_row_labels(ctx, node->children[i], depth - 1);
+}
+
+static void adjust_locations(struct interpret_context *ctx,
+ struct interpret_node *node)
+{
+    uint32_t n = ctx->next_action_offset;
+    node->start_location = n - (SIZE_MAX - node->start_location) - 1;
+    node->end_location = n - (SIZE_MAX - node->end_location) - 1;
+    for (uint32_t i = 0; i < node->number_of_children; ++i)
+        adjust_locations(ctx, node->children[i]);
 }
 
 static void append_string(char **string, uint32_t *length, uint32_t *bytes,
@@ -272,21 +432,19 @@ static void fill_rows(struct interpret_context *ctx,
 {
     if (!node || node->type != NODE_RULE)
         return;
-    uint32_t n = ctx->next_action_offset;
-#define DECODE(x) (n - (uint32_t)(SIZE_MAX - (x)) - 1)
-    uint32_t location_cursor = DECODE(node->start_location);
+    uint32_t location_cursor = (uint32_t)node->start_location;
     uint32_t start = location_cursor + *offset;
     for (size_t i = 0; i < node->number_of_children; ++i) {
         struct interpret_node *child = node->children[i];
         location_cursor = offset_labels(&ctx->document, location_cursor,
-         DECODE(child->start_location), *offset, depth + 1);
+         (uint32_t)child->start_location, *offset, depth + 1);
         if (depth == 0)
             abort();
         fill_rows(ctx, child, depth - 1, offset);
-        location_cursor = DECODE(child->end_location);
+        location_cursor = (uint32_t)child->end_location;
     }
     location_cursor = offset_labels(&ctx->document, location_cursor,
-     DECODE(node->end_location), *offset, depth + 1);
+     (uint32_t)node->end_location, *offset, depth + 1);
     if (depth + 1 >= ctx->document.number_of_rows)
         return;
     (*offset)++;
@@ -322,6 +480,35 @@ static void fill_rows(struct interpret_context *ctx,
         .start = start,
         .end = location_cursor + *offset - 1,
     };
+}
+
+static void initialize_document(struct interpret_context *ctx,
+ struct interpret_node *root, uint32_t number_of_token_labels)
+{
+    uint32_t number_of_rows = root->depth;
+    if (root->depth == 1 ||
+     ctx->grammar->rules[ctx->grammar->root_rule].number_of_choices > 0) {
+        // If the root rule is the only rule that matched, or if it has choices,
+        // then show the root node in the tree.  Otherwise, we hide the root to
+        // avoid an extra nesting level across the entire output.
+        number_of_rows++;
+    }
+    ctx->document = (struct document){
+        .rows = calloc(number_of_rows, sizeof(struct row)),
+        .number_of_rows = number_of_rows,
+    };
+    ctx->document.rows[0].number_of_labels = number_of_token_labels;
+    count_row_labels(ctx, root, root->depth - 1);
+    for (uint32_t i = 0; i < ctx->document.number_of_rows; ++i) {
+        ctx->document.rows[i].labels =
+         calloc(ctx->document.rows[i].number_of_labels,
+         sizeof(struct label));
+        if (i > 0) {
+            // We use `number_of_labels` to keep track of the next label index
+            // for non-zero rows.
+            ctx->document.rows[i].number_of_labels = 0;
+        }
+    }
 }
 
 void interpret(struct interpreter *interpreter, const char *text, FILE *output)
@@ -372,32 +559,9 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
     for (uint32_t i = 0; i < context.next_action_offset; ++i)
         printf("%u. %lu\n", i, context.offset_table[i]);
 #endif
-    uint32_t depth = root->depth;
-    uint32_t number_of_rows = depth;
-    if (depth == 1 ||
-     context.grammar->rules[context.grammar->root_rule].number_of_choices > 0) {
-        // If the root rule is the only rule that matched, or if it has choices,
-        // then show the root node in the tree.  Otherwise, we hide the root to
-        // avoid an extra nesting level across the entire output.
-        number_of_rows++;
-    }
-    context.document = (struct document){
-        .rows = calloc(number_of_rows, sizeof(struct row)),
-        .number_of_rows = number_of_rows,
-    };
+    adjust_locations(&context, root);
     uint32_t n = context.next_action_offset;
-    context.document.rows[0].number_of_labels = n / 2;
-    find_number_of_labels(root, depth - 1, &context.document);
-    for (uint32_t i = 0; i < context.document.number_of_rows; ++i) {
-        context.document.rows[i].labels =
-         calloc(context.document.rows[i].number_of_labels,
-         sizeof(struct label));
-        if (i > 0) {
-            // We use `number_of_labels` to keep track of the next label index
-            // for non-zero rows.
-            context.document.rows[i].number_of_labels = 0;
-        }
-    }
+    initialize_document(&context, root, n / 2);
     for (uint32_t i = 0; i < n; ++i) {
         // Reverse all the offsets.  We could change how we access the table
         // instead, but that would make the code harder to read (and it's
@@ -438,8 +602,8 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
         };
     }
     uint32_t offset = 0;
-    fill_rows(&context, root, depth - 1, &offset);
-    uint32_t location_cursor = DECODE(root->end_location);
+    fill_rows(&context, root, root->depth - 1, &offset);
+    uint32_t location_cursor = (uint32_t)root->end_location;
     offset_labels(&context.document, location_cursor, n, offset, 0);
 #if 0
     for (uint32_t i = 0; i < context.document.number_of_rows; ++i) {
@@ -552,19 +716,6 @@ static bool follow_transition(struct automaton *a, state_id *state,
     return false;
 }
 
-#define CONSTRUCT_ACTION_NAME(name) PRINT_CONSTRUCT_ACTION_ ## name,
-enum { CONSTRUCT_ACTIONS };
-#undef CONSTRUCT_ACTION_NAME
-static void print_action(uint16_t action, size_t offset)
-{
-    uint16_t slot = CONSTRUCT_ACTION_GET_SLOT(action);
-    switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
-#define CONSTRUCT_ACTION_NAME(name) case PRINT_CONSTRUCT_ACTION_ ## name : printf(#name " %u at %lu\n", slot, offset); break;
-CONSTRUCT_ACTIONS
-#undef CONSTRUCT_ACTION_NAME
-    }
-}
-
 static void follow_transition_reversed(struct interpret_context *ctx,
  state_id *last_nfa_state, uint32_t state, uint32_t token, size_t start,
  size_t end)
@@ -629,6 +780,8 @@ static void follow_transition_reversed(struct interpret_context *ctx,
             action_offset = ctx->next_action_offset - 1;
             break;
         }
+        // TODO: make sure the start of two different things at the same level
+        // can't be the same (to avoid problems with sorting/stability/etc)
 #if 0
         printf("action: %u\n", offset);
         print_action(map->actions[k], action_offset);
@@ -779,6 +932,7 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
             index++;
         }
     }
+    // TODO: offset start locations for multiple actions in the same place?
     qsort(node->children, node->number_of_children,
      sizeof(struct interpret_node *), compare_start_locations);
     return node;
@@ -787,6 +941,8 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
 static struct interpret_node *finish_token(uint32_t rule,
  struct interpret_node *next_sibling, struct interpret_context *context)
 {
+    if (context->no_tokens)
+        return next_sibling;
     struct interpret_node *token = context->tokens;
     if (!token)
         abort();
