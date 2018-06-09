@@ -233,21 +233,20 @@ int main(int argc, char *argv[])
                combined.tokens[i].string);
     }
 
-    struct bracket_transitions bracket_transitions = {0};
-    determinize_bracket_transitions(&bracket_transitions, &combined);
-
-    struct ambiguities ambiguities = {0};
-    check_for_ambiguity(&combined, &bracket_transitions, &ambiguities);
-    if (ambiguities.has_ambiguity) {
+    struct ambiguity ambiguity = {0};
+    check_for_ambiguity(&combined, &ambiguity);
+    if (ambiguity.has_ambiguity) {
         struct interpreter interpreter = {
             .grammar = &grammar,
             .combined = &combined,
-            .transitions = &bracket_transitions,
             .terminal_info = terminal_info,
         };
-        output_ambiguities(&interpreter, &ambiguities, stderr);
+        output_ambiguity(&interpreter, &ambiguity, stderr);
         return 2;
     }
+
+    struct bracket_transitions bracket_transitions = {0};
+    determinize_bracket_transitions(&bracket_transitions, &combined);
 
     struct deterministic_grammar deterministic = {0};
     determinize(&combined, &deterministic, &bracket_transitions);

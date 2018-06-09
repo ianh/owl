@@ -111,6 +111,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                  "are currently unsupported.\n", MAX_NUMBER_OF_CHOICES);
                 exit(-1);
             }
+            // TODO: Verify there are no other choices or operators with this name.
             uint32_t choice_index = rule->number_of_choices++;
             rule->choices = grow_array(rule->choices,
              &rule->choices_allocated_bytes,
@@ -136,6 +137,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                  MAX_NUMBER_OF_CHOICES);
                 exit(-1);
             }
+            // TODO: Verify there are no other choices or operators with this name.
             // First, unpack the fixity and associativity from the parse tree.
             struct parsed_fixity fixity = parsed_fixity_get(tree, ops.fixity);
             enum fixity rule_fixity;
@@ -327,6 +329,8 @@ static void build_body_expression(struct context *ctx,
         } else {
             struct automaton bracket_automaton = {0};
             build_body_automaton(ctx, &bracket_automaton, &bracket_expr);
+            // Update the bracket pointer in case it was invalidated.
+            bracket = &rule->brackets[bracket_index];
             automaton_move(&bracket_automaton, &bracket->automaton);
             automaton_destroy(&bracket_automaton);
         }
@@ -335,6 +339,14 @@ static void build_body_expression(struct context *ctx,
          TOKEN_START);
         bracket->end_symbol = add_keyword_token(ctx, rule, expr->end_token,
          TOKEN_END);
+        if (bracket->start_symbol == SYMBOL_EPSILON) {
+            fprintf(stderr, "error: '' is not a valid start symbol.\n");
+            exit(-1);
+        }
+        if (bracket->end_symbol == SYMBOL_EPSILON) {
+            fprintf(stderr, "error: '' is not a valid end symbol.\n");
+            exit(-1);
+        }
         automaton_add_transition(automaton, b.entry, b.exit, bracket->symbol);
         break;
     }

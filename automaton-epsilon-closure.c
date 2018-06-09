@@ -55,6 +55,15 @@ void automaton_compute_epsilon_closure(struct automaton *a,
                     continue;
                 state_id target = transition.target;
                 state_id action = transition.action;
+                if (target == i) {
+                    // So, this is a little bit of a hack.  Because it makes me
+                    // feel bad to allocate the "trivial" path from the state to
+                    // itself, I avoid doing it in most cases.  But here, we're
+                    // about to generate another path which is ambiguous with
+                    // this trivial path.  So we are forced to add it, or else
+                    // we can end up with incorrect results.
+                    closure_entry_add(&visited, closure, UINT32_MAX, i, 0);
+                }
                 if (closure_entry_add(&visited, closure, id, target, action))
                     state_array_push(&worklist, target);
             }

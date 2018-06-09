@@ -259,7 +259,7 @@ static void fill_rows(struct interpret_context *ctx,
  struct interpret_node *node, uint32_t depth, uint32_t *offset);
 
 static void output_ambiguity_path(struct interpreter *interpreter,
- struct ambiguity_path *path, FILE *output)
+ struct ambiguity *ambiguity, struct ambiguity_path *path, FILE *output)
 {
     struct interpret_context context = {
         .grammar = interpreter->grammar,
@@ -278,27 +278,29 @@ static void output_ambiguity_path(struct interpreter *interpreter,
      context.combined->root_rule_is_expression ?
      CONSTRUCT_EXPRESSION_ROOT : CONSTRUCT_NORMAL_ROOT);
     uint32_t n = path->number_of_actions;
+#if 1
     for (uint32_t i = n - 1; i < n; --i) {
         print_action(path->actions[i], path->offsets[i] * 4);
     }
+#endif
     for (uint32_t i = n - 1; i < n; --i) {
         construct_action_apply(&context.construct_state, path->actions[i],
          path->offsets[i] * 4);
     }
     struct interpret_node *root = construct_finish(&context.construct_state, 0);
 
-    initialize_document(&context, root, path->number_of_tokens * 2);
+    initialize_document(&context, root, ambiguity->number_of_tokens * 2);
     struct label *token_labels = context.document.rows[0].labels;
     uint32_t identifier_iterator = 0;
     uint32_t number_iterator = 0;
     uint32_t string_iterator = 0;
-    for (uint32_t i = 0; i < path->number_of_tokens; ++i) {
+    for (uint32_t i = 0; i < ambiguity->number_of_tokens; ++i) {
         token_labels[i * 2] = (struct label){
             .start = i * 4,
             .end = i * 4 + 1,
         };
-        struct token token = context.combined->tokens[path->tokens[i]];
-        if (path->tokens[i] < context.combined->number_of_keyword_tokens) {
+        struct token token = context.combined->tokens[ambiguity->tokens[i]];
+        if (ambiguity->tokens[i] < context.combined->number_of_keyword_tokens) {
             token_labels[i * 2].text = token.string;
             token_labels[i * 2].length = token.length;
         } else {
@@ -327,11 +329,11 @@ static void output_ambiguity_path(struct interpreter *interpreter,
                     length = underscores + 1;
                     identifier_iterator++;
                 } else if (is_number) {
-                    length = sprintf(0, "%u", number_iterator);
-                    text = realloc(text, length);
+                    length = snprintf(0, 0, "%u", number_iterator + 1);
+                    text = realloc(text, length + 1);
                     if (!text)
                         abort();
-                    sprintf(text, "%u", number_iterator);
+                    sprintf(text, "%u", number_iterator + 1);
                     number_iterator++;
                 } else if (is_string) {
                     size_t copies = 1 + (string_iterator / 26);
@@ -342,7 +344,7 @@ static void output_ambiguity_path(struct interpreter *interpreter,
                     for (size_t j = 0; j < copies; ++j)
                         text[j + 1] = 'a' + letter;
                     text[0] = '"';
-                    text[copies] = '"';
+                    text[copies + 1] = '"';
                     length = copies + 2;
                     string_iterator++;
                 }
@@ -356,14 +358,14 @@ static void output_ambiguity_path(struct interpreter *interpreter,
             .text = " ",
             .length = 1,
             .start = i * 4 + 2,
-            .end = i * 4 + i,
+            .end = i * 4 + 3,
         };
     }
 
     uint32_t offset = 0;
     fill_rows(&context, root, root->depth - 1, &offset);
     offset_labels(&context.document, (uint32_t)root->end_location,
-     path->number_of_tokens * 4, offset, 0);
+     ambiguity->number_of_tokens * 4, offset, 0);
 #if 1
     for (uint32_t i = 0; i < context.document.number_of_rows; ++i) {
         printf("row %u:\n", i);
@@ -376,11 +378,15 @@ static void output_ambiguity_path(struct interpreter *interpreter,
     output_document(output, &context.document, interpreter->terminal_info);
 }
 
-void output_ambiguities(struct interpreter *interpreter,
- struct ambiguities *ambiguities, FILE *output)
+void output_ambiguity(struct interpreter *interpreter,
+ struct ambiguity *ambiguity, FILE *output)
 {
-    output_ambiguity_path(interpreter, &ambiguities->paths[0], output);
-    output_ambiguity_path(interpreter, &ambiguities->paths[1], output);
+    // TODO: Adjust colors to help maintain association between output rows.
+    fputs("\nerror: the input text\n\n", output);
+    fputs("\ncan be parsed in two different ways: as\n\n", output);
+    output_ambiguity_path(interpreter, ambiguity, &ambiguity->paths[0], output);
+    fputs("\nor as\n\n", output);
+    output_ambiguity_path(interpreter, ambiguity, &ambiguity->paths[1], output);
 }
 
 static void count_row_labels(struct interpret_context *ctx,
@@ -448,6 +454,10 @@ static void fill_rows(struct interpret_context *ctx,
     if (depth + 1 >= ctx->document.number_of_rows)
         return;
     (*offset)++;
+    if (node->start_location == node->end_location) {
+        // Avoid empty ranges which confuse the layout algorithm.
+        (*offset)++;
+    }
     struct slot *s = node->slot;
     struct rule *rule = &ctx->grammar->rules[node->rule_index];
     uint32_t j = ctx->document.rows[depth + 1].number_of_labels++;

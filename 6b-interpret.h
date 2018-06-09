@@ -23,7 +23,7 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output);
 
 // Interpret ambiguous paths and output the resulting tree using our fancy
 // tree-drawing code.
-void output_ambiguities(struct interpreter *interpreter,
- struct ambiguities *ambiguities, FILE *output);
+void output_ambiguity(struct interpreter *interpreter,
+ struct ambiguity *ambiguity, FILE *output);
 
 #endif
