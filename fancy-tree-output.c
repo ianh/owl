@@ -62,8 +62,7 @@ static size_t offset_at(struct line *line, uint32_t index);
 static void expand_offset_range(struct line *line, uint32_t index);
 static void ensure_offsets_capacity(struct line *line, uint32_t capacity);
 
-static void set_color_for_row(FILE *file, struct line *line, uint32_t row,
- uint32_t color);
+static void set_color(FILE *file, struct line *line, uint32_t color);
 
 void output_document(FILE *file, struct document *document,
  struct terminal_info terminal_info)
@@ -158,11 +157,11 @@ static void output_line(FILE *file, struct line *line,
                 output_spacing(file, line, i, offset, index, l.start);
                 index = l.start;
                 offset = offset_at(line, index);
-                set_color_for_row(file, line, i, l.color ? l.color : i);
+                set_color(file, line, l.color ? l.color : i);
                 fwrite(l.text, 1, l.length, file);
                 offset += l.length;
             } else
-                set_color_for_row(file, line, i, i);
+                set_color(file, line, i);
             size_t end_offset = offset_at(line, l.end);
             if (end_offset == BEFORE_START)
                 continue;
@@ -194,7 +193,7 @@ static void output_spacing(FILE *file, struct line *line, uint32_t row,
             end_offset = line->offsets[i - r.start];
         for (size_t j = offset; j < end_offset; ++j) {
             if (row != 0 && offset_row != 0) {
-                set_color_for_row(file, line, row, offset_row);
+                set_color(file, line, offset_row);
                 fputs("|", file);
                 offset_row = 0;
             } else if (row == 0 &&
@@ -385,8 +384,7 @@ void ensure_offsets_capacity(struct line *line, uint32_t capacity)
     line->offsets_capacity = capacity * 2;
 }
 
-static void set_color_for_row(FILE *file, struct line *line, uint32_t row,
- uint32_t color)
+static void set_color(FILE *file, struct line *line, uint32_t color)
 {
     const char **colors = line->terminal_info.row_colors;
     if (color == 0 || !colors)
