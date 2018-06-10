@@ -270,11 +270,8 @@ static void output_ambiguity_path(struct interpreter *interpreter,
         .no_tokens = true,
     };
     context.construct_state.info = &context;
-    size_t end_offset = 0;
-    if (path->number_of_actions > 0)
-        end_offset = path->offsets[path->number_of_actions - 1] * 4;
 
-    construct_begin(&context.construct_state, end_offset,
+    construct_begin(&context.construct_state, ambiguity->number_of_tokens * 4,
      context.combined->root_rule_is_expression ?
      CONSTRUCT_EXPRESSION_ROOT : CONSTRUCT_NORMAL_ROOT);
     uint32_t n = path->number_of_actions;
@@ -496,13 +493,15 @@ static void initialize_document(struct interpret_context *ctx,
  struct interpret_node *root, uint32_t number_of_token_labels)
 {
     uint32_t number_of_rows = root->depth;
-    if (root->depth == 1 ||
-     ctx->grammar->rules[ctx->grammar->root_rule].number_of_choices > 0) {
+//    if (root->depth == 1 ||
+//     ctx->grammar->rules[ctx->grammar->root_rule].number_of_choices > 0) {
         // If the root rule is the only rule that matched, or if it has choices,
         // then show the root node in the tree.  Otherwise, we hide the root to
         // avoid an extra nesting level across the entire output.
+        // TODO: replace this rule with one based on the root rule being covered
+        // by its child rules.
         number_of_rows++;
-    }
+//    }
     ctx->document = (struct document){
         .rows = calloc(number_of_rows, sizeof(struct row)),
         .number_of_rows = number_of_rows,
