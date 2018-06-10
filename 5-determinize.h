@@ -1,10 +1,10 @@
-#ifndef _4_DETERMINIZE_H_
-#define _4_DETERMINIZE_H_
+#ifndef _5_DETERMINIZE_H_
+#define _5_DETERMINIZE_H_
 
 #include "3-combine.h"
 #include "bitset.h"
 
-// STEP 4 - DETERMINIZE
+// STEP 5 - DETERMINIZE
 
 struct bracket_transition {
     struct bitset transition_symbols;

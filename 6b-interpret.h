@@ -1,8 +1,8 @@
 #ifndef _6B_INTERPRET_H_
 #define _6B_INTERPRET_H_
 
-#include "4-determinize.h"
-#include "5-check-for-ambiguity.h"
+#include "4-check-for-ambiguity.h"
+#include "5-determinize.h"
 #include "fancy-tree-output.h"
 
 #include <stdio.h>

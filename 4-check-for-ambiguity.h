@@ -1,7 +1,9 @@
-#ifndef _5_CHECK_FOR_AMBIGUITY_H_
-#define _5_CHECK_FOR_AMBIGUITY_H_
+#ifndef _4_CHECK_FOR_AMBIGUITY_H_
+#define _4_CHECK_FOR_AMBIGUITY_H_
 
-#include "4-determinize.h"
+#include "3-combine.h"
+
+// STEP 4 - CHECK FOR AMBIGUITY
 
 struct ambiguity_path {
     uint16_t *actions;

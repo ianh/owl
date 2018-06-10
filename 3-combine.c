@@ -1,6 +1,6 @@
 #include "3-combine.h"
 
-#include "4-determinize.h"
+#include "5-determinize.h"
 #include "x-construct-actions.h"
 #include <assert.h>
 #include <stdio.h>
