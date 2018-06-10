@@ -160,6 +160,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
 
 static size_t push_action_offsets(struct interpret_context *ctx, size_t start,
  size_t end);
+static bool is_end_action(uint16_t action);
 
 #if 1
 static void print_token_runs(struct interpret_context *ctx,
@@ -259,7 +260,8 @@ static void fill_rows(struct interpret_context *ctx,
  struct interpret_node *node, uint32_t depth, uint32_t *offset);
 
 static void output_ambiguity_path(struct interpreter *interpreter,
- struct ambiguity *ambiguity, struct ambiguity_path *path, FILE *output)
+ struct ambiguity *ambiguity, int which_path, struct label *token_labels,
+ FILE *output)
 {
     struct interpret_context context = {
         .grammar = interpreter->grammar,
@@ -270,8 +272,12 @@ static void output_ambiguity_path(struct interpreter *interpreter,
         .no_tokens = true,
     };
     context.construct_state.info = &context;
+    struct ambiguity_path *path = &ambiguity->paths[which_path];
 
-    construct_begin(&context.construct_state, ambiguity->number_of_tokens * 4,
+    size_t end_location = 0;
+    if (ambiguity->number_of_tokens > 0)
+        end_location = ambiguity->number_of_tokens * 4 - 2;
+    construct_begin(&context.construct_state, end_location,
      context.combined->root_rule_is_expression ?
      CONSTRUCT_EXPRESSION_ROOT : CONSTRUCT_NORMAL_ROOT);
     uint32_t n = path->number_of_actions;
@@ -280,14 +286,44 @@ static void output_ambiguity_path(struct interpreter *interpreter,
         print_action(path->actions[i], path->offsets[i] * 4);
     }
 #endif
+    size_t offset = SIZE_MAX;
     for (uint32_t i = n - 1; i < n; --i) {
+        size_t next_offset = path->offsets[i] * 4;
+        if (is_end_action(path->actions[i]) && next_offset > 0)
+            next_offset -= 2;
+        if (next_offset < offset)
+            offset = next_offset;
         construct_action_apply(&context.construct_state, path->actions[i],
-         path->offsets[i] * 4);
+         offset);
     }
     struct interpret_node *root = construct_finish(&context.construct_state, 0);
 
     initialize_document(&context, root, ambiguity->number_of_tokens * 2);
-    struct label *token_labels = context.document.rows[0].labels;
+    memcpy(context.document.rows[0].labels, token_labels,
+     ambiguity->number_of_tokens * 2 * sizeof(struct label));
+
+    uint32_t end_offset = 0;
+    fill_rows(&context, root, root->depth - 1, &end_offset);
+    offset_labels(&context.document, (uint32_t)root->end_location,
+     ambiguity->number_of_tokens * 4, end_offset, 0);
+#if 0
+    for (uint32_t i = 0; i < context.document.number_of_rows; ++i) {
+        printf("row %u:\n", i);
+        for (uint32_t j = 0; j < context.document.rows[i].number_of_labels; ++j) {
+            struct label l = context.document.rows[i].labels[j];
+            printf(" %.*s %u - %u\n", (int)l.length, l.text, l.start, l.end);
+        }
+    }
+#endif
+    output_document(output, &context.document, interpreter->terminal_info);
+}
+
+void output_ambiguity(struct interpreter *interpreter,
+ struct ambiguity *ambiguity, FILE *output)
+{
+    struct label *token_labels = calloc(ambiguity->number_of_tokens * 2,
+     sizeof(struct label));
+    struct combined_grammar *combined = interpreter->combined;
     uint32_t identifier_iterator = 0;
     uint32_t number_iterator = 0;
     uint32_t string_iterator = 0;
@@ -295,9 +331,10 @@ static void output_ambiguity_path(struct interpreter *interpreter,
         token_labels[i * 2] = (struct label){
             .start = i * 4,
             .end = i * 4 + 1,
+            .color = DEFAULT_COLOR,
         };
-        struct token token = context.combined->tokens[ambiguity->tokens[i]];
-        if (ambiguity->tokens[i] < context.combined->number_of_keyword_tokens) {
+        struct token token = combined->tokens[ambiguity->tokens[i]];
+        if (ambiguity->tokens[i] < combined->number_of_keyword_tokens) {
             token_labels[i * 2].text = token.string;
             token_labels[i * 2].length = token.length;
         } else {
@@ -345,9 +382,8 @@ static void output_ambiguity_path(struct interpreter *interpreter,
                     length = copies + 2;
                     string_iterator++;
                 }
-            } while (find_token(context.combined->tokens,
-             context.combined->number_of_tokens, text, length, TOKEN_DONT_CARE)
-             < context.combined->number_of_tokens);
+            } while (find_token(combined->tokens, combined->number_of_tokens,
+             text, length, TOKEN_DONT_CARE) < combined->number_of_tokens);
             token_labels[i * 2].text = text;
             token_labels[i * 2].length = length;
         }
@@ -359,31 +395,22 @@ static void output_ambiguity_path(struct interpreter *interpreter,
         };
     }
 
-    uint32_t offset = 0;
-    fill_rows(&context, root, root->depth - 1, &offset);
-    offset_labels(&context.document, (uint32_t)root->end_location,
-     ambiguity->number_of_tokens * 4, offset, 0);
-#if 0
-    for (uint32_t i = 0; i < context.document.number_of_rows; ++i) {
-        printf("row %u:\n", i);
-        for (uint32_t j = 0; j < context.document.rows[i].number_of_labels; ++j) {
-            struct label l = context.document.rows[i].labels[j];
-            printf(" %.*s %u - %u\n", (int)l.length, l.text, l.start, l.end);
-        }
-    }
-#endif
-    output_document(output, &context.document, interpreter->terminal_info);
-}
-
-void output_ambiguity(struct interpreter *interpreter,
- struct ambiguity *ambiguity, FILE *output)
-{
     // TODO: Adjust colors to help maintain association between output rows.
-    fputs("\nerror: the input text\n\n", output);
-    fputs("\ncan be parsed in two different ways: as\n\n", output);
-    output_ambiguity_path(interpreter, ambiguity, &ambiguity->paths[0], output);
-    fputs("\nor as\n\n", output);
-    output_ambiguity_path(interpreter, ambiguity, &ambiguity->paths[1], output);
+    fputs("\n  Ambiguity detected. The text\n\n", output);
+    struct row token_row = {
+        .labels = token_labels,
+        .number_of_labels = ambiguity->number_of_tokens * 2,
+    };
+    struct document token_document = {
+        .rows = &token_row,
+        .number_of_rows = 1,
+    };
+    output_document(output, &token_document, interpreter->terminal_info);
+    fputs("\n  can be parsed in two different ways: as\n\n", output);
+    output_ambiguity_path(interpreter, ambiguity, 0, token_labels, output);
+    fputs("\n  or as\n\n", output);
+    output_ambiguity_path(interpreter, ambiguity, 1, token_labels, output);
+    fputs("\n", output);
 }
 
 static void count_row_labels(struct interpret_context *ctx,
@@ -510,8 +537,7 @@ static void initialize_document(struct interpret_context *ctx,
     count_row_labels(ctx, root, root->depth - 1);
     for (uint32_t i = 0; i < ctx->document.number_of_rows; ++i) {
         ctx->document.rows[i].labels =
-         calloc(ctx->document.rows[i].number_of_labels,
-         sizeof(struct label));
+         calloc(ctx->document.rows[i].number_of_labels, sizeof(struct label));
         if (i > 0) {
             // We use `number_of_labels` to keep track of the next label index
             // for non-zero rows.
@@ -770,25 +796,9 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         if (map->actions[k] == 0)
             break;
         uint32_t action_offset = ctx->next_action_offset;
-        switch (CONSTRUCT_ACTION_GET_TYPE(map->actions[k])) {
-        case CONSTRUCT_ACTION_SET_SLOT_CHOICE:
-        case CONSTRUCT_ACTION_TOKEN_SLOT:
-            break;
-        case CONSTRUCT_ACTION_BEGIN_SLOT:
-        case CONSTRUCT_ACTION_BEGIN_EXPRESSION_SLOT:
-        case CONSTRUCT_ACTION_BEGIN_OPERAND:
-        case CONSTRUCT_ACTION_BEGIN_OPERATOR:
-            action_offset = ctx->next_action_offset - 1;
-            break;
-        case CONSTRUCT_ACTION_END_SLOT:
-        case CONSTRUCT_ACTION_END_EXPRESSION_SLOT:
-        case CONSTRUCT_ACTION_END_OPERAND:
-        case CONSTRUCT_ACTION_END_OPERATOR:
-            if (offset != start)
-                offset = push_action_offsets(ctx, offset, start);
-            action_offset = ctx->next_action_offset - 1;
-            break;
-        }
+        if (is_end_action(map->actions[k]) && offset != start)
+            offset = push_action_offsets(ctx, offset, start);
+        action_offset = ctx->next_action_offset - 1;
         // TODO: make sure the start of two different things at the same level
         // can't be the same (to avoid problems with sorting/stability/etc)
 #if 0
@@ -821,6 +831,19 @@ static size_t push_action_offsets(struct interpret_context *ctx, size_t start,
     push_action_offset(ctx, start);
     push_action_offset(ctx, end);
     return end;
+}
+
+static bool is_end_action(uint16_t action)
+{
+    switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
+    case CONSTRUCT_ACTION_END_SLOT:
+    case CONSTRUCT_ACTION_END_EXPRESSION_SLOT:
+    case CONSTRUCT_ACTION_END_OPERAND:
+    case CONSTRUCT_ACTION_END_OPERATOR:
+        return true;
+    default:
+        return false;
+    }
 }
 
 static size_t read_keyword_token(uint32_t *token, bool *end_token,

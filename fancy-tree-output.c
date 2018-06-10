@@ -389,5 +389,12 @@ static void set_color(FILE *file, struct line *line, uint32_t color)
     const char **colors = line->terminal_info.row_colors;
     if (color == 0 || !colors)
         return;
+    if (color == DEFAULT_COLOR) {
+        if (line->terminal_info.reset) {
+            fputs(line->terminal_info.reset, file);
+            return;
+        } else
+            color = 1;
+    }
     fputs(colors[(color - 1) % line->terminal_info.number_of_row_colors], file);
 }

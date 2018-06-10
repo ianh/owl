@@ -6,6 +6,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
+// Set this as a label color for it to appear as the default terminal color
+// (usually white or black).
+#define DEFAULT_COLOR UINT32_MAX
+
 struct document;
 struct label;
 struct row;
