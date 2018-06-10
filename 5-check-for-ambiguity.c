@@ -276,10 +276,8 @@ static void build_ambiguity_path(struct context *context,
  struct ambiguity *ambiguity, struct path_offset offset, struct path_node *node,
  int32_t direction)
 {
-    printf("build start\n");
     bool swapped = false;
     for (; node && node->type != BOUNDARY_NODE; node = node->next) {
-        printf("build %u: %u %u %u -> %u\n", node->type, offset.symbols, offset.actions[0], offset.actions[1], node->next->type);
         if (node->flags & SWAPPED_PATH)
             swapped = !swapped;
         switch (node->type) {
@@ -344,7 +342,6 @@ static void build_ambiguity_path(struct context *context,
             break;
         }
     }
-    printf("build end\n");
 }
 
 static void search_state_pairs(struct context *context,

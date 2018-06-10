@@ -278,7 +278,7 @@ static void output_ambiguity_path(struct interpreter *interpreter,
      context.combined->root_rule_is_expression ?
      CONSTRUCT_EXPRESSION_ROOT : CONSTRUCT_NORMAL_ROOT);
     uint32_t n = path->number_of_actions;
-#if 1
+#if 0
     for (uint32_t i = n - 1; i < n; --i) {
         print_action(path->actions[i], path->offsets[i] * 4);
     }
@@ -366,7 +366,7 @@ static void output_ambiguity_path(struct interpreter *interpreter,
     fill_rows(&context, root, root->depth - 1, &offset);
     offset_labels(&context.document, (uint32_t)root->end_location,
      ambiguity->number_of_tokens * 4, offset, 0);
-#if 1
+#if 0
     for (uint32_t i = 0; i < context.document.number_of_rows; ++i) {
         printf("row %u:\n", i);
         for (uint32_t j = 0; j < context.document.rows[i].number_of_labels; ++j) {

@@ -1,6 +1,7 @@
 #include "automaton.h"
 
 #include "fnv.h"
+#include <assert.h>
 
 struct state_table {
     state_id *states;
@@ -13,7 +14,8 @@ struct state_table {
 };
 
 static uint32_t append_to_action_path(struct state_table *table,
- struct epsilon_closure *closure, state_id previous_state, uint16_t action);
+ struct epsilon_closure *closure, uint32_t previous_action_indexes,
+ uint16_t action);
 static bool closure_entry_add(struct state_table *table,
  struct epsilon_closure *closure, state_id previous_state, state_id state,
  uint16_t action);
@@ -55,15 +57,10 @@ void automaton_compute_epsilon_closure(struct automaton *a,
                     continue;
                 state_id target = transition.target;
                 state_id action = transition.action;
-                if (target == i) {
-                    // So, this is a little bit of a hack.  Because it makes me
-                    // feel bad to allocate the "trivial" path from the state to
-                    // itself, I avoid doing it in most cases.  But here, we're
-                    // about to generate another path which is ambiguous with
-                    // this trivial path.  So we are forced to add it, or else
-                    // we can end up with incorrect results.
-                    closure_entry_add(&visited, closure, UINT32_MAX, i, 0);
-                }
+//                // Uncomment me to get ambiguous paths like "" vs "a" instead
+//                // of "a" vs "a a"!
+//                if (target == i)
+//                    closure_entry_add(&visited, closure, UINT32_MAX, i, 0);
                 if (closure_entry_add(&visited, closure, id, target, action))
                     state_array_push(&worklist, target);
             }
@@ -84,43 +81,59 @@ static bool closure_entry_add(struct state_table *table,
  uint16_t action)
 {
     uint32_t *state_index = state_table_add(table, state);
-    if (*state_index != UINT32_MAX) {
-        // There are two separate paths to this state.  Keep track of the second
-        // one so we can report it during ambiguity checking.
-        if (closure->ambiguous_action_indexes[*state_index] == UINT32_MAX) {
-            closure->ambiguous_action_indexes[*state_index] =
-             append_to_action_path(table, closure, previous_state, action);
-            printf("duplicate path! i=%u ai=%u p=%u s=%u a=%u\n", *state_index, closure->ambiguous_action_indexes[*state_index], previous_state, state, action);
-            return true;
-        }
-        return false;
+    if (*state_index == UINT32_MAX) {
+        *state_index = closure->reachable.number_of_states;
+        state_array_push(&closure->reachable, state);
+        closure->action_indexes = grow_array(closure->action_indexes,
+         &closure->action_indexes_allocated_bytes,
+         closure->reachable.number_of_states * sizeof(uint32_t));
+        closure->ambiguous_action_indexes =
+         grow_array(closure->ambiguous_action_indexes,
+          &closure->ambiguous_action_indexes_allocated_bytes,
+          closure->reachable.number_of_states * sizeof(uint32_t));
+        closure->action_indexes[*state_index] = UINT32_MAX;
+        closure->ambiguous_action_indexes[*state_index] = UINT32_MAX;
     }
-    *state_index = closure->reachable.number_of_states;
-    state_array_push(&closure->reachable, state);
-    closure->action_indexes = grow_array(closure->action_indexes,
-     &closure->action_indexes_allocated_bytes,
-     closure->reachable.number_of_states * sizeof(uint32_t));
-    closure->ambiguous_action_indexes =
-     grow_array(closure->ambiguous_action_indexes,
-      &closure->ambiguous_action_indexes_allocated_bytes,
-      closure->reachable.number_of_states * sizeof(uint32_t));
-    closure->action_indexes[*state_index] = append_to_action_path(table,
-     closure, previous_state, action);
-    closure->ambiguous_action_indexes[*state_index] = UINT32_MAX;
+    if (closure->action_indexes[*state_index] != UINT32_MAX &&
+     closure->ambiguous_action_indexes[*state_index] != UINT32_MAX)
+        return false;
+    bool first_visit = closure->action_indexes[*state_index] == UINT32_MAX;
+    uint32_t previous = state_table_lookup(table, previous_state,
+     fnv(&previous_state, sizeof(previous_state)));
+    uint32_t previous_state_index = table->state_indexes[previous];
+    if (!table->used[previous] || previous_state_index == UINT32_MAX) {
+        // We shouldn't be revisiting a state unless we arrived from a valid
+        // previous state.
+        assert(first_visit);
+        closure->action_indexes[*state_index] = append_to_action_path(table,
+         closure, UINT32_MAX, action);
+        return true;
+    }
+    if (first_visit) {
+        closure->action_indexes[*state_index] = append_to_action_path(table,
+         closure, closure->action_indexes[previous_state_index], action);
+    }
+    if (closure->ambiguous_action_indexes[previous_state_index] != UINT32_MAX) {
+        closure->ambiguous_action_indexes[*state_index] =
+         append_to_action_path(table, closure,
+         closure->ambiguous_action_indexes[previous_state_index], action);
+    } else if (!first_visit) {
+        closure->ambiguous_action_indexes[*state_index] =
+         append_to_action_path(table, closure,
+         closure->action_indexes[previous_state_index], action);
+    }
     return true;
 }
 
 static uint32_t append_to_action_path(struct state_table *table,
- struct epsilon_closure *closure, state_id previous_state, uint16_t action)
+ struct epsilon_closure *closure, uint32_t previous_action_indexes,
+ uint16_t action)
 {
     uint32_t action_index = closure->number_of_actions;
     if (action)
         closure_action_add(closure, action);
-    uint32_t previous = state_table_lookup(table, previous_state,
-     fnv(&previous_state, sizeof(previous_state)));
-    uint32_t previous_state_index = table->state_indexes[previous];
-    if (table->used[previous] && previous_state_index != UINT32_MAX) {
-        uint32_t i = closure->action_indexes[previous_state_index];
+    if (previous_action_indexes != UINT32_MAX) {
+        uint32_t i = previous_action_indexes;
         if (!action)
             return i;
         while (closure->actions[i]) {

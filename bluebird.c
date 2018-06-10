@@ -18,8 +18,6 @@
 // - update generated code to include offset information
 // - error messages that include line/column/visuals
 // - don't output unreachable nfa states
-//  - this probably means filtering out intermediate states from the epsilon
-//    closure
 // - string escape sequences
 // - clean up memory leaks
 // - get rid of RULE_LOOKUP?
@@ -226,12 +224,14 @@ int main(int argc, char *argv[])
     struct combined_grammar combined = {0};
     combine(&combined, &grammar);
 
+#if 0
     automaton_print(&combined.automaton);
     automaton_print(&combined.bracket_automaton);
     for (uint32_t i = 0; i < combined.number_of_tokens; ++i) {
         printf("token %x: %.*s\n", i, (int)combined.tokens[i].length,
                combined.tokens[i].string);
     }
+#endif
 
     struct ambiguity ambiguity = {0};
     check_for_ambiguity(&combined, &ambiguity);
