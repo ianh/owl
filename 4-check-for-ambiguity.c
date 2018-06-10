@@ -67,7 +67,6 @@ struct path_node {
     uint8_t type;
     uint8_t flags;
 };
-static struct path_node invalid_node = { .type = INVALID_NODE };
 static struct path_node boundary_node = { .type = BOUNDARY_NODE };
 
 enum state_pair_status {
@@ -83,9 +82,10 @@ struct state_pair_table {
     struct path_node *in_paths;
     struct path_node *out_paths;
     // "ain"-paths are ambiguous in-paths.  We need to store these separately to
-    // keep track of them without creating cycles.
+    // keep track of them without creating cycles (an ain-path may need to
+    // include the same node pair twice -- if there are epsilon-cycles, for
+    // example).
     struct path_node *ain_paths;
-    uint32_t *pair_hashes;
     uint8_t *status;
 
     // A state pair along an ambiguous path, if one has been found.
@@ -207,10 +207,15 @@ void check_for_ambiguity(struct combined_grammar *combined,
     automaton_reverse(bracket_automaton, &bracket_reversed);
     struct state_pair_table table = {0};
     while (true) {
+        // First, look for ambiguity in the root automaton.
         search_state_pairs(&context, &table, &combined->automaton, FORWARD);
         search_state_pairs(&context, &table, &reversed, BACKWARD);
         if (table.has_ambiguity)
             break;
+
+        // If we can't find any, look for any new ambiguities in the bracket
+        // automaton (potentially propagating ambiguities outward as we discover
+        // new ambiguous transitions).
         state_pair_table_clear(&table);
         search_state_pairs(&context, &table, bracket_automaton, FORWARD);
         search_state_pairs(&context, &table, &bracket_reversed,
@@ -247,10 +252,13 @@ void check_for_ambiguity(struct combined_grammar *combined,
             ambiguity->has_ambiguity = false;
             return;
         }
+
+        // We found some new bracket ambiguities.  Loop around and see if we can
+        // find an ambiguity in the root automaton now.
         state_pair_table_clear(&table);
     }
 
-    // We found an ambiguous path through the automaton.
+    // We found an ambiguous path through the root automaton.
     ambiguity->has_ambiguity = true;
     uint32_t path_index = state_pair_table_lookup(&table, table.ambiguity,
      fnv(&table.ambiguity, sizeof(table.ambiguity)));
@@ -446,7 +454,7 @@ static void search_state_pairs(struct context *context,
                         continue;
                     struct state_pair p = state_pair_make(context->bracket_states[at.symbol - context->combined->number_of_tokens], context->bracket_states[bt.symbol - context->combined->number_of_tokens], DISALLOW_EPSILON_SUCCESSORS);
                     uint32_t k = state_pair_table_lookup(&context->bracket_paths, p, fnv(&p, sizeof(p)));
-                    if (context->bracket_paths.status[k] != EMPTY) {
+                    if (context->bracket_paths.status[k] == LOCKED) {
                         follow_state_pair_transition((struct path_node){
                             .type = BRACKET_TRANSITION_NODE,
                             .next_pair = s,
@@ -583,18 +591,17 @@ static uint32_t state_pair_table_add(struct state_pair_table *table,
 {
     if (3 * table->available_size <= 4 * (table->used_size + 1)) {
         uint32_t n = table->available_size * 2;
-        if (n == 0)
-            n = 4;
+        if (n <= 128)
+            n = 128;
         state_pair_table_rehash(table, n);
     }
     uint32_t index = state_pair_table_lookup(table, pair, hash);
     if (table->status[index] == EMPTY) {
         table->status[index] = USED;
         table->pairs[index] = pair;
-        table->in_paths[index] = invalid_node;
-        table->out_paths[index] = invalid_node;
-        table->ain_paths[index] = invalid_node;
-        table->pair_hashes[index] = hash;
+        table->in_paths[index].type = INVALID_NODE;
+        table->out_paths[index].type = INVALID_NODE;
+        table->ain_paths[index].type = INVALID_NODE;
         table->used_size++;
     }
     return index;
@@ -619,13 +626,8 @@ static uint32_t state_pair_table_lookup(struct state_pair_table *table,
 
 static void state_pair_table_clear(struct state_pair_table *table)
 {
-    free(table->pairs);
-    free(table->in_paths);
-    free(table->out_paths);
-    free(table->ain_paths);
-    free(table->pair_hashes);
-    free(table->status);
-    memset(table, 0, sizeof(*table));
+    memset(table->status, 0, sizeof(uint8_t) * table->available_size);
+    table->used_size = 0;
 }
 
 static void state_pair_table_rehash(struct state_pair_table *table,
@@ -636,15 +638,14 @@ static void state_pair_table_rehash(struct state_pair_table *table,
     table->in_paths = calloc(new_size, sizeof(struct path_node));
     table->out_paths = calloc(new_size, sizeof(struct path_node));
     table->ain_paths = calloc(new_size, sizeof(struct path_node));
-    table->pair_hashes = calloc(new_size, sizeof(uint32_t));
     table->status = calloc(new_size, sizeof(uint8_t));
     table->available_size = new_size;
     table->used_size = 0;
     for (uint32_t i = 0; i < old.available_size; ++i) {
         if (old.status[i] == EMPTY)
             continue;
-        uint32_t index = state_pair_table_add(table, old.pairs[i],
-         old.pair_hashes[i]);
+        uint32_t hash = fnv(&old.pairs[i], sizeof(old.pairs[i]));
+        uint32_t index = state_pair_table_add(table, old.pairs[i], hash);
         table->in_paths[index] = old.in_paths[i];
         table->out_paths[index] = old.out_paths[i];
         table->ain_paths[index] = old.ain_paths[i];
@@ -654,6 +655,5 @@ static void state_pair_table_rehash(struct state_pair_table *table,
     free(old.in_paths);
     free(old.out_paths);
     free(old.ain_paths);
-    free(old.pair_hashes);
     free(old.status);
 }
