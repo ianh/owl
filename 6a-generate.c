@@ -157,6 +157,9 @@ void generate(struct generator *gen)
          LOWERCASE_WITH_UNDERSCORES);
         output_line(out, "    struct {");
         generate_fields_for_token_rule(out, rule, "        %%type%%field;\n");
+        // FIXME: This isn't very memory-efficient.
+        output_line(out, "        size_t start_location;");
+        output_line(out, "        size_t end_location;");
         output_line(out, "    } *%%rule_tokens;");
         output_line(out, "    size_t number_of_%%rule_tokens;");
         output_line(out, "    size_t used_%%rule_tokens;");
@@ -169,7 +172,7 @@ void generate(struct generator *gen)
             continue;
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
-        output_string(out, "static void add_%%rule_token(struct bluebird_tree *tree");
+        output_string(out, "static void add_%%rule_token(struct bluebird_tree *tree, size_t start, size_t end");
         generate_fields_for_token_rule(out, rule, ", %%type%%field_param");
         output_line(out, ") {");
         output_line(out, "    size_t index = tree->number_of_%%rule_tokens++;");
@@ -181,6 +184,8 @@ void generate(struct generator *gen)
         output_line(out, "        tree->%%rule_tokens_capacity = capacity;");
         output_line(out, "        tree->%%rule_tokens = tokens;");
         output_line(out, "    }");
+        output_line(out, "    tree->%%rule_tokens[index].start_location = start;");
+        output_line(out, "    tree->%%rule_tokens[index].end_location = end;");
         generate_fields_for_token_rule(out, rule, "    tree->%%rule_tokens[index].%%field = %%field_param;\n");
         output_line(out, "}");
     }
@@ -243,16 +248,17 @@ void generate(struct generator *gen)
         if (rule->is_token)
             output_line(out, "    size_t token_index = read_tree(&id, tree);");
         else {
-            // TODO: Get this working for tokens too
             output_line(out, "    size_t start_location = read_tree(&id, tree);");
             output_line(out, "    size_t end_location = read_tree(&id, tree);");
         }
         output_line(out, "    return (struct parsed_%%rule){");
         output_line(out, "        ._tree = tree,");
         output_line(out, "        ._next = next,");
-        if (rule->is_token)
+        if (rule->is_token) {
             generate_fields_for_token_rule(out, rule, "        .%%field = tree->%%rule_tokens[token_index].%%field,\n");
-        else {
+            output_line(out, "        .start_location = tree->%%rule_tokens[token_index].start_location,");
+            output_line(out, "        .end_location = tree->%%rule_tokens[token_index].end_location,");
+        } else {
             output_line(out, "        .start_location = start_location,");
             output_line(out, "        .end_location = end_location,");
         }
@@ -417,19 +423,19 @@ void generate(struct generator *gen)
         if (rule_is_named(rule, "identifier")) {
             output_line(out, "static void write_identifier_token(size_t offset, size_t length, void *info) {");
             output_line(out, "    struct bluebird_tree *tree = info;");
-            output_line(out, "    add_identifier_token(tree, tree->string + offset, length);");
+            output_line(out, "    add_identifier_token(tree, offset, offset + length, tree->string + offset, length);");
             output_line(out, "}");
             set_literal_substitution(out, "write-identifier-token", "write_identifier_token");
         } else if (rule_is_named(rule, "number")) {
             output_line(out, "static void write_number_token(size_t offset, size_t length, double number, void *info) {");
             output_line(out, "    struct bluebird_tree *tree = info;");
-            output_line(out, "    add_number_token(tree, number);");
+            output_line(out, "    add_number_token(tree, offset, offset + length, number);");
             output_line(out, "}");
             set_literal_substitution(out, "write-number-token", "write_number_token");
         } else if (rule_is_named(rule, "string")) {
             output_line(out, "static void write_string_token(size_t offset, size_t length, size_t content_offset, size_t content_length, void *info) {");
             output_line(out, "    struct bluebird_tree *tree = info;");
-            output_line(out, "    add_string_token(tree, tree->string + offset, length);");
+            output_line(out, "    add_string_token(tree, offset, offset + length, tree->string + offset, length);");
             output_line(out, "}");
             set_literal_substitution(out, "write-string-token", "write_string_token");
         }
