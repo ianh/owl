@@ -405,7 +405,7 @@ static void find_bracket_transitions(struct context context,
          sizeof(struct bracket_transition), compare_bracket_transitions);
         if (equal_bracket_transitions(&transitions, result))
             break;
-#if 1
+#if 0
         printf("-\n");
         for (uint32_t i = 0; i < result->number_of_transitions; ++i) {
             struct bracket_transition t = result->transitions[i];

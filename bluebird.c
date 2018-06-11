@@ -14,7 +14,6 @@
 #define DEBUG_OUTPUT 0
 
 // TODO:
-// - ambiguity checking
 // - update generated code to include offset information
 // - error messages that include line/column/visuals
 // - don't output unreachable nfa states
