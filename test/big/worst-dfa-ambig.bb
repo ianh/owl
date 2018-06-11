@@ -1,0 +1,10 @@
+root = w* x a z*
+a = b b b b
+b = c c c c
+c = d d d d
+d = e e e e
+e = w w
+w = x | y
+x = 'x'
+y = 'y'
+z = ''
