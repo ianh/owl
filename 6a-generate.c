@@ -101,6 +101,8 @@ void generate(struct generator *gen)
         output_line(out, "    struct bluebird_tree *_tree;");
         output_line(out, "    parsed_id _next;");
         output_line(out, "    bool empty;");
+        output_line(out, "    size_t start_location;");
+        output_line(out, "    size_t end_location;");
         if (rule->number_of_choices > 0)
             output_line(out, "    enum parsed_%%rule_type type;");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
@@ -240,11 +242,20 @@ void generate(struct generator *gen)
         output_line(out, "    parsed_id next = read_tree(&id, tree);");
         if (rule->is_token)
             output_line(out, "    size_t token_index = read_tree(&id, tree);");
+        else {
+            // TODO: Get this working for tokens too
+            output_line(out, "    size_t start_location = read_tree(&id, tree);");
+            output_line(out, "    size_t end_location = read_tree(&id, tree);");
+        }
         output_line(out, "    return (struct parsed_%%rule){");
         output_line(out, "        ._tree = tree,");
         output_line(out, "        ._next = next,");
         if (rule->is_token)
             generate_fields_for_token_rule(out, rule, "        .%%field = tree->%%rule_tokens[token_index].%%field,\n");
+        else {
+            output_line(out, "        .start_location = start_location,");
+            output_line(out, "        .end_location = end_location,");
+        }
         if (rule->number_of_choices > 0)
             output_line(out, "        .type = read_tree(&id, tree),");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
@@ -256,11 +267,15 @@ void generate(struct generator *gen)
         output_line(out, "    };");
         output_line(out, "}");
     }
-    output_line(out, "static parsed_id finish_node(uint32_t rule, uint32_t choice, parsed_id next_sibling, parsed_id *slots, void *info) {");
+    output_line(out, "static parsed_id finish_node(uint32_t rule, uint32_t choice, "
+     "parsed_id next_sibling, parsed_id *slots, size_t start_location, size_t end_location, void *info) {");
     output_line(out, "    struct bluebird_tree *tree = info;");
 //    output_line(out, "    printf(\"finishing node (%lu): %u / %u\\n\", tree->next_id, rule, choice);");
     output_line(out, "    parsed_id id = tree->next_id;");
     output_line(out, "    write_tree(tree, next_sibling);");
+    // TODO: Remove these casts.
+    output_line(out, "    write_tree(tree, (parsed_id)start_location);");
+    output_line(out, "    write_tree(tree, (parsed_id)end_location);");
     output_line(out, "    switch (rule) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
@@ -355,7 +370,7 @@ void generate(struct generator *gen)
             else if (rule_is_named(rule, "string"))
                 output_line(out, "        printf(\" - %.*s\", (int)it.length, it.string);");
         }
-        output_line(out, "        printf(\"\\n\");");
+        output_line(out, "        printf(\" (%zu - %zu)\\n\", it.start_location, it.end_location);");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
             struct slot slot = rule->slots[j];
             set_substitution(out, "slot-name", slot.name, slot.name_length,
@@ -481,7 +496,7 @@ void generate(struct generator *gen)
     output_line(out, "    struct state_stack stack;");
     output_line(out, "};");
     output_line(out, "static void fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);");
-    output_line(out, "static parsed_id build_parse_tree(struct bluebird_token_run *, struct bluebird_tree *);");
+    output_line(out, "static parsed_id build_parse_tree(struct bluebird_default_tokenizer *, struct bluebird_token_run *, struct bluebird_tree *);");
     output_line(out, "");
     output_line(out, "struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {");
     output_line(out, "    struct bluebird_tree *tree = calloc(1, sizeof(struct bluebird_tree));");
@@ -517,7 +532,7 @@ void generate(struct generator *gen)
     output_line(out, "        run_to_print = run_to_print->prev;");
     output_line(out, "    }");
      */
-    output_line(out, "    tree->root_id = build_parse_tree(token_run, tree);");
+    output_line(out, "    tree->root_id = build_parse_tree(&tokenizer, token_run, tree);");
     output_line(out, "    return tree;");
     output_line(out, "}");
     output_line(out, "void bluebird_tree_destroy(struct bluebird_tree *tree) {");
@@ -550,14 +565,17 @@ void generate(struct generator *gen)
     output_line(out, "}");
     set_unsigned_number_substitution(out, "final-nfa-state",
      gen->combined->final_nfa_state);
-    output_line(out, "static parsed_id build_parse_tree(struct bluebird_token_run *run, struct bluebird_tree *tree) {");
+    output_line(out, "static parsed_id build_parse_tree(struct bluebird_default_tokenizer *tokenizer, struct bluebird_token_run *run, struct bluebird_tree *tree) {");
     output_line(out, "    struct construct_state construct_state = { .info = tree };");
     output_line(out, "    struct state_stack stack = {0};");
+    output_line(out, "    size_t whitespace = tokenizer->whitespace;");
+    output_line(out, "    size_t offset = tokenizer->offset - whitespace;");
     if (gen->combined->root_rule_is_expression)
-        output_line(out, "    construct_begin(&construct_state, CONSTRUCT_EXPRESSION_ROOT);");
+        output_line(out, "    construct_begin(&construct_state, offset, CONSTRUCT_EXPRESSION_ROOT);");
     else
-        output_line(out, "    construct_begin(&construct_state, CONSTRUCT_NORMAL_ROOT);");
+        output_line(out, "    construct_begin(&construct_state, offset, CONSTRUCT_NORMAL_ROOT);");
     output_line(out, "    uint16_t token_index = run->number_of_tokens;");
+    output_line(out, "    uint16_t length_offset = run->lengths_size - 1;");
     output_line(out, "    %%state-type start_state = %%final-nfa-state;");
     output_line(out, "start:");
     output_line(out, "    switch (start_state) {");
@@ -572,7 +590,7 @@ void generate(struct generator *gen)
     output_line(out, "    printf(\"error!\\n\");");
     output_line(out, "finish:");
     output_line(out, "    free(stack.states);");
-    output_line(out, "    return construct_finish(&construct_state);");
+    output_line(out, "    return construct_finish(&construct_state, offset);");
     output_line(out, "}");
     output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info) {");
     for (uint32_t i = 0; i < gen->combined->number_of_keyword_tokens; ++i) {
@@ -798,7 +816,9 @@ static void generate_action_automaton(struct generator *gen,
             set_unsigned_number_substitution(out, "entry-target",
              entry.target_nfa_state + nfa_offset);
             output_line(out, "    case %%entry-target:");
-            output_line(out, "nfa_state_%%entry-target:");
+            output_line(out, "nfa_state_%%entry-target: {");
+            output_line(out, "        size_t end = offset;");
+            output_line(out, "        size_t len = 0;");
             output_line(out, "        if (token_index == 0) {");
             output_line(out, "            struct bluebird_token_run *last_run = run;");
             output_line(out, "            run = run->prev;");
@@ -813,6 +833,7 @@ static void generate_action_automaton(struct generator *gen,
             }
             output_line(out, "            }");
             output_line(out, "            token_index = run->number_of_tokens;");
+            output_line(out, "            length_offset = run->lengths_size - 1;");
             output_line(out, "        }");
             output_line(out, "        token_index--;");
             output_line(out, "        switch (run->states[token_index]) {");
@@ -830,7 +851,10 @@ static void generate_action_automaton(struct generator *gen,
             set_unsigned_number_substitution(out, "entry-symbol",
              entry.dfa_symbol);
             output_line(out, "            case %%entry-symbol:");
+            if (entry.dfa_symbol < gen->combined->number_of_tokens)
+                output_line(out, "                len = decode_token_length(run, &length_offset, &offset);");
             generate_actions(out, map, entry.action_index);
+            output_line(out, "                whitespace = end - offset - len;");
             set_unsigned_number_substitution(out, "entry-nfa-state",
              entry.nfa_state + nfa_offset);
             if (type == BRACKET_AUTOMATON && entry.dfa_state ==
@@ -866,6 +890,7 @@ static void generate_action_automaton(struct generator *gen,
             output_line(out, "        default: break;");
             output_line(out, "        }");
             output_line(out, "        break;");
+            output_line(out, "    }");
         }
     }
 }
@@ -889,7 +914,8 @@ static void generate_actions(struct generator_output *out,
         set_unsigned_number_substitution(out, "action-id", map->actions[i]);
         set_unsigned_number_substitution(out, "action-slot", CONSTRUCT_ACTION_GET_SLOT(map->actions[i]));
 //        FORMAT_ACTION(map->actions[i]);
-        output_line(out, "            construct_action_apply(&construct_state, %%action-id);");
+        // TODO: end vs end + whitespace depending on whether it's an end action
+        output_line(out, "                construct_action_apply(&construct_state, %%action-id, end);");
     }
 }
 #undef CONSTRUCT_ACTION_NAME
