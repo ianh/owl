@@ -130,7 +130,9 @@ struct choice {
     const char *name;
     size_t name_length;
 
-    struct source_range range;
+    // For error reporting.
+    struct source_range name_range;
+    struct source_range expr_range;
 
     // A deterministic automaton which recognizes this choice.
     struct automaton automaton;
@@ -145,7 +147,9 @@ struct operator {
     const char *name;
     size_t name_length;
 
-    struct source_range range;
+    // For error reporting.
+    struct source_range name_range;
+    struct source_range expr_range;
 
     enum fixity fixity;
     enum associativity associativity;

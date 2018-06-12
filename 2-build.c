@@ -36,6 +36,22 @@ static uint32_t add_rule(struct context *ctx, const char *name, size_t len);
 static void add_token_rule(struct context *ctx, const char *name, size_t len);
 static uint32_t find_rule(struct context *ctx, const char *name, size_t len);
 
+#define CHECK_FOR_DUPLICATE_CLAUSE(type, elem) \
+do { \
+    for (uint32_t i = 0; i < rule->number_of_##type##s; ++i) { \
+        if (rule->type##s[i].name_length != elem.length) \
+            continue; \
+        if (memcmp(rule->type##s[i].name, elem.identifier, elem.length)) \
+            continue; \
+        snprintf(error.text, sizeof(error.text), "there's already a " \
+         #type " named '%.*s'.", (int)elem.length, elem.identifier); \
+        error.ranges[0] = rule->type##s[i].expr_range; \
+        error.ranges[1] = rule->type##s[i].name_range; \
+        error.ranges[2] = elem.range; \
+        exit_with_error(); \
+    } \
+} while (0)
+
 void build(struct grammar *grammar, struct bluebird_tree *tree)
 {
     struct context context = {
@@ -116,21 +132,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 error.ranges[0] = rule->name_range;
                 exit_with_error();
             }
-            for (uint32_t i = 0; i < rule->number_of_choices; ++i) {
-                if (rule->choices[i].name_length != choice_identifier.length)
-                    continue;
-                if (memcmp(rule->choices[i].name, choice_identifier.identifier,
-                 choice_identifier.length))
-                    continue;
-                snprintf(error.text, sizeof(error.text), "there's already a "
-                 "choice clause named '%.*s'.", (int)choice_identifier.length,
-                 choice_identifier.identifier);
-                error.ranges[0] = rule->choices[i].range;
-                error.ranges[1] = choice_identifier.range;
-                exit_with_error();
-
-            }
-            // TODO: Verify there are no other choices or operators with this name.
+            CHECK_FOR_DUPLICATE_CLAUSE(choice, choice_identifier);
             uint32_t choice_index = rule->number_of_choices++;
             rule->choices = grow_array(rule->choices,
              &rule->choices_allocated_bytes,
@@ -138,6 +140,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             struct choice *choice = &rule->choices[choice_index];
             choice->name = choice_identifier.identifier;
             choice->name_length = choice_identifier.length;
+            choice->name_range = choice_identifier.range;
+            choice->expr_range = expr.range;
             build_body_automaton(&context, &choice->automaton, &expr);
             expr = parsed_expr_next(expr);
             choice_identifier = parsed_identifier_next(choice_identifier);
@@ -148,15 +152,6 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         ops = parsed_operators_get(tree, body.operators);
         int32_t precedence = -1;
         while (!ops.empty) {
-            if (rule->number_of_operators + rule->number_of_choices
-             >= MAX_NUMBER_OF_CHOICES) {
-                // TODO: Show location in original grammar text.
-                fprintf(stderr, "error: rules with more than %u combined "
-                 "choice and operator clauses are currently unsupported.\n",
-                 MAX_NUMBER_OF_CHOICES);
-                exit(-1);
-            }
-            // TODO: Verify there are no other choices or operators with this name.
             // First, unpack the fixity and associativity from the parse tree.
             struct parsed_fixity fixity = parsed_fixity_get(tree, ops.fixity);
             enum fixity rule_fixity;
@@ -192,6 +187,18 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 struct parsed_expr op_expr = parsed_expr_get(tree, op.expr);
                 struct parsed_identifier op_choice =
                  parsed_identifier_get(tree, op.identifier);
+
+                if (rule->number_of_operators + rule->number_of_choices >=
+                 MAX_NUMBER_OF_CHOICES) {
+                    snprintf(error.text, sizeof(error.text), "rules with more "
+                     "than %u combined choice and operator clauses are "
+                     "currently unsupported.", MAX_NUMBER_OF_CHOICES);
+                    error.ranges[0] = rule->name_range;
+                    exit_with_error();
+                }
+                CHECK_FOR_DUPLICATE_CLAUSE(choice, op_choice);
+                CHECK_FOR_DUPLICATE_CLAUSE(operator, op_choice);
+
                 uint32_t op_index = rule->number_of_operators++;
                 rule->operators = grow_array(rule->operators,
                  &rule->operators_allocated_bytes,
@@ -199,6 +206,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 struct operator *operator = &rule->operators[op_index];
                 operator->name = op_choice.identifier;
                 operator->name_length = op_choice.length;
+                operator->name_range = op_choice.range;
+                operator->expr_range = op_expr.range;
                 operator->fixity = rule_fixity;
                 operator->associativity = rule_associativity;
                 operator->precedence = precedence;
