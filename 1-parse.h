@@ -40,21 +40,25 @@ parsed_id bluebird_tree_root_id(struct bluebird_tree *tree);
 // As a shortcut, returns the parsed_grammar struct corresponding to the root parsed_id.
 struct parsed_grammar bluebird_tree_get_parsed_grammar(struct bluebird_tree *tree);
 
+// The range of text corresponding to a tree element.
+struct source_range {
+    size_t start;
+    size_t end;
+};
+
 struct parsed_grammar {
     struct bluebird_tree *_tree;
     parsed_id _next;
+    struct source_range range;
     bool empty;
-    size_t start_location;
-    size_t end_location;
     parsed_id rule;
 };
 
 struct parsed_rule {
     struct bluebird_tree *_tree;
     parsed_id _next;
+    struct source_range range;
     bool empty;
-    size_t start_location;
-    size_t end_location;
     parsed_id identifier;
     parsed_id body;
 };
@@ -62,9 +66,8 @@ struct parsed_rule {
 struct parsed_body {
     struct bluebird_tree *_tree;
     parsed_id _next;
+    struct source_range range;
     bool empty;
-    size_t start_location;
-    size_t end_location;
     parsed_id expr;
     parsed_id identifier;
     parsed_id operators;
@@ -73,9 +76,8 @@ struct parsed_body {
 struct parsed_operators {
     struct bluebird_tree *_tree;
     parsed_id _next;
+    struct source_range range;
     bool empty;
-    size_t start_location;
-    size_t end_location;
     parsed_id fixity;
     parsed_id operator;
 };
@@ -83,9 +85,8 @@ struct parsed_operators {
 struct parsed_operator {
     struct bluebird_tree *_tree;
     parsed_id _next;
+    struct source_range range;
     bool empty;
-    size_t start_location;
-    size_t end_location;
     parsed_id expr;
     parsed_id identifier;
 };
@@ -98,9 +99,8 @@ enum parsed_fixity_type {
 struct parsed_fixity {
     struct bluebird_tree *_tree;
     parsed_id _next;
+    struct source_range range;
     bool empty;
-    size_t start_location;
-    size_t end_location;
     enum parsed_fixity_type type;
     parsed_id assoc;
 };
@@ -114,9 +114,8 @@ enum parsed_assoc_type {
 struct parsed_assoc {
     struct bluebird_tree *_tree;
     parsed_id _next;
+    struct source_range range;
     bool empty;
-    size_t start_location;
-    size_t end_location;
     enum parsed_assoc_type type;
 };
 
@@ -134,9 +133,8 @@ enum parsed_expr_type {
 struct parsed_expr {
     struct bluebird_tree *_tree;
     parsed_id _next;
+    struct source_range range;
     bool empty;
-    size_t start_location;
-    size_t end_location;
     enum parsed_expr_type type;
     parsed_id identifier;
     parsed_id rename;
@@ -150,9 +148,8 @@ struct parsed_expr {
 struct parsed_identifier {
     struct bluebird_tree *_tree;
     parsed_id _next;
+    struct source_range range;
     bool empty;
-    size_t start_location;
-    size_t end_location;
     const char *identifier;
     size_t length;
 };
@@ -160,18 +157,16 @@ struct parsed_identifier {
 struct parsed_number {
     struct bluebird_tree *_tree;
     parsed_id _next;
+    struct source_range range;
     bool empty;
-    size_t start_location;
-    size_t end_location;
     double number;
 };
 
 struct parsed_string {
     struct bluebird_tree *_tree;
     parsed_id _next;
+    struct source_range range;
     bool empty;
-    size_t start_location;
-    size_t end_location;
     const char *string;
     size_t length;
 };
@@ -251,16 +246,14 @@ struct bluebird_tree {
     struct {
         const char *identifier;
         size_t length;
-        size_t start_location;
-        size_t end_location;
+        struct source_range range;
     } *identifier_tokens;
     size_t number_of_identifier_tokens;
     size_t used_identifier_tokens;
     size_t identifier_tokens_capacity;
     struct {
         double number;
-        size_t start_location;
-        size_t end_location;
+        struct source_range range;
     } *number_tokens;
     size_t number_of_number_tokens;
     size_t used_number_tokens;
@@ -268,8 +261,7 @@ struct bluebird_tree {
     struct {
         const char *string;
         size_t length;
-        size_t start_location;
-        size_t end_location;
+        struct source_range range;
     } *string_tokens;
     size_t number_of_string_tokens;
     size_t used_string_tokens;
@@ -285,8 +277,8 @@ static void add_identifier_token(struct bluebird_tree *tree, size_t start, size_
         tree->identifier_tokens_capacity = capacity;
         tree->identifier_tokens = tokens;
     }
-    tree->identifier_tokens[index].start_location = start;
-    tree->identifier_tokens[index].end_location = end;
+    tree->identifier_tokens[index].range.start = start;
+    tree->identifier_tokens[index].range.end = end;
     tree->identifier_tokens[index].identifier = identifier_param;
     tree->identifier_tokens[index].length = length_param;
 }
@@ -300,8 +292,8 @@ static void add_number_token(struct bluebird_tree *tree, size_t start, size_t en
         tree->number_tokens_capacity = capacity;
         tree->number_tokens = tokens;
     }
-    tree->number_tokens[index].start_location = start;
-    tree->number_tokens[index].end_location = end;
+    tree->number_tokens[index].range.start = start;
+    tree->number_tokens[index].range.end = end;
     tree->number_tokens[index].number = number_param;
 }
 static void add_string_token(struct bluebird_tree *tree, size_t start, size_t end, const char *string_param, size_t length_param) {
@@ -314,8 +306,8 @@ static void add_string_token(struct bluebird_tree *tree, size_t start, size_t en
         tree->string_tokens_capacity = capacity;
         tree->string_tokens = tokens;
     }
-    tree->string_tokens[index].start_location = start;
-    tree->string_tokens[index].end_location = end;
+    tree->string_tokens[index].range.start = start;
+    tree->string_tokens[index].range.end = end;
     tree->string_tokens[index].string = string_param;
     tree->string_tokens[index].length = length_param;
 }
@@ -369,8 +361,8 @@ struct parsed_grammar parsed_grammar_get(struct bluebird_tree *tree, parsed_id i
     return (struct parsed_grammar){
         ._tree = tree,
         ._next = next,
-        .start_location = start_location,
-        .end_location = end_location,
+        .range.start = start_location,
+        .range.end = end_location,
         .rule = read_tree(&id, tree),
     };
 }
@@ -383,8 +375,8 @@ struct parsed_rule parsed_rule_get(struct bluebird_tree *tree, parsed_id id) {
     return (struct parsed_rule){
         ._tree = tree,
         ._next = next,
-        .start_location = start_location,
-        .end_location = end_location,
+        .range.start = start_location,
+        .range.end = end_location,
         .identifier = read_tree(&id, tree),
         .body = read_tree(&id, tree),
     };
@@ -398,8 +390,8 @@ struct parsed_body parsed_body_get(struct bluebird_tree *tree, parsed_id id) {
     return (struct parsed_body){
         ._tree = tree,
         ._next = next,
-        .start_location = start_location,
-        .end_location = end_location,
+        .range.start = start_location,
+        .range.end = end_location,
         .expr = read_tree(&id, tree),
         .identifier = read_tree(&id, tree),
         .operators = read_tree(&id, tree),
@@ -414,8 +406,8 @@ struct parsed_operators parsed_operators_get(struct bluebird_tree *tree, parsed_
     return (struct parsed_operators){
         ._tree = tree,
         ._next = next,
-        .start_location = start_location,
-        .end_location = end_location,
+        .range.start = start_location,
+        .range.end = end_location,
         .fixity = read_tree(&id, tree),
         .operator = read_tree(&id, tree),
     };
@@ -429,8 +421,8 @@ struct parsed_operator parsed_operator_get(struct bluebird_tree *tree, parsed_id
     return (struct parsed_operator){
         ._tree = tree,
         ._next = next,
-        .start_location = start_location,
-        .end_location = end_location,
+        .range.start = start_location,
+        .range.end = end_location,
         .expr = read_tree(&id, tree),
         .identifier = read_tree(&id, tree),
     };
@@ -444,8 +436,8 @@ struct parsed_fixity parsed_fixity_get(struct bluebird_tree *tree, parsed_id id)
     return (struct parsed_fixity){
         ._tree = tree,
         ._next = next,
-        .start_location = start_location,
-        .end_location = end_location,
+        .range.start = start_location,
+        .range.end = end_location,
         .type = read_tree(&id, tree),
         .assoc = read_tree(&id, tree),
     };
@@ -459,8 +451,8 @@ struct parsed_assoc parsed_assoc_get(struct bluebird_tree *tree, parsed_id id) {
     return (struct parsed_assoc){
         ._tree = tree,
         ._next = next,
-        .start_location = start_location,
-        .end_location = end_location,
+        .range.start = start_location,
+        .range.end = end_location,
         .type = read_tree(&id, tree),
     };
 }
@@ -473,8 +465,8 @@ struct parsed_expr parsed_expr_get(struct bluebird_tree *tree, parsed_id id) {
     return (struct parsed_expr){
         ._tree = tree,
         ._next = next,
-        .start_location = start_location,
-        .end_location = end_location,
+        .range.start = start_location,
+        .range.end = end_location,
         .type = read_tree(&id, tree),
         .identifier = read_tree(&id, tree),
         .rename = read_tree(&id, tree),
@@ -495,8 +487,7 @@ struct parsed_identifier parsed_identifier_get(struct bluebird_tree *tree, parse
         ._next = next,
         .identifier = tree->identifier_tokens[token_index].identifier,
         .length = tree->identifier_tokens[token_index].length,
-        .start_location = tree->identifier_tokens[token_index].start_location,
-        .end_location = tree->identifier_tokens[token_index].end_location,
+        .range = tree->identifier_tokens[token_index].range,
     };
 }
 struct parsed_number parsed_number_get(struct bluebird_tree *tree, parsed_id id) {
@@ -508,8 +499,7 @@ struct parsed_number parsed_number_get(struct bluebird_tree *tree, parsed_id id)
         ._tree = tree,
         ._next = next,
         .number = tree->number_tokens[token_index].number,
-        .start_location = tree->number_tokens[token_index].start_location,
-        .end_location = tree->number_tokens[token_index].end_location,
+        .range = tree->number_tokens[token_index].range,
     };
 }
 struct parsed_string parsed_string_get(struct bluebird_tree *tree, parsed_id id) {
@@ -522,8 +512,7 @@ struct parsed_string parsed_string_get(struct bluebird_tree *tree, parsed_id id)
         ._next = next,
         .string = tree->string_tokens[token_index].string,
         .length = tree->string_tokens[token_index].length,
-        .start_location = tree->string_tokens[token_index].start_location,
-        .end_location = tree->string_tokens[token_index].end_location,
+        .range = tree->string_tokens[token_index].range,
     };
 }
 static parsed_id finish_node(uint32_t rule, uint32_t choice, parsed_id next_sibling, parsed_id *slots, size_t start_location, size_t end_location, void *info) {
@@ -635,7 +624,7 @@ static void parsed_grammar_print(struct bluebird_tree *tree, parsed_id id, const
         printf("grammar");
         if (strcmp("grammar", slot_name))
             printf("@%s", slot_name);
-        printf(" (%zu - %zu)\n", it.start_location, it.end_location);
+        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_rule_print(tree, it.rule, "rule", indent + 1);
         it = parsed_grammar_next(it);
     }
@@ -647,7 +636,7 @@ static void parsed_rule_print(struct bluebird_tree *tree, parsed_id id, const ch
         printf("rule");
         if (strcmp("rule", slot_name))
             printf("@%s", slot_name);
-        printf(" (%zu - %zu)\n", it.start_location, it.end_location);
+        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_identifier_print(tree, it.identifier, "identifier", indent + 1);
         parsed_body_print(tree, it.body, "body", indent + 1);
         it = parsed_rule_next(it);
@@ -660,7 +649,7 @@ static void parsed_body_print(struct bluebird_tree *tree, parsed_id id, const ch
         printf("body");
         if (strcmp("body", slot_name))
             printf("@%s", slot_name);
-        printf(" (%zu - %zu)\n", it.start_location, it.end_location);
+        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_expr_print(tree, it.expr, "expr", indent + 1);
         parsed_identifier_print(tree, it.identifier, "identifier", indent + 1);
         parsed_operators_print(tree, it.operators, "operators", indent + 1);
@@ -674,7 +663,7 @@ static void parsed_operators_print(struct bluebird_tree *tree, parsed_id id, con
         printf("operators");
         if (strcmp("operators", slot_name))
             printf("@%s", slot_name);
-        printf(" (%zu - %zu)\n", it.start_location, it.end_location);
+        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_fixity_print(tree, it.fixity, "fixity", indent + 1);
         parsed_operator_print(tree, it.operator, "operator", indent + 1);
         it = parsed_operators_next(it);
@@ -687,7 +676,7 @@ static void parsed_operator_print(struct bluebird_tree *tree, parsed_id id, cons
         printf("operator");
         if (strcmp("operator", slot_name))
             printf("@%s", slot_name);
-        printf(" (%zu - %zu)\n", it.start_location, it.end_location);
+        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_expr_print(tree, it.expr, "expr", indent + 1);
         parsed_identifier_print(tree, it.identifier, "identifier", indent + 1);
         it = parsed_operator_next(it);
@@ -711,7 +700,7 @@ static void parsed_fixity_print(struct bluebird_tree *tree, parsed_id id, const 
             printf(" : INFIX_OP");
             break;
         }
-        printf(" (%zu - %zu)\n", it.start_location, it.end_location);
+        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_assoc_print(tree, it.assoc, "assoc", indent + 1);
         it = parsed_fixity_next(it);
     }
@@ -737,7 +726,7 @@ static void parsed_assoc_print(struct bluebird_tree *tree, parsed_id id, const c
             printf(" : NONASSOC_OP");
             break;
         }
-        printf(" (%zu - %zu)\n", it.start_location, it.end_location);
+        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         it = parsed_assoc_next(it);
     }
 }
@@ -777,7 +766,7 @@ static void parsed_expr_print(struct bluebird_tree *tree, parsed_id id, const ch
             printf(" : CHOICE");
             break;
         }
-        printf(" (%zu - %zu)\n", it.start_location, it.end_location);
+        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_identifier_print(tree, it.identifier, "identifier", indent + 1);
         parsed_identifier_print(tree, it.rename, "rename", indent + 1);
         parsed_string_print(tree, it.string, "string", indent + 1);
@@ -796,7 +785,7 @@ static void parsed_identifier_print(struct bluebird_tree *tree, parsed_id id, co
         if (strcmp("identifier", slot_name))
             printf("@%s", slot_name);
         printf(" - %.*s", (int)it.length, it.identifier);
-        printf(" (%zu - %zu)\n", it.start_location, it.end_location);
+        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         it = parsed_identifier_next(it);
     }
 }
@@ -808,7 +797,7 @@ static void parsed_number_print(struct bluebird_tree *tree, parsed_id id, const 
         if (strcmp("number", slot_name))
             printf("@%s", slot_name);
         printf(" - %f", it.number);
-        printf(" (%zu - %zu)\n", it.start_location, it.end_location);
+        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         it = parsed_number_next(it);
     }
 }
@@ -820,7 +809,7 @@ static void parsed_string_print(struct bluebird_tree *tree, parsed_id id, const 
         if (strcmp("string", slot_name))
             printf("@%s", slot_name);
         printf(" - %.*s", (int)it.length, it.string);
-        printf(" (%zu - %zu)\n", it.start_location, it.end_location);
+        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         it = parsed_string_next(it);
     }
 }

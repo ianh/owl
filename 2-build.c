@@ -59,14 +59,10 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
              "rules named '%.*s'.", (int)name.length, name.identifier);
             uint32_t other = find_rule(&context, name.identifier, name.length);
             error.ranges[0] = grammar->rules[other].name_range;
-            error.ranges[1].start_location = name.start_location;
-            error.ranges[1].end_location = name.end_location;
+            error.ranges[1] = name.range;
             exit_with_error();
         }
-        grammar->rules[index].name_range = (struct source_range){
-            .start_location = name.start_location,
-            .end_location = name.end_location,
-        };
+        grammar->rules[index].name_range = name.range;
         parsed_rule = parsed_rule_next(parsed_rule);
     }
     if (grammar->number_of_rules == 0) {
@@ -114,10 +110,25 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         choice_identifier = parsed_identifier_get(tree, body.identifier);
         while (!expr.empty) {
             if (rule->number_of_choices >= MAX_NUMBER_OF_CHOICES) {
-                // TODO: Show location in original grammar text.
-                fprintf(stderr, "error: rules with more than %u choice clauses "
-                 "are currently unsupported.\n", MAX_NUMBER_OF_CHOICES);
-                exit(-1);
+                snprintf(error.text, sizeof(error.text), "rules with more than "
+                 "%u choice clauses are currently unsupported.",
+                 MAX_NUMBER_OF_CHOICES);
+                error.ranges[0] = rule->name_range;
+                exit_with_error();
+            }
+            for (uint32_t i = 0; i < rule->number_of_choices; ++i) {
+                if (rule->choices[i].name_length != choice_identifier.length)
+                    continue;
+                if (memcmp(rule->choices[i].name, choice_identifier.identifier,
+                 choice_identifier.length))
+                    continue;
+                snprintf(error.text, sizeof(error.text), "there's already a "
+                 "choice clause named '%.*s'.", (int)choice_identifier.length,
+                 choice_identifier.identifier);
+                error.ranges[0] = rule->choices[i].range;
+                error.ranges[1] = choice_identifier.range;
+                exit_with_error();
+
             }
             // TODO: Verify there are no other choices or operators with this name.
             uint32_t choice_index = rule->number_of_choices++;

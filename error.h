@@ -1,12 +1,8 @@
 #ifndef _ERROR_H_
 #define _ERROR_H_
 
+#include "1-parse.h"
 #include <stdlib.h>
-
-struct source_range {
-    size_t start_location;
-    size_t end_location;
-};
 
 #define MAX_ERROR_RANGES 16
 struct error {

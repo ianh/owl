@@ -130,6 +130,8 @@ struct choice {
     const char *name;
     size_t name_length;
 
+    struct source_range range;
+
     // A deterministic automaton which recognizes this choice.
     struct automaton automaton;
 };
@@ -142,6 +144,8 @@ struct operator {
     // the name "plus".  This is a reference to the original parsed text.
     const char *name;
     size_t name_length;
+
+    struct source_range range;
 
     enum fixity fixity;
     enum associativity associativity;

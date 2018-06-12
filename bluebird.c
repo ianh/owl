@@ -292,10 +292,10 @@ void print_error()
 {
     fprintf(stderr, "error: %s\n", error.text);
     for (int i = 0; i < MAX_ERROR_RANGES; ++i) {
-        if (error.ranges[i].end_location == 0)
+        if (error.ranges[i].end == 0)
             break;
-        fprintf(stderr, "range: %zu - %zu\n", error.ranges[i].start_location,
-         error.ranges[i].end_location);
+        fprintf(stderr, "range: %zu - %zu\n", error.ranges[i].start,
+         error.ranges[i].end);
     }
 }
 
