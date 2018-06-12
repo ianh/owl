@@ -76,6 +76,12 @@ void generate(struct generator *gen)
     output_line(out, "");
     output_line(out, "// As a shortcut, returns the parsed_%%root-rule struct corresponding to the root parsed_id.");
     output_line(out, "struct parsed_%%root-rule bluebird_tree_get_parsed_%%root-rule(struct bluebird_tree *tree);");
+    output_line(out, "");
+    output_line(out, "// The range of text corresponding to a tree element.");
+    output_line(out, "struct source_range {");
+    output_line(out, "    size_t start;");
+    output_line(out, "    size_t end;");
+    output_line(out, "};");
 
     uint32_t n = gen->grammar->number_of_rules;
     for (uint32_t i = 0; i < n; ++i) {
@@ -100,9 +106,8 @@ void generate(struct generator *gen)
         output_line(out, "struct parsed_%%rule {");
         output_line(out, "    struct bluebird_tree *_tree;");
         output_line(out, "    parsed_id _next;");
+        output_line(out, "    struct source_range range;");
         output_line(out, "    bool empty;");
-        output_line(out, "    size_t start_location;");
-        output_line(out, "    size_t end_location;");
         if (rule->number_of_choices > 0)
             output_line(out, "    enum parsed_%%rule_type type;");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
@@ -158,8 +163,7 @@ void generate(struct generator *gen)
         output_line(out, "    struct {");
         generate_fields_for_token_rule(out, rule, "        %%type%%field;\n");
         // FIXME: This isn't very memory-efficient.
-        output_line(out, "        size_t start_location;");
-        output_line(out, "        size_t end_location;");
+        output_line(out, "        struct source_range range;");
         output_line(out, "    } *%%rule_tokens;");
         output_line(out, "    size_t number_of_%%rule_tokens;");
         output_line(out, "    size_t used_%%rule_tokens;");
@@ -184,8 +188,8 @@ void generate(struct generator *gen)
         output_line(out, "        tree->%%rule_tokens_capacity = capacity;");
         output_line(out, "        tree->%%rule_tokens = tokens;");
         output_line(out, "    }");
-        output_line(out, "    tree->%%rule_tokens[index].start_location = start;");
-        output_line(out, "    tree->%%rule_tokens[index].end_location = end;");
+        output_line(out, "    tree->%%rule_tokens[index].range.start = start;");
+        output_line(out, "    tree->%%rule_tokens[index].range.end = end;");
         generate_fields_for_token_rule(out, rule, "    tree->%%rule_tokens[index].%%field = %%field_param;\n");
         output_line(out, "}");
     }
@@ -256,11 +260,10 @@ void generate(struct generator *gen)
         output_line(out, "        ._next = next,");
         if (rule->is_token) {
             generate_fields_for_token_rule(out, rule, "        .%%field = tree->%%rule_tokens[token_index].%%field,\n");
-            output_line(out, "        .start_location = tree->%%rule_tokens[token_index].start_location,");
-            output_line(out, "        .end_location = tree->%%rule_tokens[token_index].end_location,");
+            output_line(out, "        .range = tree->%%rule_tokens[token_index].range,");
         } else {
-            output_line(out, "        .start_location = start_location,");
-            output_line(out, "        .end_location = end_location,");
+            output_line(out, "        .range.start = start_location,");
+            output_line(out, "        .range.end = end_location,");
         }
         if (rule->number_of_choices > 0)
             output_line(out, "        .type = read_tree(&id, tree),");
@@ -376,7 +379,7 @@ void generate(struct generator *gen)
             else if (rule_is_named(rule, "string"))
                 output_line(out, "        printf(\" - %.*s\", (int)it.length, it.string);");
         }
-        output_line(out, "        printf(\" (%zu - %zu)\\n\", it.start_location, it.end_location);");
+        output_line(out, "        printf(\" (%zu - %zu)\\n\", it.range.start, it.range.end);");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
             struct slot slot = rule->slots[j];
             set_substitution(out, "slot-name", slot.name, slot.name_length,
