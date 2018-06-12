@@ -580,6 +580,8 @@ void generate(struct generator *gen)
         output_line(out, "    construct_begin(&construct_state, offset, CONSTRUCT_EXPRESSION_ROOT);");
     else
         output_line(out, "    construct_begin(&construct_state, offset, CONSTRUCT_NORMAL_ROOT);");
+    output_line(out, "    if (!run)");
+    output_line(out, "        goto finish;");
     output_line(out, "    uint16_t token_index = run->number_of_tokens;");
     output_line(out, "    uint16_t length_offset = run->lengths_size - 1;");
     output_line(out, "    %%state-type start_state = %%final-nfa-state;");

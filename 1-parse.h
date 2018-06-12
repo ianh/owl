@@ -4561,6 +4561,8 @@ static parsed_id build_parse_tree(struct bluebird_default_tokenizer *tokenizer, 
     size_t whitespace = tokenizer->whitespace;
     size_t offset = tokenizer->offset - whitespace;
     construct_begin(&construct_state, offset, CONSTRUCT_NORMAL_ROOT);
+    if (!run)
+        goto finish;
     uint16_t token_index = run->number_of_tokens;
     uint16_t length_offset = run->lengths_size - 1;
     uint32_t start_state = 209U;
