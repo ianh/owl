@@ -36,11 +36,12 @@ static int terminal_colors();
 static char *read_string(FILE *file);
 static void write_to_output(const char *string, size_t len);
 
+static char *grammar_string;
+
 int main(int argc, char *argv[])
 {
     // Parse arguments.
     bool needs_help = false;
-    char *grammar_string = 0;
     const char *input_filename = 0;
     const char *output_filename = 0;
     bool compile = false;
@@ -239,7 +240,7 @@ int main(int argc, char *argv[])
             .terminal_info = terminal_info,
         };
         output_ambiguity(&interpreter, &ambiguity, stderr);
-        return 2;
+        return 3;
     }
 
     struct bracket_transitions bracket_transitions = {0};
@@ -284,6 +285,18 @@ int main(int argc, char *argv[])
     bluebird_tree_destroy(tree);
     free(grammar_string);
     return 0;
+}
+
+struct error error;
+void print_error()
+{
+    fprintf(stderr, "error: %s\n", error.text);
+    for (int i = 0; i < MAX_ERROR_RANGES; ++i) {
+        if (error.ranges[i].end_location == 0)
+            break;
+        fprintf(stderr, "range: %zu - %zu\n", error.ranges[i].start_location,
+         error.ranges[i].end_location);
+    }
 }
 
 static long terminal_columns()

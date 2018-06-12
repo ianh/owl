@@ -3,6 +3,7 @@
 
 #include "1-parse.h"
 #include "automaton.h"
+#include "error.h"
 
 // STEP 2 - BUILD
 
@@ -42,6 +43,7 @@ struct rule {
     // This string is a direct reference to the original parsed text.
     const char *name;
     size_t name_length;
+    struct source_range name_range;
 
     // Token classes like 'identifier' and 'number' are represented as rules.
     bool is_token;
@@ -187,6 +189,7 @@ enum token_type { TOKEN_NORMAL, TOKEN_START, TOKEN_END, TOKEN_DONT_CARE };
 struct token {
     const char *string;
     size_t length;
+    struct source_range range;
 
     enum token_type type;
 

@@ -55,16 +55,24 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
          parsed_identifier_get(tree, parsed_rule.identifier);
         uint32_t index = add_rule(&context, name.identifier, name.length);
         if (index == UINT32_MAX) {
-            fprintf(stderr, "error: there are multiple rules named '%.*s'\n",
-             (int)name.length, name.identifier);
-            exit(-1);
+            snprintf(error.text, sizeof(error.text), "there are multiple "
+             "rules named '%.*s'.", (int)name.length, name.identifier);
+            uint32_t other = find_rule(&context, name.identifier, name.length);
+            error.ranges[0] = grammar->rules[other].name_range;
+            error.ranges[1].start_location = name.start_location;
+            error.ranges[1].end_location = name.end_location;
+            exit_with_error();
         }
+        grammar->rules[index].name_range = (struct source_range){
+            .start_location = name.start_location,
+            .end_location = name.end_location,
+        };
         parsed_rule = parsed_rule_next(parsed_rule);
     }
     if (grammar->number_of_rules == 0) {
-        fprintf(stderr, "error: a bluebird grammar needs at least one rule of "
-         "the form 'rule_name = ...'.\n");
-        exit(-1);
+        snprintf(error.text, sizeof(error.text), "a bluebird grammar needs "
+         "at least one rule of the form 'rule_name = ...'.");
+        exit_with_error();
     }
 
     // Add rules for all the kinds of tokens we support.
@@ -457,10 +465,11 @@ uint32_t find_token(struct token *tokens, uint32_t number_of_tokens,
             continue;
         if (type != TOKEN_DONT_CARE && token->type != type) {
             // TODO: Show location in original grammar text.
-            fprintf(stderr, "error: token '%.*s' can't be used as both %s and "
-             "%s keyword\n", (int)length, string,
+            snprintf(error.text, sizeof(error.text), "token '%.*s' can't be "
+             "used as both %s and %s keyword\n", (int)length, string,
              token_type_string(token->type), token_type_string(type));
-            exit(-1);
+            error.ranges[0] = token->range;
+            exit_with_error();
         }
         break;
     }
