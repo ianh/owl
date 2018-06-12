@@ -39,6 +39,10 @@ static void follow_subset_transition(struct automaton *a,
  symbol_id nfa_symbol, symbol_id dfa_symbol, struct state_array *next_subset,
  struct action_map *map);
 
+static void add_action_map_entry(struct action_map *map,
+ struct action_map_entry entry);
+static int compare_action_map_entries(const void *aa, const void *bb);
+
 // Insert or look up the deterministic state id for a subset.  If a new state
 // is created, `*next_state` will be incremented and the new state will be added
 // to the worklist.
@@ -271,12 +275,56 @@ static void determinize_automaton(struct context context)
         }
     }
 
+    // Remove unreachable action map transitions.
+    if (context.action_map) {
+        struct action_map *map = context.action_map;
+        qsort(map->entries, map->number_of_entries,
+         sizeof(struct action_map_entry), compare_action_map_entries);
+
+        struct state_array worklist = {0};
+        struct bitset reachable = bitset_create_empty(a->number_of_states);
+        for (state_id i = 0; i < a->number_of_states; ++i) {
+            if (!a->states[i].accepting)
+                continue;
+            bitset_add(&reachable, i);
+            state_array_push(&worklist, i);
+        }
+        while (worklist.number_of_states > 0) {
+            state_id state = worklist.states[--worklist.number_of_states];
+            uint32_t n = map->number_of_entries;
+            struct action_map_entry *end = map->entries + n;
+            struct action_map_entry *entry = map->entries;
+            struct action_map_entry target = { .target_nfa_state = state };
+            while (n > 0) {
+                struct action_map_entry *a = entry + n / 2;
+                if (compare_action_map_entries(a, &target) < 0) {
+                    entry = a + 1;
+                    n -= n / 2 + 1;
+                } else
+                    n /= 2;
+            }
+            for (; entry < end && entry->target_nfa_state == state; ++entry) {
+                if (bitset_contains(&reachable, entry->nfa_state))
+                    continue;
+                bitset_add(&reachable, entry->nfa_state);
+                state_array_push(&worklist, entry->nfa_state);
+            }
+        }
+        uint32_t n = map->number_of_entries;
+        uint32_t removed = 0;
+        for (uint32_t i = 0; i < n; ++i) {
+            if (bitset_contains(&reachable, map->entries[i].target_nfa_state))
+                map->entries[i - removed] = map->entries[i];
+            else
+                removed++;
+        }
+        map->number_of_entries -= removed;
+        bitset_destroy(&reachable);
+        state_array_destroy(&worklist);
+    }
+
     state_array_destroy(&next_subset);
 }
-
-static void add_action_map_entry(struct action_map *map,
- struct action_map_entry entry);
-static int compare_action_map_entries(const void *aa, const void *bb);
 
 static int compare_state_ids(const void *aa, const void *bb);
 static int compare_bracket_transitions(const void *aa, const void *bb);
@@ -468,11 +516,6 @@ void determinize(struct combined_grammar *grammar,
         .action_map = &result->bracket_action_map,
         .options = MARK_ACCEPTING_BRACKET_STATES,
     });
-    qsort(result->action_map.entries, result->action_map.number_of_entries,
-     sizeof(struct action_map_entry), compare_action_map_entries);
-    qsort(result->bracket_action_map.entries,
-     result->bracket_action_map.number_of_entries,
-     sizeof(struct action_map_entry), compare_action_map_entries);
 }
 
 void determinize_bracket_transitions(struct bracket_transitions *result,
