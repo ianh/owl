@@ -585,6 +585,19 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
         fprintf(stderr, "error: tokenizing failed.\n");
         exit(-1);
     }
+    uint32_t state = deterministic->automaton.start_state;
+    if (token_run && token_run->number_of_tokens > 0)
+        state = token_run->states[token_run->number_of_tokens - 1];
+    struct automaton *a = &deterministic->automaton;
+    if (state >= (1UL << 31) && state != UINT32_MAX) {
+        state -= (1UL << 31);
+        a = &deterministic->bracket_automaton;
+    }
+    if (!a->states[state].accepting) {
+        // TODO: Better error message
+        fprintf(stderr, "error: unexpected end of file.\n");
+        exit(-1);
+    }
 //    print_token_runs(&context, token_run);
     push_action_offsets(&context, 0, 0);
     struct interpret_node *root = build_parse_tree(&context, token_run);
@@ -776,7 +789,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
     entry = action_map_find(map, nfa_state, state, token);
     if (!entry) {
         fprintf(stderr, "internal error (%u %u %x)\n", state, nfa_state, token);
-        exit(-1);
+        abort();
     }
     nfa_state = entry->nfa_state;
     if (bracket_transition) {
