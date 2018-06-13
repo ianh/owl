@@ -43,8 +43,8 @@ do { \
             continue; \
         if (memcmp(rule->type##s[i].name, elem.identifier, elem.length)) \
             continue; \
-        snprintf(error.text, sizeof(error.text), "there's already a " \
-         #type " named '%.*s'", (int)elem.length, elem.identifier); \
+        errorf("there's already a " #type " named '%.*s'", (int)elem.length, \
+         elem.identifier); \
         error.ranges[0] = rule->type##s[i].expr_range; \
         error.ranges[1] = rule->type##s[i].name_range; \
         error.ranges[2] = elem.range; \
@@ -71,8 +71,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
          parsed_identifier_get(tree, parsed_rule.identifier);
         uint32_t index = add_rule(&context, name.identifier, name.length);
         if (index == UINT32_MAX) {
-            snprintf(error.text, sizeof(error.text), "there are multiple "
-             "rules named '%.*s'", (int)name.length, name.identifier);
+            errorf("there are multiple rules named '%.*s'", (int)name.length,
+             name.identifier);
             uint32_t other = find_rule(&context, name.identifier, name.length);
             error.ranges[0] = grammar->rules[other].name_range;
             error.ranges[1] = name.range;
@@ -82,8 +82,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         parsed_rule = parsed_rule_next(parsed_rule);
     }
     if (grammar->number_of_rules == 0) {
-        snprintf(error.text, sizeof(error.text), "a bluebird grammar needs "
-         "at least one rule of the form 'rule_name = ...'");
+        errorf("a bluebird grammar needs at least one rule of the form "
+         "'rule_name = ...'");
         exit_with_error();
     }
 
@@ -126,9 +126,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         choice_identifier = parsed_identifier_get(tree, body.identifier);
         while (!expr.empty) {
             if (rule->number_of_choices >= MAX_NUMBER_OF_CHOICES) {
-                snprintf(error.text, sizeof(error.text), "rules with more than "
-                 "%u choice clauses are currently unsupported",
-                 MAX_NUMBER_OF_CHOICES);
+                errorf("rules with more than %u choice clauses are currently "
+                 "unsupported", MAX_NUMBER_OF_CHOICES);
                 error.ranges[0] = rule->name_range;
                 exit_with_error();
             }
@@ -189,9 +188,9 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                  parsed_identifier_get(tree, op.identifier);
                 if (rule->number_of_operators + rule->number_of_choices >=
                  MAX_NUMBER_OF_CHOICES) {
-                    snprintf(error.text, sizeof(error.text), "rules with more "
-                     "than %u combined choice and operator clauses are "
-                     "currently unsupported", MAX_NUMBER_OF_CHOICES);
+                    errorf("rules with more than %u combined choice and "
+                     "operator clauses are currently unsupported",
+                     MAX_NUMBER_OF_CHOICES);
                     error.ranges[0] = rule->name_range;
                     exit_with_error();
                 }
@@ -311,7 +310,7 @@ static void build_body_expression(struct context *ctx,
         }
         uint32_t rule_index = find_rule(ctx, rule_name, rule_name_length);
         if (rule_index == UINT32_MAX) {
-            snprintf(error.text, sizeof(error.text), "unknown rule or token");
+            errorf("unknown rule or token");
             error.ranges[0] = ident.range;
             exit_with_error();
         }
@@ -359,14 +358,12 @@ static void build_body_expression(struct context *ctx,
         bracket->end_symbol = add_keyword_token(ctx, rule, expr->end_token,
          TOKEN_END);
         if (bracket->start_symbol == SYMBOL_EPSILON) {
-            snprintf(error.text, sizeof(error.text), "'' is not a valid start "
-             "keyword");
+            errorf("'' is not a valid start keyword");
             error.ranges[0] = parsed_string_get(tree, expr->begin_token).range;
             exit_with_error();
         }
         if (bracket->end_symbol == SYMBOL_EPSILON) {
-            snprintf(error.text, sizeof(error.text), "'' is not a valid end "
-             "keyword");
+            errorf("'' is not a valid end keyword");
             error.ranges[0] = parsed_string_get(tree, expr->end_token).range;
             exit_with_error();
         }
@@ -423,9 +420,9 @@ static uint32_t add_slot(struct context *ctx, struct rule *rule,
         if (memcmp(slot->name, slot_name, slot_name_length))
             continue;
         if (slot->rule_index != referenced_rule_index) {
-            snprintf(error.text, sizeof(error.text), "in the rule '%.*s', the "
-             "name '%.*s' %s", (int)rule->name_length, rule->name,
-             (int)slot_name_length, slot_name, error_reason);
+            errorf("in the rule '%.*s', the name '%.*s' %s",
+             (int)rule->name_length, rule->name, (int)slot_name_length,
+             slot_name, error_reason);
             error.ranges[0] = slot->range;
             error.ranges[1] = range;
             exit_with_error();
@@ -435,9 +432,8 @@ static uint32_t add_slot(struct context *ctx, struct rule *rule,
     if (slot_index >= rule->number_of_slots) {
         symbol_id symbol = ctx->next_symbol++;
         if (rule->number_of_slots >= MAX_NUMBER_OF_SLOTS) {
-            snprintf(error.text, sizeof(error.text), "rules with more than %u "
-             "references to other rules or tokens are currently unsupported",
-             MAX_NUMBER_OF_SLOTS);
+            errorf("rules with more than %u references to other rules or "
+             "tokens are currently unsupported", MAX_NUMBER_OF_SLOTS);
             error.ranges[0] = rule->name_range;
             error.ranges[1] = range;
             exit_with_error();
@@ -481,10 +477,9 @@ uint32_t find_token(struct token *tokens, uint32_t number_of_tokens,
         if (memcmp(token->string, string, length))
             continue;
         if (type != TOKEN_DONT_CARE && token->type != type) {
-            // TODO: Show location in original grammar text.
-            snprintf(error.text, sizeof(error.text), "token '%.*s' can't be "
-             "used as both %s and %s keyword", (int)length, string,
-             token_type_string(token->type), token_type_string(type));
+            errorf("token '%.*s' can't be used as both %s and %s keyword",
+             (int)length, string, token_type_string(token->type),
+             token_type_string(type));
             error.ranges[0] = token->range;
             if (range)
                 error.ranges[1] = *range;

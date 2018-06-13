@@ -13,5 +13,9 @@ struct error {
 extern struct error error;
 void print_error();
 #define exit_with_error() do { print_error(); exit(-1); } while (0)
+#define errorf(...) do { snprintf(error.text, sizeof(error.text), \
+ __VA_ARGS__); } while (0)
+#define exit_with_errorf(...) do { errorf(__VA_ARGS__); print_error(); \
+ exit(-1); } while (0)
 
 #endif

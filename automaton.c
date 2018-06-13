@@ -9,7 +9,7 @@ static void state_add_transition(struct state *s, state_id target,
  symbol_id symbol, uint16_t action)
 {
     if (s->number_of_transitions == 0xffff) {
-        fprintf(stderr, "error: too many transitions for a single state.\n");
+        fprintf(stderr, "error: too many transitions for a single state\n");
         exit(-1);
     }
     uint16_t id = s->number_of_transitions++;

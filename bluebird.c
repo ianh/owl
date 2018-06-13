@@ -33,6 +33,7 @@
 static FILE *output_file = 0;
 static long terminal_columns();
 static int terminal_colors();
+static FILE *fopen_or_error(const char *filename, const char *mode);
 static char *read_string(FILE *file);
 static void write_to_output(const char *string, size_t len);
 
@@ -66,24 +67,19 @@ int main(int argc, char *argv[])
             if (!strcmp(short_name, "h") || !strcmp(long_name, "help"))
                 needs_help = true;
             else if (!strcmp(short_name, "i") || !strcmp(long_name, "input")) {
-                if (input_filename) {
-                    fprintf(stderr, "error: multiple input filenames.\n");
-                    return 1;
-                }
+                if (input_filename)
+                    exit_with_errorf("multiple input filenames");
                 parameter_state = INPUT_FILE_PARAMETER;
             } else if (!strcmp(short_name, "o") ||
              !strcmp(long_name, "output")) {
-                if (output_filename) {
-                    fprintf(stderr, "error: multiple output filenames.\n");
-                    return 1;
-                }
+                if (output_filename)
+                    exit_with_errorf("multiple output filenames");
                 parameter_state = OUTPUT_FILE_PARAMETER;
             } else if (!strcmp(short_name, "g") ||
              !strcmp(long_name, "grammar")) {
                 if (grammar_string) {
-                    fprintf(stderr, "error: bluebird only supports one grammar "
-                     "at a time.\n");
-                    return 1;
+                    exit_with_errorf("bluebird only supports one grammar at a "
+                     "time");
                 }
                 parameter_state = GRAMMAR_TEXT_PARAMETER;
             } else if (!strcmp(short_name, "c") ||
@@ -92,28 +88,23 @@ int main(int argc, char *argv[])
             else if (!strcmp(short_name, "C") || !strcmp(long_name, "color"))
                 color_output = true;
             else if (long_name[0] || short_name[0]) {
-                fprintf(stderr, "error: unknown option: %s%s\n",
-                 long_name[0] ? "--" : "-",
+                errorf("unknown option: %s%s", long_name[0] ? "--" : "-",
                  long_name[0] ? long_name : short_name);
+                print_error();
                 needs_help = true;
             } else if (!grammar_string) {
-                FILE *grammar_file = fopen(argv[i], "r");
-                if (!grammar_file) {
-                    fprintf(stderr, "error: couldn't open file:\n");
-                    fprintf(stderr, " %s\n", argv[i]);
-                    return 1;
-                }
+                FILE *grammar_file = fopen_or_error(argv[i], "r");
                 grammar_string = read_string(grammar_file);
                 fclose(grammar_file);
             } else {
-                fprintf(stderr, "error: bluebird only supports one grammar at "
-                 "a time.\n");
-                return 1;
+                exit_with_errorf("bluebird only supports one grammar at a "
+                 "time");
             }
             break;
         case INPUT_FILE_PARAMETER:
             if (short_name[0] || long_name[0]) {
-                fprintf(stderr, "error: missing input filename.\n");
+                errorf("missing input filename");
+                print_error();
                 needs_help = true;
                 break;
             }
@@ -122,7 +113,8 @@ int main(int argc, char *argv[])
             break;
         case OUTPUT_FILE_PARAMETER:
             if (short_name[0] || long_name[0]) {
-                fprintf(stderr, "error: missing output filename.\n");
+                errorf("missing output filename");
+                print_error();
                 needs_help = true;
                 break;
             }
@@ -131,7 +123,8 @@ int main(int argc, char *argv[])
             break;
         case GRAMMAR_TEXT_PARAMETER: {
             if (short_name[0] || long_name[0]) {
-                fprintf(stderr, "error: missing grammar text.\n");
+                errorf("missing grammar text");
+                print_error();
                 needs_help = true;
                 break;
             }
@@ -148,7 +141,8 @@ int main(int argc, char *argv[])
             break;
     }
     if (!needs_help && !grammar_string) {
-        fprintf(stderr, "error: missing grammar.\n");
+        errorf("missing grammar");
+        print_error();
         needs_help = true;
     }
     if (needs_help) {
@@ -163,14 +157,9 @@ int main(int argc, char *argv[])
     }
 
     struct terminal_info terminal_info = { .columns = 80 };
-    if (output_filename) {
-        output_file = fopen(output_filename, "w");
-        if (!output_file) {
-            fprintf(stderr, "error: couldn't open file:\n");
-            fprintf(stderr, " %s\n", output_filename);
-            return 1;
-        }
-    } else {
+    if (output_filename)
+        output_file = fopen_or_error(output_filename, "w");
+    else {
         output_file = stdout;
         terminal_info.columns = terminal_columns();
         if (terminal_info.columns <= 0)
@@ -260,14 +249,8 @@ int main(int argc, char *argv[])
         generate(&generator);
     } else {
         FILE *input_file = stdin;
-        if (input_filename) {
-            input_file = fopen(input_filename, "r");
-            if (!input_file) {
-                fprintf(stderr, "error: couldn't open file:\n");
-                fprintf(stderr, " %s\n", input_filename);
-                return 1;
-            }
-        }
+        if (input_filename)
+            input_file = fopen_or_error(input_filename, "r");
         char *input_string = read_string(input_file);
         fclose(input_file);
         struct interpreter interpreter = {
@@ -292,9 +275,12 @@ struct error error;
 
 void print_error()
 {
-    fprintf(stderr, "error: %s\n\n", error.text);
+    fprintf(stderr, "error: %s\n", error.text);
     qsort(error.ranges, MAX_ERROR_RANGES, sizeof(struct source_range),
      compare_source_ranges);
+    if (error.ranges[0].end == 0)
+        return;
+    fputs("\n", stderr);
     size_t line_start = 0;
     bool line_marked = false;
     bool last_line_marked = false;
@@ -412,6 +398,17 @@ static int terminal_colors()
             return value;
     }
     return 1;
+}
+
+static FILE *fopen_or_error(const char *filename, const char *mode)
+{
+    FILE *file = fopen(filename, mode);
+    if (file)
+        return file;
+    errorf("couldn't open file:");
+    print_error();
+    fprintf(stderr, "\n  %s\n\n", filename);
+    exit(-1);
 }
 
 static char *read_string(FILE *file)

@@ -199,11 +199,12 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
         if (r.failed) {
             struct rule *referent =
              &grammar->rules[rule->slots[r.failed_slot_index].rule_index];
-            fprintf(stderr, "error: outside of guard brackets [ ], the "
-             "rule '%.*s' cannot refer to the earlier rule '%.*s'.\n",
-             (int)rule->name_length, rule->name,
-             (int)referent->name_length, referent->name);
-            exit(-1);
+            errorf("outside of guard brackets [ ], the rule '%.*s' cannot "
+             "refer to the earlier rule '%.*s'", (int)rule->name_length,
+             rule->name, (int)referent->name_length, referent->name);
+            error.ranges[0] = referent->name_range;
+            error.ranges[1] = rule->slots[r.failed_slot_index].range;
+            exit_with_error();
         }
     }
 

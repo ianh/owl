@@ -396,7 +396,9 @@ void output_ambiguity(struct interpreter *interpreter,
     }
 
     // TODO: Adjust colors to help maintain association between output rows.
-    fputs("\n  Ambiguity detected. The text\n\n", output);
+    errorf("ambiguity detected");
+    print_error();
+    fputs("\n", output);
     struct row token_row = {
         .labels = token_labels,
         .number_of_labels = ambiguity->number_of_tokens * 2,
