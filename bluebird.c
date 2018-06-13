@@ -292,7 +292,7 @@ struct error error;
 
 void print_error()
 {
-    fprintf(stderr, "error: %s\n", error.text);
+    fprintf(stderr, "error: %s\n\n", error.text);
     qsort(error.ranges, MAX_ERROR_RANGES, sizeof(struct source_range),
      compare_source_ranges);
     size_t line_start = 0;
@@ -304,9 +304,9 @@ void print_error()
             break;
         if (grammar_string[i] == '\0' || grammar_string[i] == '\n') {
             if (line_marked) {
-                fputs(" ", stderr);
+                fputs("  ", stderr);
                 fwrite(grammar_string + line_start, 1, i - line_start, stderr);
-                fputs("\n ", stderr);
+                fputs("\n  ", stderr);
                 int max_range = range;
                 for (size_t j = line_start; j < i; ++j) {
                     bool marked = false;
@@ -331,7 +331,7 @@ void print_error()
                 line_marked = false;
                 last_line_marked = true;
             } else if (last_line_marked) {
-                fputs(" ...\n", stderr);
+                fputs("  ...\n", stderr);
                 last_line_marked = false;
             }
             if (grammar_string[i] == '\0')
@@ -341,6 +341,7 @@ void print_error()
         if (i >= error.ranges[range].start)
             line_marked = true;
     }
+    fputs("\n", stderr);
 }
 
 static int compare_source_ranges(const void *aa, const void *bb)
