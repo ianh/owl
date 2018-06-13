@@ -47,6 +47,10 @@ enum {
 
     // The paths swap places through this node due to pair normalization.
     SWAPPED_PATH = 1 << 2,
+
+    // The paths swap places through this bracket transition due to pair
+    // normalization.
+    SWAPPED_BRACKET_PATH = 1 << 3,
 };
 struct path_offset {
     uint32_t symbols;
@@ -123,7 +127,7 @@ struct context {
 
 static void build_ambiguity_path(struct context *context,
  struct ambiguity *ambiguity, struct path_offset offset, struct path_node *node,
- int32_t direction);
+ int32_t direction, bool swapped);
 
 static void search_state_pairs(struct context *context,
  struct state_pair_table *table, struct automaton *automaton,
@@ -276,15 +280,14 @@ void check_for_ambiguity(struct combined_grammar *combined,
         ambiguity->paths[i].actions = calloc(n, sizeof(uint16_t));
         ambiguity->paths[i].offsets = calloc(n, sizeof(uint32_t));
     }
-    build_ambiguity_path(&context, ambiguity, in.offset, &out, 1);
-    build_ambiguity_path(&context, ambiguity, in.offset, &in, -1);
+    build_ambiguity_path(&context, ambiguity, in.offset, &out, 1, false);
+    build_ambiguity_path(&context, ambiguity, in.offset, &in, -1, false);
 }
 
 static void build_ambiguity_path(struct context *context,
  struct ambiguity *ambiguity, struct path_offset offset, struct path_node *node,
- int32_t direction)
+ int32_t direction, bool swapped)
 {
-    bool swapped = false;
     for (; node && node->type != BOUNDARY_NODE; node = node->next) {
         if (node->flags & SWAPPED_PATH)
             swapped = !swapped;
@@ -322,7 +325,8 @@ static void build_ambiguity_path(struct context *context,
                 for (int i = 0; i < 2; ++i)
                     offset.actions[swapped ? 1 - i : i] += in.offset.actions[i];
             }
-            build_ambiguity_path(context, ambiguity, offset, &in, -1);
+            build_ambiguity_path(context, ambiguity, offset, &in, -1,
+             node->flags & SWAPPED_BRACKET_PATH ? !swapped : swapped);
             if (direction == -1) {
                 offset.symbols -= in.offset.symbols;
                 for (int i = 0; i < 2; ++i)
@@ -337,8 +341,10 @@ static void build_ambiguity_path(struct context *context,
                 offset.actions[i] += node->join[j]->offset.actions[i] *
                  direction;
             }
-            build_ambiguity_path(context, ambiguity, offset, node->join[1], 1);
-            build_ambiguity_path(context, ambiguity, offset, node->join[0], -1);
+            build_ambiguity_path(context, ambiguity, offset, node->join[1], 1,
+             swapped);
+            build_ambiguity_path(context, ambiguity, offset, node->join[0], -1,
+             swapped);
             offset.symbols += node->join[1 - j]->offset.symbols * direction;
             for (int i = 0; i < 2; ++i) {
                 offset.actions[i] += node->join[1 - j]->offset.actions[i] *
@@ -452,15 +458,18 @@ static void search_state_pairs(struct context *context,
                         continue;
                     if (bt.symbol < context->combined->number_of_tokens)
                         continue;
-                    struct state_pair p = state_pair_make(context->bracket_states[at.symbol - context->combined->number_of_tokens], context->bracket_states[bt.symbol - context->combined->number_of_tokens], DISALLOW_EPSILON_SUCCESSORS);
+                    state_id sa = context->bracket_states[at.symbol - context->combined->number_of_tokens];
+                    state_id sb = context->bracket_states[bt.symbol - context->combined->number_of_tokens];
+                    struct state_pair p = state_pair_make(sa, sb, DISALLOW_EPSILON_SUCCESSORS);
                     uint32_t k = state_pair_table_lookup(&context->bracket_paths, p, fnv(&p, sizeof(p)));
                     if (context->bracket_paths.status[k] == LOCKED) {
                         follow_state_pair_transition((struct path_node){
                             .type = BRACKET_TRANSITION_NODE,
                             .next_pair = s,
                             .bracket_pair = p,
-                            .flags = at.symbol == bt.symbol ? 0 :
-                             AMBIGUOUS_NODE,
+                            .flags = (at.symbol == bt.symbol ? 0 :
+                             AMBIGUOUS_NODE) | (sa == p.a ? 0 :
+                             SWAPPED_BRACKET_PATH),
                         }, at.target, bt.target, direction, table, &worklist);
                     }
                     if (at.symbol == bt.symbol) {

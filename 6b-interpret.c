@@ -994,6 +994,8 @@ static struct interpret_node *finish_token(uint32_t rule,
 static uint32_t rule_lookup(uint32_t parent, uint32_t slot,
  struct interpret_context *context)
 {
+    if (slot >= context->grammar->rules[parent].number_of_slots)
+        abort();
     return context->grammar->rules[parent].slots[slot].rule_index;
 }
 
