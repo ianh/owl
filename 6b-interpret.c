@@ -261,7 +261,7 @@ static void fill_rows(struct interpret_context *ctx,
 
 static void output_ambiguity_path(struct interpreter *interpreter,
  struct ambiguity *ambiguity, int which_path, struct label *token_labels,
- FILE *output)
+ uint32_t *row_count, FILE *output)
 {
     struct interpret_context context = {
         .grammar = interpreter->grammar,
@@ -315,7 +315,12 @@ static void output_ambiguity_path(struct interpreter *interpreter,
         }
     }
 #endif
+    if (*row_count != UINT32_MAX) {
+        context.document.color_offset = (int32_t)*row_count -
+         (int32_t)context.document.number_of_rows;
+    }
     output_document(output, &context.document, interpreter->terminal_info);
+    *row_count = context.document.number_of_rows;
 }
 
 void output_ambiguity(struct interpreter *interpreter,
@@ -409,9 +414,12 @@ void output_ambiguity(struct interpreter *interpreter,
     };
     output_document(output, &token_document, interpreter->terminal_info);
     fputs("\n  can be parsed in two different ways: as\n\n", output);
-    output_ambiguity_path(interpreter, ambiguity, 0, token_labels, output);
+    uint32_t row_count = UINT32_MAX;
+    output_ambiguity_path(interpreter, ambiguity, 0, token_labels, &row_count,
+     output);
     fputs("\n  or as\n\n", output);
-    output_ambiguity_path(interpreter, ambiguity, 1, token_labels, output);
+    output_ambiguity_path(interpreter, ambiguity, 1, token_labels, &row_count,
+     output);
     fputs("\n", output);
 }
 

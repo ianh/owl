@@ -20,6 +20,10 @@ struct document {
     // represent nodes in the parse tree.
     struct row *rows;
     uint32_t number_of_rows;
+
+    // If we want two documents with different numbers of rows to have the same
+    // colors, we need to apply a color offset.
+    int32_t color_offset;
 };
 
 struct row {

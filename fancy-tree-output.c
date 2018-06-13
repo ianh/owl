@@ -24,6 +24,7 @@ struct line {
     bool is_overflow;
 
     struct terminal_info terminal_info;
+    int32_t color_offset;
 };
 
 // This is how many dots we leave at the end of wrapped lines.
@@ -73,6 +74,8 @@ void output_document(FILE *file, struct document *document,
     init_line(&next_line, document);
     line.terminal_info = terminal_info;
     next_line.terminal_info = terminal_info;
+    line.color_offset = document->color_offset;
+    next_line.color_offset = document->color_offset;
     bool can_break_line = false;
     long columns = terminal_info.columns;
     while (true) {
@@ -396,5 +399,9 @@ static void set_color(FILE *file, struct line *line, uint32_t color)
         } else
             color = 1;
     }
+    int32_t offset = line->color_offset;
+    while (offset < 0)
+        offset += line->terminal_info.number_of_row_colors;
+    color += offset;
     fputs(colors[(color - 1) % line->terminal_info.number_of_row_colors], file);
 }
