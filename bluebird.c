@@ -275,8 +275,16 @@ struct error error;
 
 void print_error()
 {
+    // TODO: Line breaking, if there's time.
     int colors = terminal_colors(STDERR_FILENO);
-    fprintf(stderr, "error: %s\n", error.text);
+    if (colors >= 256)
+        fputs("\033[38;5;168m", stderr);
+    else if (colors >= 8)
+        fputs("\033[1;31m", stderr);
+    fputs("error:", stderr);
+    if (colors >= 8)
+        fputs("\033[0m", stderr);
+    fprintf(stderr, " %s\n", error.text);
     qsort(error.ranges, MAX_ERROR_RANGES, sizeof(struct source_range),
      compare_source_ranges);
     if (error.ranges[0].end == 0)
@@ -295,7 +303,9 @@ void print_error()
                 fwrite(grammar_string + line_start, 1, i - line_start, stderr);
                 fputs("\n  ", stderr);
                 int max_range = range;
-                if (colors >= 8)
+                if (colors >= 256)
+                    fputs("\033[38;5;113m", stderr);
+                else if (colors >= 8)
                     fputs("\033[32m", stderr);
                 for (size_t j = line_start; j < i; ++j) {
                     bool marked = false;

@@ -1,3 +1,3 @@
-a = b
+invalid = b
 b = c
-a = c
+invalid = c

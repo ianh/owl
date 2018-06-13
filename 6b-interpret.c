@@ -396,7 +396,7 @@ void output_ambiguity(struct interpreter *interpreter,
     }
 
     // TODO: Adjust colors to help maintain association between output rows.
-    errorf("ambiguity detected");
+    errorf("this grammar is ambiguous");
     print_error();
     fputs("\n", output);
     struct row token_row = {
