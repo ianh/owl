@@ -105,6 +105,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
             // matched.
             state_id start = automaton_create_state(automaton);
             state_id end = automaton_create_state(automaton);
+            automaton_set_start_state(automaton, start);
+            automaton_mark_accepting_state(automaton, end);
             for (uint32_t j = 0; j < rule->number_of_choices; ++j) {
                 // Embed each choice into the automaton, tracking it as an
                 // "operand" if this is an expression rule with operators.
@@ -121,7 +123,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                 automaton_add_transition_with_action(automaton, start,
                  choice_start, SYMBOL_EPSILON, start_action);
             }
-            for (uint32_t j = 0; j < rule->number_of_operators; ++j) {
+            for (uint32_t j = 0; j < rule->number_of_operators; ) {
                 // Now we add the operator automata.  Operators are a virtual
                 // "transition" between a to_state and a from_state -- the
                 // fixity determines which states the operator is a transition
@@ -147,29 +149,37 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                     state_id rhs_end = automaton_create_state(automaton);
                     state_id rhs_start = embed(automaton, automaton, rhs_end,
                      SYMBOL_EPSILON, 0);
+                    // Clear out the old accepting state--it's about to be
+                    // replaced by the new one we just added.
+                    automaton->states[end].accepting = false;
                     from_state = end;
                     to_state = rhs_start;
                     end = rhs_end;
+                    automaton_mark_accepting_state(automaton, end);
                 } else {
                     // Infix operators are a transition from the end state back
                     // to the start state.
                     from_state = end;
                     to_state = start;
                 }
-                // Embed the operator automaton and hook it up according to the
-                // rules above.  Offset the "choice index" by
-                // rule->number_of_choices to indicate this is an operator
-                // instead of a normal choice.
-                uint32_t op_index = j + rule->number_of_choices;
-                state_id op_start = embed(automaton, &op->automaton,
-                 to_state, SYMBOL_EPSILON,
-                 CONSTRUCT_ACTION(ACTION_END_OPERATOR, op_index));
-                automaton_add_transition_with_action(automaton, from_state,
-                 op_start, SYMBOL_EPSILON,
-                 CONSTRUCT_ACTION(ACTION_BEGIN_OPERATOR, op_index));
+                int precedence = op->precedence;
+                for (; j < rule->number_of_operators; ++j) {
+                    struct operator *op = &rule->operators[j];
+                    if (op->precedence != precedence)
+                        break;
+                    // Embed each operator automaton and hook it up according
+                    // to the rules above.  Offset the "choice index" by
+                    // rule->number_of_choices to indicate this is an operator
+                    // instead of a normal choice.
+                    uint32_t op_index = j + rule->number_of_choices;
+                    state_id op_start = embed(automaton, &op->automaton,
+                     to_state, SYMBOL_EPSILON,
+                     CONSTRUCT_ACTION(ACTION_END_OPERATOR, op_index));
+                    automaton_add_transition_with_action(automaton, from_state,
+                     op_start, SYMBOL_EPSILON,
+                     CONSTRUCT_ACTION(ACTION_BEGIN_OPERATOR, op_index));
+                }
             }
-            automaton_set_start_state(automaton, start);
-            automaton_mark_accepting_state(automaton, end);
         }
 
         // The bracket symbols for each rule are local to that rule.  Rename
