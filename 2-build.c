@@ -11,9 +11,11 @@ struct context {
     struct grammar *grammar;
     struct bluebird_tree *tree;
 
-    struct rule *rule;
+    uint32_t rule_index;
     symbol_id next_symbol;
     state_id next_state;
+
+    size_t bracket_nesting;
 };
 
 struct boundary_states;
@@ -105,9 +107,9 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             abort();
         struct rule *rule = &grammar->rules[rule_index];
 
-        // Store the rule into our context object so we don't have to pass it
-        // around everywhere while we're building the rule's automata.
-        context.rule = rule;
+        // Store the rule index in our context object so we don't have to pass
+        // it around everywhere while we're building the rule's automata.
+        context.rule_index = rule_index;
         context.next_symbol = 0;
 
         struct parsed_body body = parsed_body_get(tree, parsed_rule.body);
@@ -271,7 +273,7 @@ static void build_body_expression(struct context *ctx,
  struct boundary_states b)
 {
     struct bluebird_tree *tree = ctx->tree;
-    struct rule *rule = ctx->rule;
+    struct rule *rule = &ctx->grammar->rules[ctx->rule_index];
     switch (expr->type) {
     case PARSED_CHOICE: {
         struct parsed_expr choice = parsed_expr_get(tree, expr->operand);
@@ -314,6 +316,19 @@ static void build_body_expression(struct context *ctx,
             error.ranges[0] = ident.range;
             exit_with_error();
         }
+        if (ctx->bracket_nesting == 0 && rule_index <= ctx->rule_index) {
+            if (rule_index == ctx->rule_index) {
+                errorf("outside of guard brackets [ ], the rule '%.*s' cannot "
+                 "refer to itself", (int)rule->name_length, rule->name);
+            } else {
+                errorf("outside of guard brackets [ ], the rule '%.*s' cannot "
+                 "refer to the earlier rule '%.*s'", (int)rule->name_length,
+                 rule->name, (int)rule_name_length, rule_name);
+            }
+            error.ranges[0] = ctx->grammar->rules[rule_index].name_range;
+            error.ranges[1] = ident.range;
+            exit_with_error();
+        }
         uint32_t slot_index = add_slot(ctx, rule, slot_name, slot_name_length,
          rule_index, expr->range, "could refer to two different rules");
         automaton_add_transition(automaton, b.entry, b.exit,
@@ -346,7 +361,9 @@ static void build_body_expression(struct context *ctx,
             automaton_mark_accepting_state(&bracket->automaton, 0);
         } else {
             struct automaton bracket_automaton = {0};
+            ctx->bracket_nesting++;
             build_body_automaton(ctx, &bracket_automaton, &bracket_expr);
+            ctx->bracket_nesting--;
             // Update the bracket pointer in case it was invalidated.
             bracket = &rule->brackets[bracket_index];
             automaton_move(&bracket_automaton, &bracket->automaton);

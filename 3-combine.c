@@ -16,13 +16,8 @@ struct rename {
     symbol_id to;
 };
 
-// Substitution fails if we try to substitute a rule with an index less than
-// `min_rule_index`.
-struct substitution_result { bool failed; uint32_t failed_slot_index; };
-static struct substitution_result successful_substitution_result;
-
-static struct substitution_result substitute_slots(struct grammar *grammar,
- struct rule *rule, uint32_t min_rule_index, struct automaton *a,
+static void substitute_slots(struct grammar *grammar, struct rule *rule,
+ uint32_t min_rule_index, struct automaton *a,
  struct automaton *automaton_for_rule, struct rename *renames,
  size_t number_of_renames);
 
@@ -193,19 +188,9 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
         // that refer to other rules' automata.  Rules can only refer to later
         // rules, so since we're building the rule automata from last to first,
         // these automata are guaranteed to already have been built.
-        struct substitution_result r = substitute_slots(grammar, rule, i + 1,
-         automaton, automaton_for_rule, renames_for_rule[i],
-         rule->number_of_keyword_tokens + rule->number_of_brackets);
-        if (r.failed) {
-            struct rule *referent =
-             &grammar->rules[rule->slots[r.failed_slot_index].rule_index];
-            errorf("outside of guard brackets [ ], the rule '%.*s' cannot "
-             "refer to the earlier rule '%.*s'", (int)rule->name_length,
-             rule->name, (int)referent->name_length, referent->name);
-            error.ranges[0] = referent->name_range;
-            error.ranges[1] = rule->slots[r.failed_slot_index].range;
-            exit_with_error();
-        }
+        substitute_slots(grammar, rule, i + 1, automaton, automaton_for_rule,
+         renames_for_rule[i], rule->number_of_keyword_tokens +
+         rule->number_of_brackets);
     }
 
     // Fourth pass: build and substitute the bracket automata from each rule.
@@ -307,8 +292,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     free(automaton_for_rule);
 }
 
-static struct substitution_result substitute_slots(struct grammar *grammar,
- struct rule *rule, uint32_t min_rule_index, struct automaton *a,
+static void substitute_slots(struct grammar *grammar, struct rule *rule,
+ uint32_t min_rule_index, struct automaton *a,
  struct automaton *automaton_for_rule, struct rename *renames,
  size_t number_of_renames)
 {
@@ -330,10 +315,8 @@ static struct substitution_result substitute_slots(struct grammar *grammar,
                 struct slot *slot = &rule->slots[k];
                 if (slot->symbol != symbol)
                     continue;
-                if (slot->rule_index < min_rule_index) {
-                    return (struct substitution_result){ .failed = true,
-                     .failed_slot_index = k };
-                }
+                if (slot->rule_index < min_rule_index)
+                    abort();
                 struct rule *slot_rule = &grammar->rules[slot->rule_index];
                 uint16_t begin_action = 0;
                 uint16_t end_action = 0;
@@ -358,7 +341,6 @@ static struct substitution_result substitute_slots(struct grammar *grammar,
             }
         }
     }
-    return successful_substitution_result;
 }
 
 static void update_number_of_symbols(struct automaton *a)

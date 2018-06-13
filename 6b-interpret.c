@@ -82,7 +82,7 @@ struct interpret_context {
     struct bracket_transitions *transitions;
 
     struct state_array stack;
-    uint32_t state;
+    state_id state;
 
     struct bluebird_default_tokenizer *tokenizer;
     struct construct_state construct_state;
@@ -587,13 +587,8 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
         fprintf(stderr, "error: tokenizing failed.\n");
         exit(-1);
     }
-    struct automaton *a = &deterministic->automaton;
-    uint32_t state = context.state;
-    if (state >= (1UL << 31)) {
-        state -= (1UL << 31);
-        a = &deterministic->bracket_automaton;
-    }
-    if (!a->states[state].accepting) {
+    if (context.stack.number_of_states > 0 ||
+     !deterministic->automaton.states[context.state].accepting) {
         // TODO: Better error message
         fprintf(stderr, "error: unexpected end of file.\n");
         exit(-1);
