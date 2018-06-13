@@ -287,16 +287,75 @@ int main(int argc, char *argv[])
     return 0;
 }
 
+static int compare_source_ranges(const void *aa, const void *bb);
 struct error error;
+
 void print_error()
 {
     fprintf(stderr, "error: %s\n", error.text);
-    for (int i = 0; i < MAX_ERROR_RANGES; ++i) {
-        if (error.ranges[i].end == 0)
+    qsort(error.ranges, MAX_ERROR_RANGES, sizeof(struct source_range),
+     compare_source_ranges);
+    size_t line_start = 0;
+    bool line_marked = false;
+    bool last_line_marked = false;
+    int range = 0;
+    for (size_t i = 0; range < MAX_ERROR_RANGES; ++i) {
+        if (error.ranges[range].end == 0)
             break;
-        fprintf(stderr, "range: %zu - %zu\n", error.ranges[i].start,
-         error.ranges[i].end);
+        if (grammar_string[i] == '\0' || grammar_string[i] == '\n') {
+            if (line_marked) {
+                fputs(" ", stderr);
+                fwrite(grammar_string + line_start, 1, i - line_start, stderr);
+                fputs("\n ", stderr);
+                int max_range = range;
+                for (size_t j = line_start; j < i; ++j) {
+                    bool marked = false;
+                    for (int k = range; k < MAX_ERROR_RANGES; ++k) {
+                        if (error.ranges[k].end == 0)
+                            break;
+                        if (j >= error.ranges[k].end)
+                            continue;
+                        if (j < error.ranges[k].start)
+                            continue;
+                        marked = true;
+                        if (k > max_range)
+                            max_range = k;
+                    }
+                    if (marked)
+                        fputs("~", stderr);
+                    else
+                        fputs(" ", stderr);
+                }
+                fputs("\n", stderr);
+                range = max_range + 1;
+                line_marked = false;
+                last_line_marked = true;
+            } else if (last_line_marked) {
+                fputs(" ...\n", stderr);
+                last_line_marked = false;
+            }
+            if (grammar_string[i] == '\0')
+                break;
+            line_start = i + 1;
+        }
+        if (i >= error.ranges[range].start)
+            line_marked = true;
     }
+}
+
+static int compare_source_ranges(const void *aa, const void *bb)
+{
+    const struct source_range *a = aa;
+    const struct source_range *b = bb;
+    if (a->end != 0 && b->end == 0)
+        return -1;
+    if (a->end == 0 && b->end != 0)
+        return 1;
+    if (a->start < b->start)
+        return -1;
+    if (a->start > b->start)
+        return 1;
+    return 0;
 }
 
 static long terminal_columns()

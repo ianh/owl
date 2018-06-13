@@ -226,16 +226,18 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             char buf[256];
             if (operator->fixity == INFIX && operator->associativity != FLAT) {
                 snprintf(buf, sizeof(buf), "is reserved for the left operand "
-                 "of '%.*s'", (int)operator->name_length, operator->name);
+                 "of operator '%.*s'", (int)operator->name_length,
+                 operator->name);
                 rule->left_slot_index = add_slot(&context, rule, "left",
                  strlen("left"), rule_index, (struct source_range){0}, buf);
                 snprintf(buf, sizeof(buf), "is reserved for the right operand "
-                 "of '%.*s'", (int)operator->name_length, operator->name);
+                 "of operator '%.*s'", (int)operator->name_length,
+                 operator->name);
                 rule->right_slot_index = add_slot(&context, rule, "right",
                  strlen("right"), rule_index, (struct source_range){0}, buf);
             } else {
                 snprintf(buf, sizeof(buf), "is reserved for the operand of "
-                 "'%.*s'", (int)operator->name_length, operator->name);
+                 "operator '%.*s'", (int)operator->name_length, operator->name);
                 rule->operand_slot_index = add_slot(&context, rule, "operand",
                  strlen("operand"), rule_index, (struct source_range){0}, buf);
             }
