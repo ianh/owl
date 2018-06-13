@@ -57,7 +57,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
         for (uint32_t j = 0; j < rule->number_of_keyword_tokens; ++j) {
             struct token token = rule->keyword_tokens[j];
             uint32_t index = find_token(result->tokens,
-             result->number_of_tokens, token.string, token.length, token.type);
+             result->number_of_tokens, token.string, token.length, token.type,
+             &token.range);
             if (index >= result->number_of_tokens) {
                 result->number_of_tokens = index + 1;
                 result->tokens = grow_array(result->tokens,

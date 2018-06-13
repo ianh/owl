@@ -130,12 +130,12 @@ struct choice {
     const char *name;
     size_t name_length;
 
+    // A deterministic automaton which recognizes this choice.
+    struct automaton automaton;
+
     // For error reporting.
     struct source_range name_range;
     struct source_range expr_range;
-
-    // A deterministic automaton which recognizes this choice.
-    struct automaton automaton;
 };
 
 enum fixity { PREFIX, POSTFIX, INFIX };
@@ -147,16 +147,16 @@ struct operator {
     const char *name;
     size_t name_length;
 
-    // For error reporting.
-    struct source_range name_range;
-    struct source_range expr_range;
-
     enum fixity fixity;
     enum associativity associativity;
     int32_t precedence;
 
     // A deterministic automaton which recognizes this operator.
     struct automaton automaton;
+
+    // For error reporting.
+    struct source_range name_range;
+    struct source_range expr_range;
 };
 
 struct slot {
@@ -172,6 +172,9 @@ struct slot {
 
     // The rule this slot refers to.
     uint32_t rule_index;
+
+    // For error reporting.
+    struct source_range range;
 };
 
 struct bracket {
@@ -210,6 +213,7 @@ struct token {
 // We share this function with the combine step -- both build and combine need
 // to de-duplicate keyword tokens in the same way.
 uint32_t find_token(struct token *tokens, uint32_t number_of_tokens,
- const char *string, size_t length, enum token_type type);
+ const char *string, size_t length, enum token_type type,
+ struct source_range *range);
 
 #endif

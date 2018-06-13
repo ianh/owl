@@ -82,7 +82,7 @@ struct interpret_context {
     struct bracket_transitions *transitions;
 
     struct state_array stack;
-    state_id state;
+    uint32_t state;
 
     struct bluebird_default_tokenizer *tokenizer;
     struct construct_state construct_state;
@@ -383,7 +383,7 @@ void output_ambiguity(struct interpreter *interpreter,
                     string_iterator++;
                 }
             } while (find_token(combined->tokens, combined->number_of_tokens,
-             text, length, TOKEN_DONT_CARE) < combined->number_of_tokens);
+             text, length, TOKEN_DONT_CARE, 0) < combined->number_of_tokens);
             token_labels[i * 2].text = text;
             token_labels[i * 2].length = length;
         }
@@ -585,11 +585,9 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
         fprintf(stderr, "error: tokenizing failed.\n");
         exit(-1);
     }
-    uint32_t state = deterministic->automaton.start_state;
-    if (token_run && token_run->number_of_tokens > 0)
-        state = token_run->states[token_run->number_of_tokens - 1];
     struct automaton *a = &deterministic->automaton;
-    if (state >= (1UL << 31) && state != UINT32_MAX) {
+    uint32_t state = context.state;
+    if (state >= (1UL << 31)) {
         state -= (1UL << 31);
         a = &deterministic->bracket_automaton;
     }
