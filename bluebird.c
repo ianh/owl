@@ -31,8 +31,8 @@
 // - write a blog post or something about how the old parser worked?
 
 static FILE *output_file = 0;
-static long terminal_columns();
-static int terminal_colors();
+static long terminal_columns(int fileno);
+static int terminal_colors(int fileno);
 static FILE *fopen_or_error(const char *filename, const char *mode);
 static char *read_string(FILE *file);
 static void write_to_output(const char *string, size_t len);
@@ -161,11 +161,11 @@ int main(int argc, char *argv[])
         output_file = fopen_or_error(output_filename, "w");
     else {
         output_file = stdout;
-        terminal_info.columns = terminal_columns();
+        terminal_info.columns = terminal_columns(STDOUT_FILENO);
         if (terminal_info.columns <= 0)
             terminal_info.columns = 80;
         if (!color_output) {
-            int colors = terminal_colors();
+            int colors = terminal_colors(STDOUT_FILENO);
             if (colors >= 256)
                 color_output = true;
             else if (colors >= 8) {
@@ -275,6 +275,7 @@ struct error error;
 
 void print_error()
 {
+    int colors = terminal_colors(STDERR_FILENO);
     fprintf(stderr, "error: %s\n", error.text);
     qsort(error.ranges, MAX_ERROR_RANGES, sizeof(struct source_range),
      compare_source_ranges);
@@ -294,6 +295,8 @@ void print_error()
                 fwrite(grammar_string + line_start, 1, i - line_start, stderr);
                 fputs("\n  ", stderr);
                 int max_range = range;
+                if (colors >= 8)
+                    fputs("\033[32m", stderr);
                 for (size_t j = line_start; j < i; ++j) {
                     bool marked = false;
                     for (int k = range; k < MAX_ERROR_RANGES; ++k) {
@@ -312,12 +315,17 @@ void print_error()
                     else
                         fputs(" ", stderr);
                 }
+                if (colors >= 8)
+                    fputs("\033[0m", stderr);
                 fputs("\n", stderr);
                 range = max_range + 1;
                 line_marked = false;
                 last_line_marked = true;
             } else if (last_line_marked) {
-                fputs("  ...\n", stderr);
+                if (colors >= 8)
+                    fputs("\033[90m  ...\033[0m\n", stderr);
+                else
+                    fputs("  ...\n", stderr);
                 last_line_marked = false;
             }
             if (grammar_string[i] == '\0')
@@ -345,11 +353,11 @@ static int compare_source_ranges(const void *aa, const void *bb)
     return 0;
 }
 
-static long terminal_columns()
+static long terminal_columns(int fileno)
 {
 #ifdef TIOCGWINSZ
     struct winsize winsize = {0};
-    if (!ioctl(STDOUT_FILENO, TIOCGWINSZ, (char *)&winsize))
+    if (!ioctl(fileno, TIOCGWINSZ, (char *)&winsize))
         return (long)winsize.ws_col;
 #endif
     char *env = getenv("COLUMNS");
@@ -362,9 +370,9 @@ static long terminal_columns()
     return columns;
 }
 
-static int terminal_colors()
+static int terminal_colors(int fileno)
 {
-    if (!isatty(STDOUT_FILENO))
+    if (!isatty(fileno))
         return 1;
     // Try some different names that "ncurses" goes by on various platforms.
     // Each name is annotated with the platform it was added to support.
@@ -391,7 +399,7 @@ static int terminal_colors()
         int (*tigetnum)(char *) = dlsym(handle, "tigetnum");
         int value = -1;
         int err;
-        if (setupterm && tigetnum && !setupterm(0, STDOUT_FILENO, &err))
+        if (setupterm && tigetnum && !setupterm(0, fileno, &err))
             value = tigetnum("colors");
         dlclose(handle);
         if (value > 0)
