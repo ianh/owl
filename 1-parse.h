@@ -65652,102 +65652,123 @@ finish:
     return construct_finish(&construct_state, offset);
 }
 static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *text, void *info) {
-    if (strncmp(text, "=", 1U) == 0) {
-        *token = 0U;
+    switch (text[0]) {
+    case 40U:
         *end_token = false;
-        return 1U;
-    }
-    if (strncmp(text, ":", 1U) == 0) {
-        *token = 1U;
-        *end_token = false;
-        return 1U;
-    }
-    if (strncmp(text, ".operators", 10U) == 0) {
-        *token = 2U;
-        *end_token = false;
-        return 10U;
-    }
-    if (strncmp(text, "postfix", 7U) == 0) {
-        *token = 3U;
-        *end_token = false;
-        return 7U;
-    }
-    if (strncmp(text, "prefix", 6U) == 0) {
-        *token = 4U;
-        *end_token = false;
-        return 6U;
-    }
-    if (strncmp(text, "infix", 5U) == 0) {
-        *token = 5U;
-        *end_token = false;
-        return 5U;
-    }
-    if (strncmp(text, "flat", 4U) == 0) {
-        *token = 6U;
-        *end_token = false;
-        return 4U;
-    }
-    if (strncmp(text, "left", 4U) == 0) {
-        *token = 7U;
-        *end_token = false;
-        return 4U;
-    }
-    if (strncmp(text, "right", 5U) == 0) {
-        *token = 8U;
-        *end_token = false;
-        return 5U;
-    }
-    if (strncmp(text, "nonassoc", 8U) == 0) {
-        *token = 9U;
-        *end_token = false;
-        return 8U;
-    }
-    if (strncmp(text, "\x40", 1U) == 0) {
-        *token = 10U;
-        *end_token = false;
-        return 1U;
-    }
-    if (strncmp(text, "(", 1U) == 0) {
         *token = 11U;
-        *end_token = false;
         return 1U;
-    }
-    if (strncmp(text, ")", 1U) == 0) {
+    case 41U:
+        *end_token = true;
         *token = 12U;
-        *end_token = true;
         return 1U;
-    }
-    if (strncmp(text, "[", 1U) == 0) {
-        *token = 13U;
+    case 42U:
         *end_token = false;
-        return 1U;
-    }
-    if (strncmp(text, "]", 1U) == 0) {
-        *token = 14U;
-        *end_token = true;
-        return 1U;
-    }
-    if (strncmp(text, "*", 1U) == 0) {
         *token = 15U;
-        *end_token = false;
         return 1U;
-    }
-    if (strncmp(text, "+", 1U) == 0) {
+    case 43U:
+        *end_token = false;
         *token = 16U;
-        *end_token = false;
         return 1U;
-    }
-    if (strncmp(text, "?", 1U) == 0) {
+    case 46U:
+        if (strncmp(text + 1U, "operators", 9U) == 0) {
+            *end_token = false;
+            *token = 2U;
+            return 10U;
+        } else {
+            return 0;
+        }
+    case 58U:
+        *end_token = false;
+        *token = 1U;
+        return 1U;
+    case 61U:
+        *end_token = false;
+        *token = 0U;
+        return 1U;
+    case 63U:
+        *end_token = false;
         *token = 17U;
-        *end_token = false;
         return 1U;
-    }
-    if (strncmp(text, "|", 1U) == 0) {
+    case 64U:
+        *end_token = false;
+        *token = 10U;
+        return 1U;
+    case 91U:
+        *end_token = false;
+        *token = 13U;
+        return 1U;
+    case 93U:
+        *end_token = true;
+        *token = 14U;
+        return 1U;
+    case 102U:
+        if (strncmp(text + 1U, "lat", 3U) == 0) {
+            *end_token = false;
+            *token = 6U;
+            return 4U;
+        } else {
+            return 0;
+        }
+    case 105U:
+        if (strncmp(text + 1U, "nfix", 4U) == 0) {
+            *end_token = false;
+            *token = 5U;
+            return 5U;
+        } else {
+            return 0;
+        }
+    case 108U:
+        if (strncmp(text + 1U, "eft", 3U) == 0) {
+            *end_token = false;
+            *token = 7U;
+            return 4U;
+        } else {
+            return 0;
+        }
+    case 110U:
+        if (strncmp(text + 1U, "onassoc", 7U) == 0) {
+            *end_token = false;
+            *token = 9U;
+            return 8U;
+        } else {
+            return 0;
+        }
+    case 112U:
+        switch (text[1U]) {
+        case 111U:
+            if (strncmp(text + 2U, "stfix", 5U) == 0) {
+                *end_token = false;
+                *token = 3U;
+                return 7U;
+            } else {
+                return 0;
+            }
+        case 114U:
+            if (strncmp(text + 2U, "efix", 4U) == 0) {
+                *end_token = false;
+                *token = 4U;
+                return 6U;
+            } else {
+                return 0;
+            }
+        default:
+            return 0;
+        }
+    case 114U:
+        if (strncmp(text + 1U, "ight", 4U) == 0) {
+            *end_token = false;
+            *token = 8U;
+            return 5U;
+        } else {
+            return 0;
+        }
+    case 124U:
+        *end_token = false;
         *token = 18U;
-        *end_token = false;
         return 1U;
+    default:
+        return 0;
     }
-    return 0;
 }
 static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context) {
     switch (parent) {
