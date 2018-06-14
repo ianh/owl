@@ -43,6 +43,12 @@ struct deterministic_grammar {
 
     struct action_map action_map;
     struct action_map bracket_action_map;
+
+    // For each state in the bracket automaton, this array stores the set of
+    // bracket transitions which can be reached from this state.  We check this
+    // set against the expected transitions as we parse in order to know exactly
+    // where the text stops being a valid prefix of the recognized language.
+    struct bitset *bracket_reachability;
 };
 
 void determinize(struct combined_grammar *grammar,

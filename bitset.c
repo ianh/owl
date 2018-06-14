@@ -14,6 +14,22 @@ void bitset_union(struct bitset *set, struct bitset *other)
         set->bit_groups[i] |= other->bit_groups[i];
 }
 
+bool bitset_union_added(struct bitset *set, struct bitset *other)
+{
+    if (set->number_of_elements != other->number_of_elements)
+        abort();
+    bool added = false;
+    for (uint32_t i = 0; i < set->number_of_bit_groups; ++i) {
+        uint64_t group = set->bit_groups[i];
+        group |= other->bit_groups[i];
+        if (group == set->bit_groups[i])
+            continue;
+        set->bit_groups[i] = group;
+        added = true;
+    }
+    return added;
+}
+
 int bitset_compare(struct bitset *a, struct bitset *b)
 {
     if (a->number_of_elements != b->number_of_elements)

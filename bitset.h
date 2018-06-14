@@ -40,6 +40,8 @@ static inline void bitset_add(struct bitset *set, uint32_t element)
 
 void bitset_clear(struct bitset *set);
 void bitset_union(struct bitset *set, struct bitset *other);
+// Like `union`, but returns true if any new elements were added.
+bool bitset_union_added(struct bitset *set, struct bitset *other);
 int bitset_compare(struct bitset *a, struct bitset *b);
 
 #endif

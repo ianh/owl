@@ -516,6 +516,41 @@ void determinize(struct combined_grammar *grammar,
         .action_map = &result->bracket_action_map,
         .options = MARK_ACCEPTING_BRACKET_STATES,
     });
+
+    // Fill in the bracket_reachability array.
+    uint32_t n = result->bracket_automaton.number_of_states;
+    result->bracket_reachability = calloc(n, sizeof(struct bitset));
+    for (uint32_t i = 0; i < n; ++i) {
+        result->bracket_reachability[i] =
+         bitset_create_empty(transitions->number_of_transitions);
+    }
+    struct automaton reversed = {0};
+    automaton_reverse(&result->bracket_automaton, &reversed);
+    struct state_array worklist = {0};
+    for (state_id i = 0; i < result->bracket_automaton.number_of_states; ++i) {
+        if (!result->bracket_automaton.states[i].accepting)
+            continue;
+        for (uint32_t j = 0; j < transitions->number_of_transitions; ++j) {
+            if (transitions->transitions[j].deterministic_transition_symbol !=
+             result->bracket_automaton.states[i].transition_symbol)
+                continue;
+            bitset_add(&result->bracket_reachability[i], j);
+            state_array_push(&worklist, i);
+            break;
+        }
+    }
+    while (worklist.number_of_states > 0) {
+        state_id state = state_array_pop(&worklist);
+        struct bitset set = result->bracket_reachability[state];
+        struct state s = reversed.states[state];
+        for (uint32_t i = 0; i < s.number_of_transitions; ++i) {
+            state_id next = s.transitions[i].target;
+            if (bitset_union_added(&result->bracket_reachability[next], &set))
+                state_array_push(&worklist, next);
+        }
+    }
+    state_array_destroy(&worklist);
+    automaton_destroy(&reversed);
 }
 
 void determinize_bracket_transitions(struct bracket_transitions *result,
