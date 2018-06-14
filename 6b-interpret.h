@@ -12,7 +12,6 @@
 struct interpreter {
     struct grammar *grammar;
     struct combined_grammar *combined;
-    struct bracket_transitions *transitions;
     struct deterministic_grammar *deterministic;
 
     struct terminal_info terminal_info;

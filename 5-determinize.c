@@ -330,6 +330,7 @@ static int compare_state_ids(const void *aa, const void *bb);
 static int compare_bracket_transitions(const void *aa, const void *bb);
 static bool equal_bracket_transitions(struct bracket_transitions *a,
  struct bracket_transitions *b);
+static void bracket_transitions_destroy(struct bracket_transitions *);
 
 static void follow_subset_transition(struct automaton *a,
  state_id target_nfa_state, state_id nfa_state, state_id dfa_state,
@@ -499,19 +500,23 @@ void disambiguate(struct automaton *input, struct automaton *input_bracket,
 }
 
 void determinize(struct combined_grammar *grammar,
- struct deterministic_grammar *result, struct bracket_transitions *transitions)
+ struct deterministic_grammar *result)
 {
+    find_bracket_transitions((struct context){
+        .input = &grammar->bracket_automaton,
+        .first_transition_symbol = grammar->number_of_tokens,
+    }, &result->transitions);
     determinize_automaton((struct context){
         .input = &grammar->automaton,
         .result = &result->automaton,
-        .in_transitions = *transitions,
+        .in_transitions = result->transitions,
         .first_transition_symbol = grammar->number_of_tokens,
         .action_map = &result->action_map,
     });
     determinize_automaton((struct context){
         .input = &grammar->bracket_automaton,
         .result = &result->bracket_automaton,
-        .in_transitions = *transitions,
+        .in_transitions = result->transitions,
         .first_transition_symbol = grammar->number_of_tokens,
         .action_map = &result->bracket_action_map,
         .options = MARK_ACCEPTING_BRACKET_STATES,
@@ -522,16 +527,17 @@ void determinize(struct combined_grammar *grammar,
     result->bracket_reachability = calloc(n, sizeof(struct bitset));
     for (uint32_t i = 0; i < n; ++i) {
         result->bracket_reachability[i] =
-         bitset_create_empty(transitions->number_of_transitions);
+         bitset_create_empty(result->transitions.number_of_transitions);
     }
     struct automaton reversed = {0};
     automaton_reverse(&result->bracket_automaton, &reversed);
+    struct bracket_transitions ts = result->transitions;
     struct state_array worklist = {0};
     for (state_id i = 0; i < result->bracket_automaton.number_of_states; ++i) {
         if (!result->bracket_automaton.states[i].accepting)
             continue;
-        for (uint32_t j = 0; j < transitions->number_of_transitions; ++j) {
-            if (transitions->transitions[j].deterministic_transition_symbol !=
+        for (uint32_t j = 0; j < ts.number_of_transitions; ++j) {
+            if (ts.transitions[j].deterministic_transition_symbol !=
              result->bracket_automaton.states[i].transition_symbol)
                 continue;
             bitset_add(&result->bracket_reachability[i], j);
@@ -553,15 +559,6 @@ void determinize(struct combined_grammar *grammar,
     automaton_destroy(&reversed);
 }
 
-void determinize_bracket_transitions(struct bracket_transitions *result,
- struct combined_grammar *grammar)
-{
-    find_bracket_transitions((struct context){
-        .input = &grammar->bracket_automaton,
-        .first_transition_symbol = grammar->number_of_tokens,
-    }, result);
-}
-
 struct action_map_entry *action_map_find(struct action_map *map,
  state_id target_nfa_state, state_id dfa_state, symbol_id dfa_symbol)
 {
@@ -572,12 +569,6 @@ struct action_map_entry *action_map_find(struct action_map *map,
     };
     return bsearch(&query, map->entries, map->number_of_entries,
      sizeof(struct action_map_entry), compare_action_map_entries);
-}
-
-void bracket_transitions_destroy(struct bracket_transitions *transitions)
-{
-    free(transitions->transitions);
-    memset(transitions, 0, sizeof(*transitions));
 }
 
 // This is Brzozowski's algorithm.
@@ -714,4 +705,10 @@ static bool equal_bracket_transitions(struct bracket_transitions *a,
             return false;
     }
     return true;
+}
+
+static void bracket_transitions_destroy(struct bracket_transitions *transitions)
+{
+    free(transitions->transitions);
+    memset(transitions, 0, sizeof(*transitions));
 }

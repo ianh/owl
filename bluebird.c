@@ -263,11 +263,8 @@ int main(int argc, char *argv[])
         return 3;
     }
 
-    struct bracket_transitions bracket_transitions = {0};
-    determinize_bracket_transitions(&bracket_transitions, &combined);
-
     struct deterministic_grammar deterministic = {0};
-    determinize(&combined, &deterministic, &bracket_transitions);
+    determinize(&combined, &deterministic);
 
     automaton_print_with_reachability(&deterministic.bracket_automaton,
      deterministic.bracket_reachability);
@@ -278,7 +275,6 @@ int main(int argc, char *argv[])
             .grammar = &grammar,
             .combined = &combined,
             .deterministic = &deterministic,
-            .transitions = &bracket_transitions,
         };
         generate(&generator);
     } else {
@@ -291,7 +287,6 @@ int main(int argc, char *argv[])
             .grammar = &grammar,
             .combined = &combined,
             .deterministic = &deterministic,
-            .transitions = &bracket_transitions,
             .terminal_info = terminal_info,
         };
         interpret(&interpreter, input_string, output_file);

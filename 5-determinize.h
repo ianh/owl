@@ -44,6 +44,12 @@ struct deterministic_grammar {
     struct action_map action_map;
     struct action_map bracket_action_map;
 
+    // Accepting states of the bracket automaton are determinized, too -- the
+    // `transitions` struct tracks which transition symbols of the determinized
+    // automaton correspond to which transition symbols of the original, non-
+    // deterministic bracket automaton.
+    struct bracket_transitions transitions;
+
     // For each state in the bracket automaton, this array stores the set of
     // bracket transitions which can be reached from this state.  We check this
     // set against the expected transitions as we parse in order to know exactly
@@ -52,15 +58,10 @@ struct deterministic_grammar {
 };
 
 void determinize(struct combined_grammar *grammar,
- struct deterministic_grammar *result, struct bracket_transitions *transitions);
-
-void determinize_bracket_transitions(struct bracket_transitions *result,
- struct combined_grammar *grammar);
+ struct deterministic_grammar *result);
 
 struct action_map_entry *action_map_find(struct action_map *map,
  state_id target_nfa_state, state_id dfa_state, symbol_id dfa_symbol);
-
-void bracket_transitions_destroy(struct bracket_transitions *transitions);
 
 // Step 2 (build) uses this function to determinize and minimize rules.
 void determinize_minimize(struct automaton *input, struct automaton *result);

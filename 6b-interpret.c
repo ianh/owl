@@ -79,7 +79,6 @@ struct interpret_context {
     struct grammar *grammar;
     struct combined_grammar *combined;
     struct deterministic_grammar *deterministic;
-    struct bracket_transitions *transitions;
 
     struct state_array stack;
     state_id state;
@@ -267,7 +266,6 @@ static void output_ambiguity_path(struct interpreter *interpreter,
         .grammar = interpreter->grammar,
         .combined = interpreter->combined,
         .deterministic = interpreter->deterministic,
-        .transitions = interpreter->transitions,
 
         .no_tokens = true,
     };
@@ -560,7 +558,6 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
 {
     struct grammar *grammar = interpreter->grammar;
     struct combined_grammar *combined = interpreter->combined;
-    struct bracket_transitions *transitions = interpreter->transitions;
     struct deterministic_grammar *deterministic = interpreter->deterministic;
 
     if (deterministic->automaton.number_of_states > (1UL << 31) ||
@@ -584,7 +581,6 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
         .grammar = grammar,
         .combined = combined,
         .deterministic = deterministic,
-        .transitions = transitions,
         .tokenizer = &tokenizer,
     };
     info.context = &context;
@@ -779,10 +775,10 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         bracket_automaton = true;
     }
     // TODO: Include this info in a token table.
+    struct bracket_transitions ts = ctx->deterministic->transitions;
     bool bracket_transition = false;
-    for (uint32_t j = 0; j < ctx->transitions->number_of_transitions; ++j) {
-        struct bracket_transition t = ctx->transitions->transitions[j];
-        if (token != t.deterministic_transition_symbol)
+    for (uint32_t i = 0; i < ts.number_of_transitions; ++i) {
+        if (token != ts.transitions[i].deterministic_transition_symbol)
             continue;
         bracket_transition = true;
         break;
@@ -798,21 +794,21 @@ static void follow_transition_reversed(struct interpret_context *ctx,
     if (bracket_transition) {
         state_array_push(&ctx->stack, nfa_state);
         // TODO: Use a table.
-        for (state_id k = 0; k <
-         ctx->combined->bracket_automaton.number_of_states; ++k) {
-            if (ctx->combined->bracket_automaton.states[k].transition_symbol
+        for (state_id i = 0; i <
+         ctx->combined->bracket_automaton.number_of_states; ++i) {
+            if (ctx->combined->bracket_automaton.states[i].transition_symbol
              != entry->nfa_symbol)
                 continue;
-            nfa_state = k;
+            nfa_state = i;
             break;
         }
     }
     size_t offset = end;
-    for (uint32_t k = entry->action_index; k < map->number_of_actions; k++) {
-        if (map->actions[k] == 0)
+    for (uint32_t i = entry->action_index; i < map->number_of_actions; i++) {
+        if (map->actions[i] == 0)
             break;
         uint32_t action_offset = ctx->next_action_offset;
-        if (is_end_action(map->actions[k]) && offset != start)
+        if (is_end_action(map->actions[i]) && offset != start)
             offset = push_action_offsets(ctx, offset, start);
         action_offset = ctx->next_action_offset - 1;
         // TODO: make sure the start of two different things at the same level
@@ -821,7 +817,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         printf("action: %u\n", offset);
         print_action(map->actions[k], action_offset);
 #endif
-        construct_action_apply(&ctx->construct_state, map->actions[k],
+        construct_action_apply(&ctx->construct_state, map->actions[i],
          SIZE_MAX - action_offset);
     }
     if (offset != start)
