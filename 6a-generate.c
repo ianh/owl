@@ -11,6 +11,8 @@ static bool token_is(struct token *token, const char *name);
 
 static void generate_fields_for_token_rule(struct generator_output *out,
  struct rule *rule, const char *string);
+static void generate_keyword_reader(struct generator *gen,
+ struct generator_output *out);
 
 enum automaton_type { NORMAL_AUTOMATON, BRACKET_AUTOMATON };
 static void generate_automaton(struct generator *gen,
@@ -22,7 +24,12 @@ static void generate_action_automaton(struct generator *gen,
 static void generate_actions(struct generator_output *out,
  struct action_map *map, uint32_t action_index);
 
+static void output_indentation(struct generator_output *out,
+ size_t indentation);
+
 static bool should_escape(char c);
+
+static int compare_tokens(const void *a, const void *b);
 
 void generate(struct generator *gen)
 {
@@ -603,42 +610,7 @@ void generate(struct generator *gen)
     output_line(out, "    free(stack.states);");
     output_line(out, "    return construct_finish(&construct_state, offset);");
     output_line(out, "}");
-    output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info) {");
-    for (uint32_t i = 0; i < gen->combined->number_of_keyword_tokens; ++i) {
-        struct token keyword = gen->combined->tokens[i];
-        set_unsigned_number_substitution(out, "token-index", keyword.symbol);
-        if (keyword.length > UINT32_MAX) {
-            // Why even store the length as a size_t if we're just gonna do
-            // this?
-            abort();
-        }
-        set_unsigned_number_substitution(out, "token-length",
-         (uint32_t)keyword.length);
-        if (keyword.type == TOKEN_END)
-            set_literal_substitution(out, "is-end-token", "true");
-        else
-            set_literal_substitution(out, "is-end-token", "false");
-        // TODO: Use a trie or something slightly less N^2.
-        // TODO: This is incorrect; it doesn't handle tokens that are prefixes
-        // of each other if they happen to appear in the wrong order.
-        output_string(out, "    if (strncmp(text, \"");
-        for (size_t j = 0; j < keyword.length; ++j) {
-            if (!should_escape(keyword.string[j])) {
-                gen->output(&keyword.string[j], 1);
-                continue;
-            }
-            char string[8];
-            snprintf(string, sizeof(string), "\\x%02x", keyword.string[j]);
-            gen->output(string, strlen(string));
-        }
-        output_line(out, "\", %%token-length) == 0) {");
-        output_line(out, "        *token = %%token-index;");
-        output_line(out, "        *end_token = %%is-end-token;");
-        output_line(out, "        return %%token-length;");
-        output_line(out, "    }");
-    }
-    output_line(out, "    return 0;");
-    output_line(out, "}");
+    generate_keyword_reader(gen, out);
     output_line(out, "static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context) {");
     output_line(out, "    switch (parent) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
@@ -756,6 +728,135 @@ static void generate_fields_for_token_rule(struct generator_output *out,
         output_string(out, string);
     } else
         abort();
+}
+
+struct generated_token {
+    struct token token;
+    struct generated_token *prefix;
+};
+
+static void generate_keyword(struct generator_output *out, struct token keyword,
+ size_t indentation)
+{
+    set_unsigned_number_substitution(out, "token-index", keyword.symbol);
+    if (keyword.length > UINT32_MAX)
+        abort();
+    set_unsigned_number_substitution(out, "token-length",
+     (uint32_t)keyword.length);
+    output_indentation(out, indentation);
+    if (keyword.type == TOKEN_END)
+        output_line(out, "*end_token = true;");
+    else
+        output_line(out, "*end_token = false;");
+    output_indentation(out, indentation);
+    output_line(out, "*token = %%token-index;");
+    output_indentation(out, indentation);
+    output_line(out, "return %%token-length;");
+}
+
+static void generate_keyword_reader(struct generator *gen,
+ struct generator_output *out) {
+    output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info) {");
+    output_line(out, "    switch (text[0]) {");
+    struct generated_token *tokens = malloc(sizeof(struct generated_token) *
+     (size_t)gen->combined->number_of_keyword_tokens);
+    for (uint32_t i = 0; i < gen->combined->number_of_keyword_tokens; ++i)
+        tokens[i].token = gen->combined->tokens[i];
+    qsort(tokens, gen->combined->number_of_keyword_tokens,
+     sizeof(struct generated_token), compare_tokens);
+    size_t shared_length = 0;
+    struct generated_token *prefix = 0;
+    for (uint32_t i = 0; i < gen->combined->number_of_keyword_tokens; ++i) {
+        struct generated_token *token = &tokens[i];
+        struct token keyword = token->token;
+        struct generated_token *next = 0;
+        size_t next_length = 0;
+        if (i + 1 < gen->combined->number_of_keyword_tokens) {
+            next = &tokens[i + 1];
+            next_length = next->token.length;
+        }
+        size_t shared = 0;
+        for (; shared < keyword.length && shared < next_length; shared++) {
+            if (keyword.string[shared] != next->token.string[shared])
+                break;
+        }
+        while (shared > shared_length) {
+            set_unsigned_number_substitution(out, "character",
+             keyword.string[shared_length]);
+            output_indentation(out, shared_length + 1);
+            output_line(out, "case %%character:");
+            shared_length++;
+            if (shared_length > UINT32_MAX)
+                abort();
+            set_unsigned_number_substitution(out, "index",
+             (uint32_t)shared_length);
+            output_indentation(out, shared_length + 1);
+            output_line(out, "switch (text[%%index]) {");
+        }
+        token->prefix = prefix;
+        if (shared == keyword.length) {
+            prefix = token;
+            continue;
+        }
+        set_unsigned_number_substitution(out, "character",
+         keyword.string[shared_length]);
+        output_indentation(out, shared_length + 1);
+        output_line(out, "case %%character:");
+        if (keyword.length <= shared_length + 1)
+            generate_keyword(out, keyword, shared_length + 2);
+        else {
+            if (shared_length + 1 > UINT32_MAX)
+                abort();
+            set_unsigned_number_substitution(out, "offset",
+             (uint32_t)(shared_length + 1));
+            output_indentation(out, shared_length + 2);
+            output_string(out, "if (strncmp(text + %%offset, \"");
+            for (size_t j = shared_length + 1; j < keyword.length; ++j) {
+                if (!should_escape(keyword.string[j])) {
+                    gen->output(&keyword.string[j], 1);
+                    continue;
+                }
+                char string[8];
+                snprintf(string, sizeof(string), "\\x%02x", keyword.string[j]);
+                gen->output(string, strlen(string));
+            }
+            if (keyword.length - shared_length - 1 > UINT32_MAX)
+                abort();
+            set_unsigned_number_substitution(out, "token-length",
+             (uint32_t)(keyword.length - shared_length - 1));
+            output_line(out, "\", %%token-length) == 0) {");
+            generate_keyword(out, keyword, shared_length + 3);
+            output_indentation(out, shared_length + 2);
+            output_line(out, "} else {");
+            if (prefix)
+                generate_keyword(out, prefix->token, shared_length + 3);
+            else {
+                output_indentation(out, shared_length + 3);
+                output_line(out, "return 0;");
+            }
+            output_indentation(out, shared_length + 2);
+            output_line(out, "}");
+        }
+        while (shared_length > shared) {
+            output_indentation(out, shared_length + 1);
+            output_line(out, "default:");
+            if (prefix) {
+                generate_keyword(out, prefix->token, shared_length + 2);
+                if (prefix->token.length >= shared_length)
+                    prefix = prefix->prefix;
+            } else {
+                output_indentation(out, shared_length + 2);
+                output_line(out, "return 0;");
+            }
+            output_indentation(out, shared_length + 1);
+            output_line(out, "}");
+            shared_length--;
+        }
+    }
+    output_line(out, "    default:");
+    output_line(out, "        return 0;");
+    output_line(out, "    }");
+    output_line(out, "}");
 }
 
 static void generate_automaton(struct generator *gen,
@@ -943,6 +1044,12 @@ static bool token_is(struct token *token, const char *name)
      !memcmp(name, token->string, token->length);
 }
 
+static void output_indentation(struct generator_output *out, size_t indentation)
+{
+    for (int i = 0; i < indentation; ++i)
+        output_string(out, "    ");
+}
+
 static bool should_escape(char c)
 {
     if (c >= 'a' && c <= 'z')
@@ -957,4 +1064,19 @@ static bool should_escape(char c)
             return false;
     }
     return true;
+}
+
+static int compare_tokens(const void *aa, const void *bb)
+{
+    const struct token *a = &((struct generated_token *)aa)->token;
+    const struct token *b = &((struct generated_token *)bb)->token;
+    size_t minlen = a->length < b->length ? a->length : b->length;
+    int cmp = memcmp(a->string, b->string, minlen);
+    if (cmp != 0)
+        return cmp;
+    if (a->length < b->length)
+        return -1;
+    if (a->length > b->length)
+        return 1;
+    return 0;
 }
