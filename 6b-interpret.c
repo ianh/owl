@@ -75,13 +75,23 @@ static void left_right_operand_slots_lookup(uint32_t rule, uint32_t *left,
 #include "x-tokenize.h"
 #include "x-construct-parse-tree.h"
 
+struct saved_state {
+    struct bitset bracket_reachability;
+    struct automaton *automaton;
+    state_id state;
+    bool in_bracket;
+};
+
 struct interpret_context {
     struct grammar *grammar;
     struct combined_grammar *combined;
     struct deterministic_grammar *deterministic;
 
-    struct state_array stack;
-    state_id state;
+    struct saved_state *stack;
+    uint32_t stack_allocated_bytes;
+    uint32_t stack_depth;
+
+    struct state_array nfa_stack;
 
     struct bluebird_default_tokenizer *tokenizer;
     struct construct_state construct_state;
@@ -584,6 +594,11 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
         .tokenizer = &tokenizer,
     };
     info.context = &context;
+    context.stack_depth = 1;
+    context.stack = grow_array(context.stack, &context.stack_allocated_bytes,
+     sizeof(struct saved_state));
+    context.stack[0].state = deterministic->automaton.start_state;
+    context.stack[0].automaton = &deterministic->automaton;
     while (bluebird_default_tokenizer_advance(&tokenizer, &token_run))
         fill_run_states(&context, token_run);
     if (text[tokenizer.offset] != '\0') {
@@ -591,8 +606,8 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
         fprintf(stderr, "error: tokenizing failed.\n");
         exit(-1);
     }
-    if (context.stack.number_of_states > 0 ||
-     !deterministic->automaton.states[context.state].accepting) {
+    if (context.stack_depth != 1 ||
+     !deterministic->automaton.states[context.stack[0].state].accepting) {
         // TODO: Better error message
         fprintf(stderr, "error: unexpected end of file.\n");
         exit(-1);
@@ -664,43 +679,91 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
     output_document(output, &context.document, interpreter->terminal_info);
 }
 
+// on enter bracket:
+// - find all valid successors that have bracket transitions
+// - fill in a bitset based on those transitions
+// - push this bitset onto a stack
+// on leave bracket:
+// - pop the stack
+// on normal transition:
+// - check that the successor state is valid
+
+static bool valid_state(struct interpret_context *ctx, struct saved_state *s,
+ state_id state)
+{
+    if (!s->in_bracket)
+        return true;
+    return bitset_intersects(&ctx->deterministic->bracket_reachability[state],
+     &s->bracket_reachability);
+}
+
 static void fill_run_states(struct interpret_context *ctx,
  struct bluebird_token_run *run)
 {
-    struct state_array *stack = &ctx->stack;
-    state_id state = ctx->state;
-    struct automaton *a = stack->number_of_states > 0 ?
-     &ctx->deterministic->bracket_automaton : &ctx->deterministic->automaton;
+    if (ctx->stack_depth < 1) {
+        // TODO: Better error message here.
+        fprintf(stderr, "error: stack underflow.\n");
+        exit(-1);
+    }
+    struct saved_state *top = &ctx->stack[ctx->stack_depth - 1];
     for (uint16_t i = 0; i < run->number_of_tokens; ++i) {
         symbol_id symbol = run->tokens[i];
-        run->states[i] = state + (stack->number_of_states > 0 ? 1UL << 31 : 0);
-        if (a->states[state].accepting && stack->number_of_states > 0) {
+        run->states[i] = top->state + (top->in_bracket ? 1UL << 31 : 0);
+        struct state s = top->automaton->states[top->state];
+        if (s.accepting && top->in_bracket) {
             // We've reached the end token for a guard bracket.
             assert(symbol == BRACKET_TRANSITION_TOKEN);
-            symbol = a->states[state].transition_symbol;
+            symbol = s.transition_symbol;
             run->tokens[i] = symbol;
-            state = state_array_pop(stack);
-            if (stack->number_of_states == 0)
-                a = &ctx->deterministic->automaton;
-        } else if (follow_transition(a, &state, symbol)) {
+            ctx->stack_depth--;
+            if (ctx->stack_depth < 1) {
+                // TODO: Better error message here.
+                fprintf(stderr, "error: stack underflow.\n");
+                exit(-1);
+            }
+            top = &ctx->stack[ctx->stack_depth - 1];
+        } else if (follow_transition(top->automaton, &top->state, symbol)) {
             // This is just a normal token.
+            if (!valid_state(ctx, top, top->state)) {
+                // TODO: Better error message here.
+                fprintf(stderr, "error: unexpected token %u at %u.\n", symbol, i);
+                exit(-1);
+            }
             continue;
         } else {
             // Maybe this is the start token for a guard bracket.
             // TODO: Look for start symbols/tokens explicitly?
-            state_array_push(stack, state);
-            a = &ctx->deterministic->bracket_automaton;
-            state = a->start_state;
+            // - find all valid successors that have bracket transitions
+            // - fill in a bitset based on these transitions
+            // - push this bitset onto a stack
+            struct state s = top->automaton->states[top->state];
+            struct bitset reachability = bitset_create_empty(ctx->deterministic->transitions.number_of_transitions);
+            for (uint32_t j = 0; j < s.number_of_transitions; ++j) {
+                // TODO: this is dumb
+                for (uint32_t k = 0; k < ctx->deterministic->transitions.number_of_transitions; ++k) {
+                    if (ctx->deterministic->transitions.transitions[k].deterministic_transition_symbol == s.transitions[j].symbol) {
+                        bitset_add(&reachability, k);
+                        break;
+                    }
+                }
+            }
+            // if nothing is reachable, give up?
+            ctx->stack = grow_array(ctx->stack, &ctx->stack_allocated_bytes,
+             sizeof(struct saved_state) * ++ctx->stack_depth);
+            top = &ctx->stack[ctx->stack_depth - 1];
+            top->in_bracket = true;
+            top->automaton = &ctx->deterministic->bracket_automaton;
+            top->state = top->automaton->start_state;
+            top->bracket_reachability = bitset_move(&reachability);
         }
-        run->states[i] = state + (stack->number_of_states > 0 ? 1UL << 31 : 0);
-        if (!follow_transition(a, &state, symbol)) {
+        run->states[i] = top->state + (top->in_bracket ? 1UL << 31 : 0);
+        if (!follow_transition(top->automaton, &top->state, symbol) ||
+         !valid_state(ctx, top, top->state)) {
             // TODO: Better error message here.
             fprintf(stderr, "error: unexpected token %u at %u.\n", symbol, i);
             exit(-1);
-            break;
         }
     }
-    ctx->state = state;
 }
 
 static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
@@ -792,7 +855,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
     }
     nfa_state = entry->nfa_state;
     if (bracket_transition) {
-        state_array_push(&ctx->stack, nfa_state);
+        state_array_push(&ctx->nfa_stack, nfa_state);
         // TODO: Use a table.
         for (state_id i = 0; i <
          ctx->combined->bracket_automaton.number_of_states; ++i) {
@@ -824,7 +887,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         offset = push_action_offsets(ctx, offset, start);
     if (bracket_automaton && state ==
      ctx->deterministic->bracket_automaton.start_state)
-        nfa_state = state_array_pop(&ctx->stack);
+        nfa_state = state_array_pop(&ctx->nfa_stack);
     *last_nfa_state = nfa_state;
 }
 

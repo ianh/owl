@@ -28,6 +28,13 @@ static inline void bitset_destroy(struct bitset *set)
     free(set->bit_groups);
 }
 
+static inline struct bitset bitset_move(struct bitset *set)
+{
+    struct bitset s = *set;
+    *set = (struct bitset){0};
+    return s;
+}
+
 static inline bool bitset_contains(struct bitset *set, uint32_t element)
 {
     return set->bit_groups[element / 64] & (1ULL << (element % 64));
@@ -40,6 +47,7 @@ static inline void bitset_add(struct bitset *set, uint32_t element)
 
 void bitset_clear(struct bitset *set);
 void bitset_union(struct bitset *set, struct bitset *other);
+bool bitset_intersects(struct bitset *set, struct bitset *other);
 // Like `union`, but returns true if any new elements were added.
 bool bitset_union_added(struct bitset *set, struct bitset *other);
 int bitset_compare(struct bitset *a, struct bitset *b);

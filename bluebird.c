@@ -39,37 +39,6 @@ static void write_to_output(const char *string, size_t len);
 
 static char *grammar_string;
 
-static void automaton_print_with_reachability(struct automaton *a, struct bitset *sets)
-{
-    printf("start = %u\n", a->start_state);
-    for (uint32_t i = 0; i < a->number_of_states; ++i) {
-        struct state *s = &a->states[i];
-        if (s->accepting) {
-            if (s->transition_symbol)
-                printf("%4u   -- accept --> %x\n", i, s->transition_symbol);
-            else
-                printf("%4u   -- accept -->\n", i);
-        }
-        for (uint32_t j = 0; j < s->number_of_transitions; ++j) {
-            struct transition *t = &s->transitions[j];
-            if (t->symbol == SYMBOL_EPSILON)
-                printf("%4u   ---------->%4u", i, t->target);
-            else
-                printf("%4u   - %4x   ->%4u", i, t->symbol, t->target);
-            if (t->action != 0)
-                printf(" (%x)\n", t->action);
-            else
-                printf("\n");
-        }
-        struct bitset set = sets[i];
-        for (uint32_t j = 0; j < set.number_of_elements; ++j) {
-            if (bitset_contains(&set, j))
-                printf("~> %x\n", j);
-        }
-    }
-}
-
-
 int main(int argc, char *argv[])
 {
     // Parse arguments.
@@ -265,9 +234,6 @@ int main(int argc, char *argv[])
 
     struct deterministic_grammar deterministic = {0};
     determinize(&combined, &deterministic);
-
-    automaton_print_with_reachability(&deterministic.bracket_automaton,
-     deterministic.bracket_reachability);
 
     if (compile) {
         struct generator generator = {

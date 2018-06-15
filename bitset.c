@@ -14,6 +14,18 @@ void bitset_union(struct bitset *set, struct bitset *other)
         set->bit_groups[i] |= other->bit_groups[i];
 }
 
+bool bitset_intersects(struct bitset *set, struct bitset *other)
+{
+    if (set->number_of_elements != other->number_of_elements)
+        abort();
+    uint32_t hits = 0;
+    for (uint32_t i = 0; i < set->number_of_bit_groups; ++i) {
+        if (set->bit_groups[i] & other->bit_groups[i])
+            hits++;
+    }
+    return hits > 0;
+}
+
 bool bitset_union_added(struct bitset *set, struct bitset *other)
 {
     if (set->number_of_elements != other->number_of_elements)
