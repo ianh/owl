@@ -606,15 +606,21 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
     while (bluebird_default_tokenizer_advance(&tokenizer, &token_run))
         fill_run_states(&context, token_run);
     if (text[tokenizer.offset] != '\0') {
-        // TODO: Better error message
-        fprintf(stderr, "error: tokenizing failed.\n");
-        exit(-1);
+        error.ranges[0].start = tokenizer.offset;
+        size_t i = tokenizer.offset + 1;
+        while (text[i] != '\0' && !char_is_whitespace(text[i]) &&
+         !char_continues_identifier(text[i], &info))
+            i++;
+        error.ranges[0].end = i;
+        exit_with_errorf("the text '%.*s' doesn't match any token",
+         (int)(error.ranges[0].end - error.ranges[0].start),
+         text + error.ranges[0].start);
     }
     if (context.stack_depth != 1 ||
      !deterministic->automaton.states[context.stack[0].state].accepting) {
-        // TODO: Better error message
-        fprintf(stderr, "error: unexpected end of file.\n");
-        exit(-1);
+        error.ranges[0].start = tokenizer.offset - tokenizer.whitespace - 1;
+        error.ranges[0].end = tokenizer.offset - tokenizer.whitespace;
+        exit_with_errorf("input unexpectedly ended after the last token");
     }
 //    print_token_runs(&context, token_run);
     push_action_offsets(&context, 0, 0);
