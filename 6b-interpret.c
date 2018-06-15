@@ -91,6 +91,11 @@ struct interpret_context {
     uint32_t stack_allocated_bytes;
     uint32_t stack_depth;
 
+    // This array has an element for every symbol that appears in the automata.
+    // If the symbol isn't a bracket transition symbol, the array has UINT32_T
+    // in its position.
+    uint32_t *bracket_transition_for_symbol;
+
     struct state_array nfa_stack;
 
     struct bluebird_default_tokenizer *tokenizer;
@@ -697,14 +702,25 @@ static bool valid_state(struct interpret_context *ctx, struct saved_state *s,
      &s->bracket_reachability);
 }
 
+static void fill_bracket_transitions_for_symbols(struct interpret_context *ctx)
+{
+    if (ctx->bracket_transition_for_symbol)
+        return;
+    struct deterministic_grammar *d = ctx->deterministic;
+    size_t len = d->automaton.number_of_symbols * sizeof(uint32_t);
+    ctx->bracket_transition_for_symbol = malloc(len);
+    memset(ctx->bracket_transition_for_symbol, 0xff, len);
+    for (uint32_t i = 0; i < d->transitions.number_of_transitions; ++i) {
+        symbol_id symbol =
+         d->transitions.transitions[i].deterministic_transition_symbol;
+        ctx->bracket_transition_for_symbol[symbol] = i;
+    }
+}
+
 static void fill_run_states(struct interpret_context *ctx,
  struct bluebird_token_run *run)
 {
-    if (ctx->stack_depth < 1) {
-        // TODO: Better error message here.
-        fprintf(stderr, "error: stack underflow.\n");
-        exit(-1);
-    }
+    fill_bracket_transitions_for_symbols(ctx);
     struct saved_state *top = &ctx->stack[ctx->stack_depth - 1];
     for (uint16_t i = 0; i < run->number_of_tokens; ++i) {
         symbol_id symbol = run->tokens[i];
@@ -717,37 +733,29 @@ static void fill_run_states(struct interpret_context *ctx,
             run->tokens[i] = symbol;
             ctx->stack_depth--;
             if (ctx->stack_depth < 1) {
-                // TODO: Better error message here.
-                fprintf(stderr, "error: stack underflow.\n");
-                exit(-1);
+                fprintf(stderr, "internal error (underflow)\n");
+                abort();
             }
             top = &ctx->stack[ctx->stack_depth - 1];
         } else if (follow_transition(top->automaton, &top->state, symbol)) {
             // This is just a normal token.
-            if (!valid_state(ctx, top, top->state)) {
-                // TODO: Better error message here.
-                fprintf(stderr, "error: unexpected token %u at %u.\n", symbol, i);
-                exit(-1);
-            }
+            if (!valid_state(ctx, top, top->state))
+                goto unexpected_token;
             continue;
         } else {
             // Maybe this is the start token for a guard bracket.
-            // TODO: Look for start symbols/tokens explicitly?
-            // - find all valid successors that have bracket transitions
-            // - fill in a bitset based on these transitions
-            // - push this bitset onto a stack
             struct state s = top->automaton->states[top->state];
-            struct bitset reachability = bitset_create_empty(ctx->deterministic->transitions.number_of_transitions);
+            struct bitset reachability = bitset_create_empty(
+             ctx->deterministic->transitions.number_of_transitions);
             for (uint32_t j = 0; j < s.number_of_transitions; ++j) {
-                // TODO: this is dumb
-                for (uint32_t k = 0; k < ctx->deterministic->transitions.number_of_transitions; ++k) {
-                    if (ctx->deterministic->transitions.transitions[k].deterministic_transition_symbol == s.transitions[j].symbol) {
-                        bitset_add(&reachability, k);
-                        break;
-                    }
-                }
+                if (!valid_state(ctx, top, s.transitions[j].target))
+                    continue;
+                symbol_id symbol = s.transitions[j].symbol;
+                uint32_t k = ctx->bracket_transition_for_symbol[symbol];
+                if (k != UINT32_MAX)
+                    bitset_add(&reachability, k);
             }
-            // if nothing is reachable, give up?
+            // TODO: if nothing is reachable, give up?
             ctx->stack = grow_array(ctx->stack, &ctx->stack_allocated_bytes,
              sizeof(struct saved_state) * ++ctx->stack_depth);
             top = &ctx->stack[ctx->stack_depth - 1];
@@ -757,11 +765,36 @@ static void fill_run_states(struct interpret_context *ctx,
             top->bracket_reachability = bitset_move(&reachability);
         }
         run->states[i] = top->state + (top->in_bracket ? 1UL << 31 : 0);
-        if (!follow_transition(top->automaton, &top->state, symbol) ||
-         !valid_state(ctx, top, top->state)) {
-            // TODO: Better error message here.
-            fprintf(stderr, "error: unexpected token %u at %u.\n", symbol, i);
-            exit(-1);
+        if (follow_transition(top->automaton, &top->state, symbol) &&
+         valid_state(ctx, top, top->state))
+            continue;
+unexpected_token:
+        {
+            size_t offset = ctx->tokenizer->offset - ctx->tokenizer->whitespace;
+            size_t last_offset = offset;
+            size_t len = 0;
+            uint16_t length_offset = run->lengths_size - 1;
+            for (uint32_t j = i; j < run->number_of_tokens; ++j) {
+                if (run->tokens[j] >= ctx->combined->number_of_tokens)
+                    continue;
+                last_offset = offset;
+                len = decode_token_length(run, &length_offset, &offset);
+            }
+            error.ranges[0].start = last_offset - len;
+            error.ranges[0].end = last_offset;
+            for (uint32_t j = 0; j < ctx->combined->number_of_tokens; ++j) {
+                struct token token = ctx->combined->tokens[j];
+                if (token.symbol != symbol)
+                    continue;
+                if (j < ctx->combined->number_of_keyword_tokens) {
+                    exit_with_errorf("unexpected token '%.*s'",
+                     (int)token.length, token.string);
+                } else {
+                    exit_with_errorf("unexpected %.*s", (int)token.length,
+                     token.string);
+                }
+            }
+            abort();
         }
     }
 }
@@ -769,6 +802,7 @@ static void fill_run_states(struct interpret_context *ctx,
 static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
  struct bluebird_token_run *run)
 {
+    fill_bracket_transitions_for_symbols(ctx);
     ctx->construct_state.info = ctx;
     construct_begin(&ctx->construct_state, SIZE_MAX,
      ctx->combined->root_rule_is_expression ?
@@ -837,14 +871,10 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         map = &ctx->deterministic->bracket_action_map;
         bracket_automaton = true;
     }
-    // TODO: Include this info in a token table.
-    struct bracket_transitions ts = ctx->deterministic->transitions;
     bool bracket_transition = false;
-    for (uint32_t i = 0; i < ts.number_of_transitions; ++i) {
-        if (token != ts.transitions[i].deterministic_transition_symbol)
-            continue;
-        bracket_transition = true;
-        break;
+    if (token != UINT32_MAX) {
+        bracket_transition =
+         ctx->bracket_transition_for_symbol[token] != UINT32_MAX;
     }
     struct action_map_entry *entry;
     state_id nfa_state = *last_nfa_state;

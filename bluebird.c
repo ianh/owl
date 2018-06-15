@@ -37,7 +37,7 @@ static FILE *fopen_or_error(const char *filename, const char *mode);
 static char *read_string(FILE *file);
 static void write_to_output(const char *string, size_t len);
 
-static char *grammar_string;
+static char *error_in_string;
 
 int main(int argc, char *argv[])
 {
@@ -45,6 +45,7 @@ int main(int argc, char *argv[])
     bool needs_help = false;
     const char *input_filename = 0;
     const char *output_filename = 0;
+    char *grammar_string = 0;
     bool compile = false;
     bool color_output = false;
     enum {
@@ -155,6 +156,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, " -h          --help             output this help text\n");
         return 1;
     }
+    error_in_string = grammar_string;
 
     struct terminal_info terminal_info = { .columns = 80 };
     if (output_filename)
@@ -255,6 +257,7 @@ int main(int argc, char *argv[])
             .deterministic = &deterministic,
             .terminal_info = terminal_info,
         };
+        error_in_string = input_string;
         interpret(&interpreter, input_string, output_file);
         free(input_string);
     }
@@ -292,10 +295,10 @@ void print_error()
     for (size_t i = 0; range < MAX_ERROR_RANGES; ++i) {
         if (error.ranges[range].end == 0)
             break;
-        if (grammar_string[i] == '\0' || grammar_string[i] == '\n') {
+        if (error_in_string[i] == '\0' || error_in_string[i] == '\n') {
             if (line_marked) {
                 fputs("  ", stderr);
-                fwrite(grammar_string + line_start, 1, i - line_start, stderr);
+                fwrite(error_in_string + line_start, 1, i - line_start, stderr);
                 fputs("\n  ", stderr);
                 int max_range = range;
                 if (colors >= 256)
@@ -333,7 +336,7 @@ void print_error()
                     fputs("  ...\n", stderr);
                 last_line_marked = false;
             }
-            if (grammar_string[i] == '\0')
+            if (error_in_string[i] == '\0')
                 break;
             line_start = i + 1;
         }
