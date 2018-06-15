@@ -1,5 +1,5 @@
-#ifndef _FANCY_TREE_OUTPUT_H_
-#define _FANCY_TREE_OUTPUT_H_
+#ifndef _6B_FANCY_TREE_OUTPUT_H_
+#define _6B_FANCY_TREE_OUTPUT_H_
 
 #include <stdbool.h>
 #include <stddef.h>

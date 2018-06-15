@@ -4,7 +4,6 @@
 #include "5-determinize.h"
 #include "6a-generate.h"
 #include "6b-interpret.h"
-#include "fancy-tree-output.h"
 #include <dlfcn.h>
 #include <stdio.h>
 #include <string.h>

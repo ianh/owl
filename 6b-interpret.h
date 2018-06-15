@@ -3,7 +3,7 @@
 
 #include "4-check-for-ambiguity.h"
 #include "5-determinize.h"
-#include "fancy-tree-output.h"
+#include "6b-fancy-tree-output.h"
 
 #include <stdio.h>
 
