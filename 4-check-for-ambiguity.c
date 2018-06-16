@@ -517,6 +517,7 @@ static void follow_state_pair_transition(struct path_node node, state_id a,
         table->out_paths[index] = node;
         if ((pair.a != pair.b && table->in_paths[index].type != INVALID_NODE) ||
          table->ain_paths[index].type != INVALID_NODE) {
+            // TODO: find minimum path, not just the first one we come across.
             table->has_ambiguity = true;
             table->ambiguity = pair;
             return;

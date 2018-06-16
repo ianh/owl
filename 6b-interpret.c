@@ -176,80 +176,6 @@ static size_t push_action_offsets(struct interpret_context *ctx, size_t start,
 static bool is_end_action(uint16_t action);
 
 #if 1
-static void print_token_runs(struct interpret_context *ctx,
- struct bluebird_token_run *token_run)
-{
-    if (!token_run)
-        return;
-    print_token_runs(ctx, token_run->prev);
-    for (uint16_t i = 0; i < token_run->number_of_tokens; ++i) {
-        if (token_run->states[i] >= (1UL << 31)) {
-            struct state s = ctx->deterministic->bracket_automaton.states[token_run->states[i] - (1UL << 31)];
-            if (s.accepting && s.transition_symbol)
-                printf("%02x -> %u* (%x)\n", token_run->tokens[i], token_run->states[i] - (1U << 31), s.transition_symbol);
-            else
-                printf("%02x -> %u*\n", token_run->tokens[i], token_run->states[i] - (1U << 31));
-        } else
-            printf("%02x -> %u\n", token_run->tokens[i], token_run->states[i]);
-    }
-}
-
-static void print_parse_tree(struct interpret_context *ctx,
- struct interpret_node *node, struct slot *slot, int indent)
-{
-    if (!node)
-        return;
-    for (int i = 0; i < indent; ++i)
-        printf(" ");
-    if (node->type != NODE_RULE) {
-        switch (node->type) {
-        case NODE_IDENTIFIER_TOKEN:
-            printf("%.*s", (int)node->identifier.length, node->identifier.name);
-            break;
-        case NODE_NUMBER_TOKEN:
-            printf("%f", node->number);
-            break;
-        case NODE_STRING_TOKEN:
-            printf("%.*s", (int)node->string.length, node->string.string);
-            break;
-        default:
-            break;
-        }
-        // FIXME: We need to fill in the correct rule index for this to work.
-//        if (slot && (slot->name_length != rule->name_length ||
-//         memcmp(slot->name, rule->name, rule->name_length)))
-//            printf("@%.*s", (int)slot->name_length, slot->name);
-        printf("\n");
-        print_parse_tree(ctx, node->next_sibling, slot, indent);
-        return;
-    }
-    struct rule *rule = &ctx->grammar->rules[node->rule_index];
-    printf("%.*s", (int)rule->name_length, rule->name);
-    if (slot && (slot->name_length != rule->name_length ||
-     memcmp(slot->name, rule->name, rule->name_length)))
-        printf("@%.*s", (int)slot->name_length, slot->name);
-    if (rule->number_of_choices) {
-        if (node->choice_index >= rule->number_of_choices) {
-            struct operator *op = &rule->operators[node->choice_index -
-             rule->number_of_choices];
-            printf(" : %.*s", (int)op->name_length, op->name);
-        } else {
-            struct choice *choice = &rule->choices[node->choice_index];
-            printf(" : %.*s", (int)choice->name_length, choice->name);
-        }
-    }
-    printf("  %u - %u", SIZE_MAX - node->start_location, SIZE_MAX - node->end_location);
-    printf("\n");
-    for (uint32_t i = 0; i < rule->number_of_slots; ++i) {
-        struct slot *slot = &rule->slots[i];
-        if (!node->slots[i])
-            continue;
-        print_parse_tree(ctx, node->slots[i], slot, indent + 1);
-    }
-    print_parse_tree(ctx, node->next_sibling, slot, indent);
-
-}
-
 #define CONSTRUCT_ACTION_NAME(name) PRINT_CONSTRUCT_ACTION_ ## name,
 enum { CONSTRUCT_ACTIONS };
 #undef CONSTRUCT_ACTION_NAME
@@ -366,7 +292,7 @@ void output_ambiguity(struct interpreter *interpreter,
             do {
                 // This whole business is to avoid adding tokens that will
                 // parse as keywords.  We don't want to confuse anyone by
-                // producing a string that won't actually parse to the right
+                // producing a token that won't actually parse to the right
                 // thing.
                 if (is_identifier) {
                     size_t underscores = identifier_iterator / 26;
@@ -412,7 +338,6 @@ void output_ambiguity(struct interpreter *interpreter,
         };
     }
 
-    // TODO: Adjust colors to help maintain association between output rows.
     errorf("this grammar is ambiguous");
     print_error();
     fputs("\n", output);
@@ -622,11 +547,8 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
         error.ranges[0].end = tokenizer.offset - tokenizer.whitespace;
         exit_with_errorf("input unexpectedly ended after the last token");
     }
-//    print_token_runs(&context, token_run);
     push_action_offsets(&context, 0, 0);
     struct interpret_node *root = build_parse_tree(&context, token_run);
-    // TODO: Error handling.
-//    print_parse_tree(&context, root, 0, 0);
 #if 0
     for (uint32_t i = 0; i < context.next_action_offset; ++i)
         printf("%u. %lu\n", i, context.offset_table[i]);

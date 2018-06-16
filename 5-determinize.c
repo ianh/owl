@@ -482,6 +482,8 @@ void disambiguate(struct automaton *input, struct automaton *input_bracket,
         .first_transition_symbol = first_bracket_transition_symbol,
         .options = DISAMBIGUATE,
     }, &transitions);
+
+    // TODO: Minimize! (how?)
     determinize_automaton((struct context){
         .input = input,
         .result = result,

@@ -5,6 +5,8 @@
 // invocation.  The interpreter includes the source directly, while the compiler
 // redefines the macro to return the source code as a string.
 
+// FIXME: We should probably support Unicode.
+
 #ifndef TOKEN_T
 #define TOKEN_T uint32_t
 #endif
@@ -44,7 +46,6 @@
 #error The built-in tokenizer needs definitions of basic tokens to work.
 #endif
 
-// TODO: 4096 seems to be a decent value for this.  Do some more testing later.
 #define TOKEN_RUN_LENGTH 4096
 
 TOKENIZE_BODY
@@ -91,7 +92,6 @@ static bool char_is_numeric(char c)
     return c >= '0' && c <= '9';
 }
 
-// TODO: Unicode.
 static bool char_is_alphabetic(char c)
 {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
