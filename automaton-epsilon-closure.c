@@ -102,11 +102,16 @@ static bool closure_entry_add(struct state_table *table,
      fnv(&previous_state, sizeof(previous_state)));
     uint32_t previous_state_index = table->state_indexes[previous];
     if (!table->used[previous] || previous_state_index == UINT32_MAX) {
-        // We shouldn't be revisiting a state unless we arrived from a valid
-        // previous state.
-        assert(first_visit);
-        closure->action_indexes[*state_index] = append_to_action_path(table,
-         closure, UINT32_MAX, action);
+        // We'll visit this state twice in succession if there are two
+        // transitions from a single state to this one.  So we have to handle
+        // both cases.
+        if (first_visit) {
+            closure->action_indexes[*state_index] =
+             append_to_action_path(table, closure, UINT32_MAX, action);
+        } else {
+            closure->ambiguous_action_indexes[*state_index] =
+             append_to_action_path(table, closure, UINT32_MAX, action);
+        }
         return true;
     }
     if (first_visit) {
