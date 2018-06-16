@@ -196,6 +196,8 @@ struct construct_action {
 static bool construct_expression_should_reduce(struct construct_state *s,
  struct construct_expression *expr, struct construct_node *node)
 {
+    if (node->fixity_associativity == CONSTRUCT_POSTFIX)
+        return false;
     struct construct_node *top = expr->first_operator;
     if (!top)
         return false;
