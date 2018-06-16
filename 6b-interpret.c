@@ -175,7 +175,7 @@ static size_t push_action_offsets(struct interpret_context *ctx, size_t start,
  size_t end);
 static bool is_end_action(uint16_t action);
 
-#if 1
+#if 0
 #define CONSTRUCT_ACTION_NAME(name) PRINT_CONSTRUCT_ACTION_ ## name,
 enum { CONSTRUCT_ACTIONS };
 #undef CONSTRUCT_ACTION_NAME

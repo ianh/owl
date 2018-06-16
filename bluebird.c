@@ -402,8 +402,9 @@ static int terminal_colors(int fileno)
         void *handle = dlopen(libs[i], RTLD_LAZY | RTLD_LOCAL);
         if (!handle)
             continue;
-        int (*setupterm)(char *, int, int *) = dlsym(handle, "setupterm");
-        int (*tigetnum)(char *) = dlsym(handle, "tigetnum");
+        int (*setupterm)(char *, int, int *) =
+         (int (*)(char *, int, int *))dlsym(handle, "setupterm");
+        int (*tigetnum)(char *) = (int (*)(char *))dlsym(handle, "tigetnum");
         int value = -1;
         int err;
         if (setupterm && tigetnum && !setupterm(0, fileno, &err))
