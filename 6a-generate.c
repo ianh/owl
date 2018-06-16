@@ -531,7 +531,7 @@ void generate(struct generator *gen)
     output_line(out, "    if (string[tokenizer.offset] != '\\0') {");
     output_line(out, "        // TODO: Return error instead of printing it");
     output_line(out, "        fprintf(stderr, \"error: tokenizing failed. next char was %u\\n\", string[tokenizer.offset]);");
-    output_line(out, "        abort();");
+    output_line(out, "        exit(-1);");
     output_line(out, "    }");
     output_line(out, "    if (c.stack.depth > 0) {");
     output_line(out, "        // TODO: Return error instead of printing it");

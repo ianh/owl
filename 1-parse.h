@@ -1361,7 +1361,7 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
     if (string[tokenizer.offset] != '\0') {
         // TODO: Return error instead of printing it
         fprintf(stderr, "error: tokenizing failed. next char was %u\n", string[tokenizer.offset]);
-        abort();
+        exit(-1);
     }
     if (c.stack.depth > 0) {
         // TODO: Return error instead of printing it
