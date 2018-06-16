@@ -341,8 +341,8 @@ static bool grow_tree(struct bluebird_tree *tree, size_t size)
 }
 static void write_tree(struct bluebird_tree *tree, parsed_id value)
 {
-    // Reserve 5 bytes (the maximum encoded size of a 32-bit value).
-    size_t reserved_size = tree->next_id + 5;
+    // Reserve 10 bytes (the maximum encoded size of a 64-bit value).
+    size_t reserved_size = tree->next_id + 10;
     if (tree->parse_tree_size <= reserved_size && !grow_tree(tree, reserved_size))
         return;
     tree->parse_tree[tree->next_id++] = value & 0x7f;

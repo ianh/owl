@@ -236,8 +236,8 @@ void generate(struct generator *gen)
     output_line(out, "}");
     output_line(out, "static void write_tree(struct bluebird_tree *tree, parsed_id value)");
     output_line(out, "{");
-    output_line(out, "    // Reserve 5 bytes (the maximum encoded size of a 32-bit value).");
-    output_line(out, "    size_t reserved_size = tree->next_id + 5;");
+    output_line(out, "    // Reserve 10 bytes (the maximum encoded size of a 64-bit value).");
+    output_line(out, "    size_t reserved_size = tree->next_id + 10;");
     output_line(out, "    if (tree->parse_tree_size <= reserved_size && !grow_tree(tree, reserved_size))");
     // FIXME: Should we handle this case?
     output_line(out, "        return;");
