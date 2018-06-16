@@ -323,14 +323,14 @@ static void build_ambiguity_path(struct context *context,
             if (direction == 1) {
                 offset.symbols += in.offset.symbols;
                 for (int i = 0; i < 2; ++i)
-                    offset.actions[swapped ? 1 - i : i] += in.offset.actions[i];
+                    offset.actions[swapped ? 1 - i : i] += in.offset.actions[(node->flags & SWAPPED_BRACKET_PATH) ? 1 - i : i];
             }
             build_ambiguity_path(context, ambiguity, offset, &in, -1,
              node->flags & SWAPPED_BRACKET_PATH ? !swapped : swapped);
             if (direction == -1) {
                 offset.symbols -= in.offset.symbols;
                 for (int i = 0; i < 2; ++i)
-                    offset.actions[swapped ? 1 - i : i] -= in.offset.actions[i];
+                    offset.actions[swapped ? 1 - i : i] -= in.offset.actions[(node->flags & SWAPPED_BRACKET_PATH) ? 1 - i : i];
             }
             break;
         }
@@ -567,7 +567,7 @@ static void path_node_copy(struct context *context,
             assert(in.flags & COPIED_PATH);
             offset->symbols += in.offset.symbols;
             for (int i = 0; i < 2; ++i)
-                offset->actions[swapped ? 1 - i : i] += in.offset.actions[i];
+                offset->actions[swapped ? 1 - i : i] += in.offset.actions[(node->flags & SWAPPED_BRACKET_PATH) ? 1 - i : i];
             break;
         }
         case JOIN_NODE:
