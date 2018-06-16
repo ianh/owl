@@ -1,9 +1,9 @@
 #ifndef _BITSET_H_
 #define _BITSET_H_
 
+#include "alloc.h"
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
 
 struct bitset {
     uint64_t *bit_groups;

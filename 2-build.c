@@ -1,6 +1,7 @@
 #include "2-build.h"
 
 #include "5-determinize.h"
+#include "alloc.h"
 #include "grow-array.h"
 
 #include <assert.h>

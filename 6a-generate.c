@@ -1,5 +1,6 @@
 #include "6a-generate.h"
 
+#include "alloc.h"
 #include "6a-generate-output.h"
 #include "grow-array.h"
 #include "x-construct-actions.h"

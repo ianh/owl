@@ -1,5 +1,6 @@
 #include "automaton.h"
 
+#include "alloc.h"
 #include "fnv.h"
 #include <assert.h>
 

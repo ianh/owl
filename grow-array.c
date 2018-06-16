@@ -1,5 +1,6 @@
 #include "grow-array.h"
 
+#include "alloc.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -16,8 +17,6 @@ void *grow_array_using_realloc(void *a, uint32_t *size, uint32_t target_size)
             n = 16;
     }
     char *next_array = realloc(a, n);
-    if (!next_array)
-        abort();
     memset(next_array + *size, 0, n - *size);
     *size = n;
     return next_array;

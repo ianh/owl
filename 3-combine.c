@@ -1,6 +1,7 @@
 #include "3-combine.h"
 
 #include "5-determinize.h"
+#include "alloc.h"
 #include "x-construct-actions.h"
 #include <assert.h>
 #include <stdio.h>
@@ -35,8 +36,6 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     struct rename **renames_for_rule = calloc(n, sizeof(struct rename *));
     symbol_id **bracket_symbols_for_rule = calloc(n, sizeof(symbol_id *));
     uint32_t tokens_allocated_bytes = 0;
-    if (!automaton_for_rule)
-        abort();
 
     result->root_rule_is_expression =
      grammar->rules[grammar->root_rule].number_of_operators > 0;

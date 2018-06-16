@@ -1,5 +1,6 @@
 #include "6b-interpret.h"
 
+#include "alloc.h"
 #include "x-construct-actions.h"
 #include <assert.h>
 #include <stdio.h>
@@ -298,8 +299,6 @@ void output_ambiguity(struct interpreter *interpreter,
                     size_t underscores = identifier_iterator / 26;
                     size_t letter = identifier_iterator % 26;
                     text = realloc(text, underscores + 1);
-                    if (!text)
-                        abort();
                     for (size_t j = 0; j < underscores; ++j)
                         text[j] = '_';
                     text[underscores] = 'a' + letter;
@@ -308,16 +307,12 @@ void output_ambiguity(struct interpreter *interpreter,
                 } else if (is_number) {
                     length = snprintf(0, 0, "%u", number_iterator + 1);
                     text = realloc(text, length + 1);
-                    if (!text)
-                        abort();
                     sprintf(text, "%u", number_iterator + 1);
                     number_iterator++;
                 } else if (is_string) {
                     size_t copies = 1 + (string_iterator / 26);
                     size_t letter = string_iterator % 26;
                     text = realloc(text, copies + 2);
-                    if (!text)
-                        abort();
                     for (size_t j = 0; j < copies; ++j)
                         text[j + 1] = 'a' + letter;
                     text[0] = '"';
@@ -967,8 +962,6 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
     node->number_of_slots = context->grammar->rules[rule].number_of_slots;
     node->slots = calloc(node->number_of_slots,
      sizeof(struct interpret_node *));
-    if (!node->slots)
-        abort();
     memcpy(node->slots, slots,
      sizeof(struct interpret_node *) * node->number_of_slots);
     // Compute the depth and children for the fancy tree functions to use.
@@ -990,8 +983,6 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
     node->depth = max_depth + 1;
     node->children = calloc(node->number_of_children,
      sizeof(struct interpret_node *));
-    if (!node->children)
-        abort();
     size_t index = 0;
     for (size_t i = 0; i < node->number_of_slots; ++i) {
         struct interpret_node *slot = node->slots[i];

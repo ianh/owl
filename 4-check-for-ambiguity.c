@@ -1,5 +1,6 @@
 #include "4-check-for-ambiguity.h"
 
+#include "alloc.h"
 #include "bitset.h"
 #include "fnv.h"
 #include <assert.h>

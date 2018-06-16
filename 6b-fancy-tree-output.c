@@ -1,5 +1,6 @@
 #include "6b-fancy-tree-output.h"
 
+#include "alloc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -380,8 +381,6 @@ void ensure_offsets_capacity(struct line *line, uint32_t capacity)
      (size_t)capacity * sizeof(size_t) * 2);
     void *offset_rows = realloc(line->rows_of_offsets,
      (size_t)capacity * sizeof(uint32_t) * 2);
-    if (!offsets || !offset_rows)
-        abort();
     line->offsets = offsets;
     line->rows_of_offsets = offset_rows;
     line->offsets_capacity = capacity * 2;

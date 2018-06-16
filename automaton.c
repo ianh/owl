@@ -1,5 +1,6 @@
 #include "automaton.h"
 
+#include "alloc.h"
 #include "state-array.h"
 
 #include <stdio.h>

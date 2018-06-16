@@ -165,6 +165,8 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
  *tokenizer, struct bluebird_token_run **previous_run)
 {
     struct bluebird_token_run *run = malloc(sizeof(struct bluebird_token_run));
+    if (!run)
+        return false;
     uint16_t number_of_tokens = 0;
     uint16_t lengths_size = 0;
     const char *text = tokenizer->text;

@@ -1,5 +1,6 @@
 #include "6a-generate-output.h"
 
+#include "alloc.h"
 #include "grow-array.h"
 #include <stdbool.h>
 #include <stdlib.h>

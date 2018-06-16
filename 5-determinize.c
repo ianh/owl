@@ -1,5 +1,6 @@
 #include "5-determinize.h"
 
+#include "alloc.h"
 #include "bitset.h"
 #include "fnv.h"
 
