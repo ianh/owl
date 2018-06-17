@@ -202,8 +202,6 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
          renames_for_rule[i], rule->number_of_keyword_tokens +
          rule->number_of_brackets);
     }
-    result->number_of_bracket_transition_symbols = next_bracket_symbol -
-     result->number_of_tokens;
 
     // Fourth pass: build and substitute the bracket automata from each rule.
     struct automaton combined_bracket_automaton = {0};
@@ -292,6 +290,19 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     // Equalize the number of symbols again -- we'll be using bracket transition
     // bitsets again when we fully determinize the automata.
     equalize_number_of_symbols(&result->automaton, &result->bracket_automaton);
+
+    // Compute the number of bracket transition symbols (it may be different
+    // from `next_bracket_symbol` due to disambiguation).
+    result->number_of_bracket_transition_symbols =
+     result->automaton.number_of_symbols - result->number_of_tokens;
+    for (uint32_t i = 0; i < result->bracket_automaton.number_of_states; ++i) {
+        struct state s = result->bracket_automaton.states[i];
+        if (!s.accepting)
+            continue;
+        uint32_t n = s.transition_symbol - result->number_of_tokens;
+        if (n > result->number_of_bracket_transition_symbols)
+            result->number_of_bracket_transition_symbols = n;
+    }
 
     for (uint32_t i = 0; i < n; ++i) {
         free(renames_for_rule[i]);
