@@ -606,6 +606,7 @@ void generate(struct generator *gen)
     output_line(out, "    }");
     // TODO: Free all remaining token runs here.
     output_line(out, "    printf(\"error!\\n\");");
+    output_line(out, "    exit(-1);");
     output_line(out, "finish:");
     output_line(out, "    free(stack.states);");
     output_line(out, "    return construct_finish(&construct_state, offset);");

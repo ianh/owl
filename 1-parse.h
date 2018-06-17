@@ -65647,6 +65647,7 @@ nfa_state_267U: {
     }
     }
     printf("error!\n");
+    exit(-1);
 finish:
     free(stack.states);
     return construct_finish(&construct_state, offset);
