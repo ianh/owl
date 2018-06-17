@@ -18,6 +18,9 @@ struct combined_grammar {
     // The first `number_of_keyword_tokens` are keyword tokens.
     uint32_t number_of_keyword_tokens;
 
+    // These symbols continue on past the last token symbol.
+    uint32_t number_of_bracket_transition_symbols;
+
     bool root_rule_is_expression;
 };
 

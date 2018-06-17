@@ -634,8 +634,14 @@ static void fill_bracket_transitions_for_symbols(struct interpret_context *ctx)
     if (ctx->bracket_transition_for_symbol)
         return;
     struct deterministic_grammar *d = ctx->deterministic;
-    size_t len = d->automaton.number_of_symbols * sizeof(uint32_t);
-    ctx->bracket_transition_for_symbol = malloc(len);
+    size_t len = 0;
+    for (uint32_t i = 0; i < d->transitions.number_of_transitions; ++i) {
+        symbol_id symbol =
+         d->transitions.transitions[i].deterministic_transition_symbol;
+        if (symbol + 1 > len)
+            len = symbol + 1;
+    }
+    ctx->bracket_transition_for_symbol = malloc(len * sizeof(uint32_t));
     memset(ctx->bracket_transition_for_symbol, 0xff, len);
     for (uint32_t i = 0; i < d->transitions.number_of_transitions; ++i) {
         symbol_id symbol =

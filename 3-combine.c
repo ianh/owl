@@ -202,6 +202,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
          renames_for_rule[i], rule->number_of_keyword_tokens +
          rule->number_of_brackets);
     }
+    result->number_of_bracket_transition_symbols = next_bracket_symbol -
+     result->number_of_tokens;
 
     // Fourth pass: build and substitute the bracket automata from each rule.
     struct automaton combined_bracket_automaton = {0};

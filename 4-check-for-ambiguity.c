@@ -155,16 +155,11 @@ void check_for_ambiguity(struct combined_grammar *combined,
     struct context context = {
         .combined = combined,
     };
-    uint32_t tokens = combined->number_of_tokens;
-    uint32_t number_of_bracket_transitions = 0;
-    if (combined->automaton.number_of_symbols > tokens) {
-        number_of_bracket_transitions =
-         combined->automaton.number_of_symbols - tokens;
-    }
     context.ambiguous_bracket_paths =
-     calloc(number_of_bracket_transitions, sizeof(struct path_node));
+     calloc(combined->number_of_bracket_transition_symbols,
+     sizeof(struct path_node));
     context.bracket_states =
-     calloc(number_of_bracket_transitions, sizeof(state_id));
+     calloc(combined->number_of_bracket_transition_symbols, sizeof(state_id));
     struct automaton *bracket_automaton = &combined->bracket_automaton;
     for (state_id i = 0; i < bracket_automaton->number_of_states; ++i) {
         struct state s = bracket_automaton->states[i];
