@@ -292,15 +292,10 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
 
     // Compute the number of bracket transition symbols (it may be different
     // from `next_bracket_symbol` due to disambiguation).
-    result->number_of_bracket_transition_symbols =
-     result->automaton.number_of_symbols - result->number_of_tokens;
-    for (uint32_t i = 0; i < result->bracket_automaton.number_of_states; ++i) {
-        struct state s = result->bracket_automaton.states[i];
-        if (!s.accepting)
-            continue;
-        uint32_t n = s.transition_symbol - result->number_of_tokens + 1;
-        if (n > result->number_of_bracket_transition_symbols)
-            result->number_of_bracket_transition_symbols = n;
+    result->number_of_bracket_transition_symbols = 0;
+    if (result->automaton.number_of_symbols > result->number_of_tokens) {
+        result->number_of_bracket_transition_symbols =
+         result->automaton.number_of_symbols - result->number_of_tokens;
     }
 
     for (uint32_t i = 0; i < n; ++i) {
@@ -379,15 +374,27 @@ static void update_number_of_symbols(struct automaton *a)
 }
 
 static void equalize_number_of_symbols(struct automaton *a,
- struct automaton *b)
+ struct automaton *bracket)
 {
     update_number_of_symbols(a);
-    update_number_of_symbols(b);
+    update_number_of_symbols(bracket);
     uint32_t number_of_symbols = a->number_of_symbols;
-    if (b->number_of_symbols > number_of_symbols)
-        number_of_symbols = b->number_of_symbols;
+    if (bracket->number_of_symbols > number_of_symbols)
+        number_of_symbols = bracket->number_of_symbols;
     a->number_of_symbols = number_of_symbols;
-    b->number_of_symbols = number_of_symbols;
+    bracket->number_of_symbols = number_of_symbols;
+
+    // Remove useless accepting states to enforce an invariant on their
+    // transition symbols.
+    for (uint32_t i = 0; i < bracket->number_of_states; ++i) {
+        struct state *s = &bracket->states[i];
+        if (!s->accepting)
+            continue;
+        if (s->transition_symbol >= number_of_symbols) {
+            s->accepting = false;
+            s->transition_symbol = 0;
+        }
+    }
 }
 
 static state_id embed(struct automaton *into, struct automaton *from,
