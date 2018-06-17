@@ -637,7 +637,7 @@ static void fill_bracket_transitions_for_symbols(struct interpret_context *ctx)
             len = symbol + 1;
     }
     ctx->bracket_transition_for_symbol = malloc(len * sizeof(uint32_t));
-    memset(ctx->bracket_transition_for_symbol, 0xff, len);
+    memset(ctx->bracket_transition_for_symbol, 0xff, len * sizeof(uint32_t));
     for (uint32_t i = 0; i < d->transitions.number_of_transitions; ++i) {
         symbol_id symbol =
          d->transitions.transitions[i].deterministic_transition_symbol;
