@@ -298,7 +298,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
         struct state s = result->bracket_automaton.states[i];
         if (!s.accepting)
             continue;
-        uint32_t n = s.transition_symbol - result->number_of_tokens;
+        uint32_t n = s.transition_symbol - result->number_of_tokens + 1;
         if (n > result->number_of_bracket_transition_symbols)
             result->number_of_bracket_transition_symbols = n;
     }
