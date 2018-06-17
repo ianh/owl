@@ -16,7 +16,9 @@ struct context {
     state_id next_state;
 
     size_t bracket_nesting;
+    size_t expression_nesting;
 };
+#define MAX_EXPRESSION_NESTING 3000
 
 struct boundary_states;
 static void build_body_automaton(struct context *ctx,
@@ -272,6 +274,10 @@ static void build_body_expression(struct context *ctx,
  struct automaton *automaton, struct parsed_expr *expr,
  struct boundary_states b)
 {
+    if (ctx->expression_nesting++ > MAX_EXPRESSION_NESTING) {
+        error.ranges[0] = expr->range;
+        exit_with_errorf("operators are nested too deeply");
+    }
     struct bluebird_tree *tree = ctx->tree;
     struct rule *rule = &ctx->grammar->rules[ctx->rule_index];
     switch (expr->type) {
@@ -411,6 +417,7 @@ static void build_body_expression(struct context *ctx,
     default:
         abort();
     }
+    ctx->expression_nesting--;
 }
 
 static struct boundary_states connect_expression(struct context *ctx,
