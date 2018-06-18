@@ -876,6 +876,8 @@ static void generate_automaton(struct generator *gen,
         if (s.accepting && type == BRACKET_AUTOMATON) {
             set_unsigned_number_substitution(out, "state-transition-symbol",
              s.transition_symbol);
+            output_line(out, "        if (cont->stack.depth == 0)");
+            output_line(out, "            break;"); // TODO: Error handling.
             output_line(out, "        start_state = cont->stack.states[--cont->stack.depth];");
             output_line(out, "        run->tokens[token_index] = %%state-transition-symbol;");
             output_line(out, "        goto start;");
