@@ -533,7 +533,7 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
      !deterministic->automaton.states[context.stack[0].state].accepting) {
         error.ranges[0].start = tokenizer.offset - tokenizer.whitespace - 1;
         error.ranges[0].end = tokenizer.offset - tokenizer.whitespace;
-        exit_with_errorf("input unexpectedly ended after the last token");
+        exit_with_errorf("expected more text after the last token");
     }
     push_action_offsets(&context, 0, 0);
     struct interpret_node *root = build_parse_tree(&context, token_run);
