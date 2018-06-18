@@ -101,10 +101,14 @@ struct state_pair_table {
     uint32_t used_size;
 };
 
+struct work_item {
+    struct state_pair pair;
+    uint32_t weight;
+};
 struct worklist {
-    struct state_pair *pairs;
-    uint32_t pairs_allocated_bytes;
-    uint32_t number_of_pairs;
+    struct work_item *items;
+    uint32_t items_allocated_bytes;
+    uint32_t number_of_items;
 };
 
 enum direction {
@@ -134,8 +138,8 @@ static void search_state_pairs(struct context *context,
  struct state_pair_table *table, struct automaton *automaton,
  enum direction direction);
 static void follow_state_pair_transition(struct path_node node, state_id a,
- state_id b, enum direction direction, struct state_pair_table *table,
- struct worklist *worklist);
+ state_id b, uint32_t weight, enum direction direction,
+ struct state_pair_table *table, struct worklist *worklist);
 
 // Copying a node fills in the offset as well.
 static void path_node_copy(struct context *context,
@@ -363,7 +367,7 @@ static void search_state_pairs(struct context *context,
     struct worklist worklist = {0};
     if (direction == FORWARD) {
         follow_state_pair_transition(boundary_node, automaton->start_state,
-         automaton->start_state, direction, table, &worklist);
+         automaton->start_state, 0, direction, table, &worklist);
     } else {
         struct state s = automaton->states[automaton->start_state];
         for (uint32_t i = 0; i < s.number_of_transitions; ++i) {
@@ -371,7 +375,7 @@ static void search_state_pairs(struct context *context,
             if (direction == BACKWARD_UNRESOLVED && context->ambiguous_bracket_paths[automaton->states[target].transition_symbol - context->combined->number_of_tokens].type != INVALID_NODE) {
                 continue;
             }
-            follow_state_pair_transition(boundary_node, target, target,
+            follow_state_pair_transition(boundary_node, target, target, 0,
              BACKWARD, table, &worklist);
         }
         // This is the only place where the distinction between
@@ -380,8 +384,27 @@ static void search_state_pairs(struct context *context,
         // both.
         direction = BACKWARD;
     }
-    while (worklist.number_of_pairs > 0 && !table->has_ambiguity) {
-        struct state_pair s = worklist.pairs[--worklist.number_of_pairs];
+    while (worklist.number_of_items > 0 && !table->has_ambiguity) {
+        struct work_item item = worklist.items[0];
+
+        // Rebalance the heap.
+        struct work_item last = worklist.items[--worklist.number_of_items];
+        uint32_t i = 0;
+        while (2*i+1 < worklist.number_of_items) {
+            uint32_t j = 2*i+1;
+            if (2*i+2 < worklist.number_of_items &&
+             worklist.items[2*i+2].weight < worklist.items[j].weight)
+                j = 2*i+2;
+            if (last.weight > worklist.items[j].weight)
+                worklist.items[i] = worklist.items[j];
+            else
+                break;
+            i = j;
+        }
+        worklist.items[i] = last;
+
+        struct state_pair s = item.pair;
+        uint32_t w = item.weight;
         struct state a = automaton->states[s.a];
         struct state b = automaton->states[s.b];
         bool follow_epsilons = s.epsilon_state == ALLOW_EPSILON_SUCCESSORS;
@@ -399,14 +422,14 @@ static void search_state_pairs(struct context *context,
                         .next_pair = s,
                         .actions[0] = ac.actions + ac.action_indexes[i],
                         .actions[1] = bc.actions + bc.action_indexes[j],
-                    }, ac.reachable.states[i], bc.reachable.states[j],
+                    }, ac.reachable.states[i], bc.reachable.states[j], w,
                      direction, table, &worklist);
                 }
                 follow_state_pair_transition((struct path_node){
                     .type = ACTION_NODE,
                     .next_pair = s,
                     .actions[0] = ac.actions + ac.action_indexes[i],
-                }, ac.reachable.states[i], s.b, direction, table, &worklist);
+                }, ac.reachable.states[i], s.b, w, direction, table, &worklist);
                 if (direction == FORWARD && s.a == s.b &&
                  ac.ambiguous_action_indexes[i] != UINT32_MAX) {
                     follow_state_pair_transition((struct path_node){
@@ -416,7 +439,7 @@ static void search_state_pairs(struct context *context,
                         .actions[0] = ac.actions + ac.action_indexes[i],
                         .actions[1] = ac.actions +
                          ac.ambiguous_action_indexes[i],
-                    }, ac.reachable.states[i], ac.reachable.states[i],
+                    }, ac.reachable.states[i], ac.reachable.states[i], w,
                      direction, table, &worklist);
                 }
             }
@@ -425,12 +448,12 @@ static void search_state_pairs(struct context *context,
                     .type = ACTION_NODE,
                     .next_pair = s,
                     .actions[1] = bc.actions + bc.action_indexes[j],
-                }, s.a, bc.reachable.states[j], direction, table, &worklist);
+                }, s.a, bc.reachable.states[j], w, direction, table, &worklist);
             }
             follow_state_pair_transition((struct path_node){
                 .next_pair = s,
                 .type = ACTION_NODE,
-            }, s.a, s.b, direction, table, &worklist);
+            }, s.a, s.b, w, direction, table, &worklist);
         } else {
             // Search through symbol and bracket transitions.
             for (uint32_t i = 0; i < a.number_of_transitions; ++i) {
@@ -447,7 +470,8 @@ static void search_state_pairs(struct context *context,
                             .type = SYMBOL_NODE,
                             .next_pair = s,
                             .symbol = at.symbol,
-                        }, at.target, bt.target, direction, table, &worklist);
+                        }, at.target, bt.target, w, direction, table,
+                         &worklist);
                         continue;
                     }
                     if (bt.symbol == SYMBOL_EPSILON)
@@ -466,7 +490,8 @@ static void search_state_pairs(struct context *context,
                             .flags = (at.symbol == bt.symbol ? 0 :
                              AMBIGUOUS_NODE) | (sa == p.a ? 0 :
                              SWAPPED_BRACKET_PATH),
-                        }, at.target, bt.target, direction, table, &worklist);
+                        }, at.target, bt.target, w, direction, table,
+                         &worklist);
                     }
                     if (at.symbol == bt.symbol) {
                         struct path_node n;
@@ -475,7 +500,7 @@ static void search_state_pairs(struct context *context,
                         if (n.type != INVALID_NODE) {
                             n.next_pair = s;
                             follow_state_pair_transition(n, at.target,
-                             bt.target, direction, table, &worklist);
+                             bt.target, w, direction, table, &worklist);
                         }
                     }
                 }
@@ -485,8 +510,8 @@ static void search_state_pairs(struct context *context,
 }
 
 static void follow_state_pair_transition(struct path_node node, state_id a,
- state_id b, enum direction direction, struct state_pair_table *table,
- struct worklist *worklist)
+ state_id b, uint32_t weight, enum direction direction,
+ struct state_pair_table *table, struct worklist *worklist)
 {
     struct state_pair pair;
     if (node.type == ACTION_NODE) {
@@ -525,11 +550,22 @@ static void follow_state_pair_transition(struct path_node node, state_id a,
         table->ain_paths[index] = node;
     if (!continue_following)
         return;
-    uint32_t windex = worklist->number_of_pairs++;
-    worklist->pairs = grow_array(worklist->pairs,
-     &worklist->pairs_allocated_bytes,
-     worklist->number_of_pairs * sizeof(struct state_pair));
-    worklist->pairs[windex] = pair;
+    uint32_t i = worklist->number_of_items++;
+    worklist->items = grow_array(worklist->items,
+     &worklist->items_allocated_bytes,
+     worklist->number_of_items * sizeof(struct work_item));
+    uint32_t next_weight = weight + 1;
+    if (node.type == BRACKET_TRANSITION_NODE || node.type == JOIN_NODE) {
+        // Just approximate here to avoid an inconvenient lookup.
+        next_weight = weight + 8;
+    }
+    // Setting i = (i-1)/2 moves up the binary min-heap.
+    for(; i > 0 && next_weight < worklist->items[(i-1)/2].weight; i = (i-1)/2)
+        worklist->items[i] = worklist->items[(i-1)/2];
+    worklist->items[i] = (struct work_item){
+        .pair = pair,
+        .weight = next_weight,
+    };
 }
 
 static void path_node_copy(struct context *context,
