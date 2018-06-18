@@ -1,9 +1,26 @@
 #include "bitset.h"
 
+#include "alloc.h"
+
+struct bitset bitset_create_empty(uint32_t number_of_elements)
+{
+    uint32_t number_of_groups = (number_of_elements + 63) / 64;
+    return (struct bitset){
+        .bit_groups = calloc(number_of_groups, sizeof(uint64_t)),
+        .number_of_bit_groups = number_of_groups,
+        .number_of_elements = number_of_elements,
+    };
+}
+
 void bitset_clear(struct bitset *set)
 {
     for (uint32_t i = 0; i < set->number_of_bit_groups; ++i)
         set->bit_groups[i] = 0;
+}
+
+void bitset_destroy(struct bitset *set)
+{
+    free(set->bit_groups);
 }
 
 void bitset_union(struct bitset *set, struct bitset *other)

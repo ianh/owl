@@ -1,6 +1,5 @@
 #include "6a-generate.h"
 
-#include "alloc.h"
 #include "6a-generate-output.h"
 #include "grow-array.h"
 #include "x-construct-actions.h"
@@ -762,6 +761,10 @@ static void generate_keyword_reader(struct generator *gen,
     output_line(out, "    switch (text[0]) {");
     struct generated_token *tokens = malloc(sizeof(struct generated_token) *
      (size_t)gen->combined->number_of_keyword_tokens);
+    if (!tokens) {
+        fputs("critical error: out of memory\n", stderr);
+        exit(-1);
+    }
     for (uint32_t i = 0; i < gen->combined->number_of_keyword_tokens; ++i)
         tokens[i].token = gen->combined->tokens[i];
     qsort(tokens, gen->combined->number_of_keyword_tokens,
