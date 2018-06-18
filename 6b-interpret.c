@@ -184,8 +184,12 @@ static void print_action(uint16_t action, size_t offset)
 }
 #endif
 
+// We use `root_mode` to hide the root node when it's not necessary to
+// understand the parse tree.
+enum root_mode { PRINT_ROOT_NODE, HIDE_ROOT_NODE };
 static void initialize_document(struct interpret_context *ctx,
- struct interpret_node *root, uint32_t number_of_token_labels);
+ struct interpret_node *root, uint32_t number_of_token_labels,
+ enum root_mode root_mode);
 
 static uint32_t offset_labels(struct document *document, uint32_t start,
  uint32_t end, uint32_t offset, uint32_t color);
@@ -230,7 +234,8 @@ static void output_ambiguity_path(struct interpreter *interpreter,
     }
     struct interpret_node *root = construct_finish(&context.construct_state, 0);
 
-    initialize_document(&context, root, ambiguity->number_of_tokens * 2);
+    initialize_document(&context, root, ambiguity->number_of_tokens * 2,
+     PRINT_ROOT_NODE);
     memcpy(context.document.rows[0].labels, token_labels,
      ambiguity->number_of_tokens * 2 * sizeof(struct label));
 
@@ -452,18 +457,12 @@ static void fill_rows(struct interpret_context *ctx,
 }
 
 static void initialize_document(struct interpret_context *ctx,
- struct interpret_node *root, uint32_t number_of_token_labels)
+ struct interpret_node *root, uint32_t number_of_token_labels,
+ enum root_mode root_mode)
 {
     uint32_t number_of_rows = root->depth;
-//    if (root->depth == 1 ||
-//     ctx->grammar->rules[ctx->grammar->root_rule].number_of_choices > 0) {
-        // If the root rule is the only rule that matched, or if it has choices,
-        // then show the root node in the tree.  Otherwise, we hide the root to
-        // avoid an extra nesting level across the entire output.
-        // TODO: replace this rule with one based on the root rule being covered
-        // by its child rules.
+    if (root_mode == PRINT_ROOT_NODE)
         number_of_rows++;
-//    }
     ctx->document = (struct document){
         .rows = calloc(number_of_rows, sizeof(struct row)),
         .number_of_rows = number_of_rows,
@@ -542,8 +541,11 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
         printf("%u. %lu\n", i, context.offset_table[i]);
 #endif
     adjust_locations(&context, root);
+    enum root_mode root_mode = root->depth > 1 &&
+     grammar->rules[grammar->root_rule].number_of_choices == 0 ?
+     HIDE_ROOT_NODE : PRINT_ROOT_NODE;
     uint32_t n = context.next_action_offset;
-    initialize_document(&context, root, n / 2);
+    initialize_document(&context, root, n / 2, root_mode);
     for (uint32_t i = 0; i < n; ++i) {
         // Reverse all the offsets.  We could change how we access the table
         // instead, but that would make the code harder to read (and it's
