@@ -145,6 +145,9 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                     // Clear out the old accepting state--it's about to be
                     // replaced by the new one we just added.
                     automaton->states[end].accepting = false;
+                    // Allow the automaton to skip past the nonassoc operator.
+                    automaton_add_transition(automaton, end, rhs_end,
+                     SYMBOL_EPSILON);
                     from_state = end;
                     to_state = rhs_start;
                     end = rhs_end;
