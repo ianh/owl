@@ -39,4 +39,34 @@ static inline bool is_end_action(uint16_t action)
     }
 }
 
+static inline const char *action_name(uint16_t action)
+{
+    switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
+    case ACTION_NONE:
+        return "ACTION_NONE";
+    case ACTION_END_SLOT:
+        return "ACTION_END_SLOT";
+    case ACTION_END_EXPRESSION_SLOT:
+        return "ACTION_END_EXPRESSION_SLOT";
+    case ACTION_BEGIN_SLOT:
+        return "ACTION_BEGIN_SLOT";
+    case ACTION_BEGIN_EXPRESSION_SLOT:
+        return "ACTION_BEGIN_EXPRESSION_SLOT";
+    case ACTION_SET_SLOT_CHOICE:
+        return "ACTION_SET_SLOT_CHOICE";
+    case ACTION_TOKEN_SLOT:
+        return "ACTION_TOKEN_SLOT";
+    case ACTION_END_OPERAND:
+        return "ACTION_END_OPERAND";
+    case ACTION_END_OPERATOR:
+        return "ACTION_END_OPERATOR";
+    case ACTION_BEGIN_OPERAND:
+        return "ACTION_BEGIN_OPERAND";
+    case ACTION_BEGIN_OPERATOR:
+        return "ACTION_BEGIN_OPERATOR";
+    default:
+        return "?";
+    }
+}
+
 #endif

@@ -180,7 +180,7 @@ static bool is_end_action(uint16_t action);
 static void print_action(uint16_t action, size_t offset)
 {
     uint16_t slot = CONSTRUCT_ACTION_GET_SLOT(action);
-    printf("%u %u at %lu\n", CONSTRUCT_ACTION_GET_TYPE(action), slot, offset);
+    printf("%s %u at %lu\n", action_name(action), slot, offset);
 }
 #endif
 
