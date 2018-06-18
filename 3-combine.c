@@ -6,12 +6,6 @@
 #include <assert.h>
 #include <stdio.h>
 
-#define CONSTRUCT_ACTION_NAME(action) ACTION_##action,
-enum action_type {
-CONSTRUCT_ACTIONS
-};
-#undef CONSTRUCT_ACTION_NAME
-
 struct rename {
     symbol_id from;
     symbol_id to;

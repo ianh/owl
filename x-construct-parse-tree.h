@@ -52,7 +52,6 @@
 #endif
 
 #include "x-construct-actions.h"
-#define CONSTRUCT_ACTION_NAME(action) CONSTRUCT_ACTION_##action,
 
 CONSTRUCT_BODY
 (
@@ -179,19 +178,6 @@ static void construct_expression_free(struct construct_state *state, struct
     expr->parent = state->expression_freelist;
     state->expression_freelist = expr;
 }
-
-enum construct_action_type { CONSTRUCT_ACTIONS };
-
-struct construct_action {
-    enum construct_action_type type;
-
-    // For slots and operands.
-    uint16_t slot_index;
-    uint16_t choice_index;
-
-    size_t start_location;
-    size_t end_location;
-};
 
 static bool construct_expression_should_reduce(struct construct_state *s,
  struct construct_expression *expr, struct construct_node *node)
@@ -349,7 +335,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
  size_t offset)
 {
     switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
-    case CONSTRUCT_ACTION_END_SLOT: {
+    case ACTION_END_SLOT: {
         struct construct_node *node = construct_node_alloc(s,
          RULE_LOOKUP(s->under_construction->rule,
           CONSTRUCT_ACTION_GET_SLOT(action), s->info));
@@ -359,7 +345,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
         s->under_construction = node;
         break;
     }
-    case CONSTRUCT_ACTION_END_EXPRESSION_SLOT: {
+    case ACTION_END_EXPRESSION_SLOT: {
         struct construct_expression *expr = construct_expression_alloc(s,
          RULE_LOOKUP(s->under_construction->rule,
          CONSTRUCT_ACTION_GET_SLOT(action), s->info));
@@ -368,7 +354,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
         expr->slot_index = CONSTRUCT_ACTION_GET_SLOT(action);
         break;
     }
-    case CONSTRUCT_ACTION_BEGIN_SLOT: {
+    case ACTION_BEGIN_SLOT: {
         struct construct_node *node = s->under_construction;
         node->start_location = offset;
         s->under_construction = node->next;
@@ -378,7 +364,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
         construct_node_free(s, node);
         break;
     }
-    case CONSTRUCT_ACTION_BEGIN_EXPRESSION_SLOT: {
+    case ACTION_BEGIN_EXPRESSION_SLOT: {
         struct construct_expression *expr = s->current_expression;
         s->current_expression = expr->parent;
         while (expr->first_operator)
@@ -394,18 +380,18 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
         construct_expression_free(s, expr);
         break;
     }
-    case CONSTRUCT_ACTION_SET_SLOT_CHOICE:
+    case ACTION_SET_SLOT_CHOICE:
         s->under_construction->choice_index =
          CONSTRUCT_ACTION_GET_CHOICE(action);
         break;
-    case CONSTRUCT_ACTION_TOKEN_SLOT: {
+    case ACTION_TOKEN_SLOT: {
         uint16_t slot = CONSTRUCT_ACTION_GET_SLOT(action);
         FINISHED_NODE_T *finished = &s->under_construction->slots[slot];
         *finished = FINISH_TOKEN(RULE_LOOKUP(s->under_construction->rule, slot,
          s->info), *finished, s->info);
         break;
     }
-    case CONSTRUCT_ACTION_END_OPERAND: {
+    case ACTION_END_OPERAND: {
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = construct_node_alloc(s, expr->rule);
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
@@ -415,7 +401,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
         s->under_construction = node;
         break;
     }
-    case CONSTRUCT_ACTION_END_OPERATOR: {
+    case ACTION_END_OPERATOR: {
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = construct_node_alloc(s, expr->rule);
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
@@ -431,7 +417,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
         s->under_construction = node;
         break;
     }
-    case CONSTRUCT_ACTION_BEGIN_OPERAND: {
+    case ACTION_BEGIN_OPERAND: {
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = s->under_construction;
         node->start_location = offset;
@@ -440,7 +426,7 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
         expr->first_value = node;
         break;
     }
-    case CONSTRUCT_ACTION_BEGIN_OPERATOR: {
+    case ACTION_BEGIN_OPERATOR: {
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = s->under_construction;
         node->start_location = offset;
@@ -457,5 +443,3 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
 }
 
 )
-
-#undef CONSTRUCT_ACTION_NAME

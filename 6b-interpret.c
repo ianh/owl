@@ -177,17 +177,10 @@ static size_t push_action_offsets(struct interpret_context *ctx, size_t start,
 static bool is_end_action(uint16_t action);
 
 #if 0
-#define CONSTRUCT_ACTION_NAME(name) PRINT_CONSTRUCT_ACTION_ ## name,
-enum { CONSTRUCT_ACTIONS };
-#undef CONSTRUCT_ACTION_NAME
 static void print_action(uint16_t action, size_t offset)
 {
     uint16_t slot = CONSTRUCT_ACTION_GET_SLOT(action);
-    switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
-#define CONSTRUCT_ACTION_NAME(name) case PRINT_CONSTRUCT_ACTION_ ## name : printf(#name " %u at %lu\n", slot, offset); break;
-CONSTRUCT_ACTIONS
-#undef CONSTRUCT_ACTION_NAME
-    }
+    printf("%u %u at %lu\n", CONSTRUCT_ACTION_GET_TYPE(action), slot, offset);
 }
 #endif
 
@@ -836,7 +829,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         // can't be the same (to avoid problems with sorting/stability/etc)
 #if 0
         printf("action: %u\n", offset);
-        print_action(map->actions[k], action_offset);
+        print_action(map->actions[i], action_offset);
 #endif
         construct_action_apply(&ctx->construct_state, map->actions[i],
          SIZE_MAX - action_offset);
@@ -864,19 +857,6 @@ static size_t push_action_offsets(struct interpret_context *ctx, size_t start,
     push_action_offset(ctx, start);
     push_action_offset(ctx, end);
     return end;
-}
-
-static bool is_end_action(uint16_t action)
-{
-    switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
-    case CONSTRUCT_ACTION_END_SLOT:
-    case CONSTRUCT_ACTION_END_EXPRESSION_SLOT:
-    case CONSTRUCT_ACTION_END_OPERAND:
-    case CONSTRUCT_ACTION_END_OPERATOR:
-        return true;
-    default:
-        return false;
-    }
 }
 
 static size_t read_keyword_token(uint32_t *token, bool *end_token,

@@ -1009,16 +1009,6 @@ static void generate_action_automaton(struct generator *gen,
     }
 }
 
-#define CONSTRUCT_ACTION_NAME(name) PRINT_CONSTRUCT_ACTION_ ## name,
-enum { CONSTRUCT_ACTIONS };
-#undef CONSTRUCT_ACTION_NAME
-#define CONSTRUCT_ACTION_NAME(name) case PRINT_CONSTRUCT_ACTION_ ## name : \
- output_line(out, "printf(\"" #name " %%action-slot\\n\");"); break;
-#define FORMAT_ACTION(action) do {\
-    switch (CONSTRUCT_ACTION_GET_TYPE(action)) { \
-    CONSTRUCT_ACTIONS \
-    } \
-} while (0)
 static void generate_actions(struct generator_output *out,
  struct action_map *map, uint32_t action_index)
 {
@@ -1027,12 +1017,10 @@ static void generate_actions(struct generator_output *out,
             break;
         set_unsigned_number_substitution(out, "action-id", map->actions[i]);
         set_unsigned_number_substitution(out, "action-slot", CONSTRUCT_ACTION_GET_SLOT(map->actions[i]));
-//        FORMAT_ACTION(map->actions[i]);
         // TODO: end vs end + whitespace depending on whether it's an end action
         output_line(out, "                construct_action_apply(&construct_state, %%action-id, end);");
     }
 }
-#undef CONSTRUCT_ACTION_NAME
 
 static bool rule_is_named(struct rule *rule, const char *name)
 {
