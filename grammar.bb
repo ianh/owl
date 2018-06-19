@@ -1,4 +1,5 @@
-grammar = rule*
+grammar = (comment-token | rule)*
+comment-token = 'line-comment-token' string
 rule = identifier '=' body
 body = expr | (expr ':' identifier)+ operators*
 operators = '.operators' fixity operator+
@@ -25,3 +26,5 @@ expr =
   '' : concatenation
  .operators infix flat
   '|' : choice
+
+line-comment-token '#'

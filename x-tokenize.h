@@ -184,10 +184,14 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
         TOKEN_T token;
         bool is_token = false;
         bool end_token = false;
+        bool comment = false;
         size_t token_length = READ_KEYWORD_TOKEN(&token, &end_token,
          text + offset, tokenizer->info);
-        if (token_length > 0)
+        if (token_length > 0) {
             is_token = true;
+            if (token == SYMBOL_EPSILON)
+                comment = true;
+        }
         double number = 0;
         if (char_is_numeric(c) ||
          (c == '.' && char_is_numeric(text[offset + 1]))) {
@@ -199,6 +203,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
                 token_length = rest - start;
                 is_token = true;
                 end_token = false;
+                comment = false;
                 token = NUMBER_TOKEN;
             }
         } else if (c == '\'' || c == '"') {
@@ -209,6 +214,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
                     token_length = string_offset + 1 - offset;
                     is_token = true;
                     end_token = false;
+                    comment = false;
                     token = STRING_TOKEN;
                     break;
                 }
@@ -230,10 +236,17 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
                 token_length = identifier_offset - offset;
                 is_token = true;
                 end_token = false;
+                comment = false;
                 token = IDENTIFIER_TOKEN;
             }
         }
-        if (!is_token || token == SYMBOL_EPSILON) {
+        if (comment) {
+            while (text[offset] != '\0' && text[offset] != '\n') {
+                whitespace++;
+                offset++;
+            }
+            continue;
+        } else if (!is_token || token == SYMBOL_EPSILON) {
             // Error.
             // TODO: Report the error in a better way?
             tokenizer->offset = offset;

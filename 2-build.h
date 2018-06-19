@@ -19,6 +19,7 @@
 
 struct grammar;
 struct rule;
+struct token;
 
 // The main function of this step.  The `grammar` struct should be initialized
 // to be full of zeros.
@@ -29,6 +30,10 @@ struct grammar {
     uint32_t rules_allocated_bytes;
     uint32_t number_of_rules;
 
+    struct token *comment_tokens;
+    uint32_t comment_tokens_allocated_bytes;
+    uint32_t number_of_comment_tokens;
+
     // This is the starting "root" rule's index.
     uint32_t root_rule;
 };
@@ -37,7 +42,6 @@ struct bracket;
 struct choice;
 struct operator;
 struct slot;
-struct token;
 
 struct rule {
     // This string is a direct reference to the original parsed text.
@@ -195,8 +199,17 @@ struct bracket {
 // The `token_type` enum encodes whether this token is a start or end token
 // (which can only appear at the start or end of a guard bracket) or a normal
 // token (which cannot appear at the start or end of a guard bracket).
-// The TOKEN_DONT_CARE option is used to search for tokens of any type.
-enum token_type { TOKEN_NORMAL, TOKEN_START, TOKEN_END, TOKEN_DONT_CARE };
+enum token_type {
+    TOKEN_NORMAL,
+    TOKEN_START,
+    TOKEN_END,
+
+    // A token can also start a line comment.
+    TOKEN_START_LINE_COMMENT,
+
+    // The TOKEN_DONT_CARE option is used to search for tokens of any type.
+    TOKEN_DONT_CARE,
+};
 struct token {
     const char *string;
     size_t length;

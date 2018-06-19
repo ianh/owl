@@ -56,6 +56,12 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
             }
             renames_for_rule[i][j].from = token.symbol;
             renames_for_rule[i][j].to = index;
+
+            // We call `find_token` so that an error is produced if a token is
+            // used both as a comment token and as a normal token.
+            find_token(grammar->comment_tokens,
+             grammar->number_of_comment_tokens, token.string, token.length,
+             token.type, &token.range);
         }
     }
     result->number_of_keyword_tokens = result->number_of_tokens;

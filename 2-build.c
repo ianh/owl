@@ -247,6 +247,37 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             }
         }
     }
+
+    // Add any comment tokens to the grammar.
+    for (struct parsed_comment_token parsed_comment =
+     parsed_comment_token_get(tree, g.comment_token); !parsed_comment.empty;
+     parsed_comment = parsed_comment_token_next(parsed_comment)) {
+        struct parsed_string s = parsed_string_get(tree, parsed_comment.string);
+        if (s.length <= 2) {
+            error.ranges[0] = s.range;
+            exit_with_errorf("comment tokens can't be empty");
+        }
+        uint32_t token_index = find_token(grammar->comment_tokens,
+         grammar->number_of_comment_tokens, s.string + 1, s.length - 2,
+         TOKEN_START_LINE_COMMENT, &s.range);
+        if (token_index >= grammar->number_of_comment_tokens) {
+            grammar->number_of_comment_tokens = token_index + 1;
+            grammar->comment_tokens = grow_array(grammar->comment_tokens,
+             &grammar->comment_tokens_allocated_bytes,
+             sizeof(struct token) * grammar->number_of_comment_tokens);
+            grammar->comment_tokens[token_index] = (struct token){
+                .string = s.string + 1,
+                .length = s.length - 2,
+                .type = TOKEN_START_LINE_COMMENT,
+                .symbol = SYMBOL_EPSILON,
+                .range = s.range
+            };
+        } else {
+            error.ranges[0] = grammar->comment_tokens[token_index].range;
+            error.ranges[1] = s.range;
+            exit_with_errorf("the same comment token was specified twice");
+        }
+    }
 }
 
 struct boundary_states {
@@ -485,6 +516,8 @@ static const char *token_type_string(enum token_type type)
         return "a start";
     case TOKEN_END:
         return "an end";
+    case TOKEN_START_LINE_COMMENT:
+        return "a comment";
     default:
         return "";
     }

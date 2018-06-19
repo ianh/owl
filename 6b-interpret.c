@@ -864,6 +864,7 @@ static size_t push_action_offsets(struct interpret_context *ctx, size_t start,
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
  const char *text, void *info)
 {
+    struct grammar *grammar = ((struct tokenizer_info *)info)->context->grammar;
     struct combined_grammar *combined =
      ((struct tokenizer_info *)info)->context->combined;
     symbol_id symbol = SYMBOL_EPSILON;
@@ -876,6 +877,15 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token,
             max_len = token.length;
             symbol = i;
             end = token.type == TOKEN_END;
+        }
+    }
+    for (uint32_t i = 0; i < grammar->number_of_comment_tokens; ++i) {
+        struct token token = grammar->comment_tokens[i];
+        if (token.length > max_len && !strncmp((const char *)text, token.string,
+         token.length)) {
+            max_len = token.length;
+            symbol = SYMBOL_EPSILON;
+            end = false;
         }
     }
     *end_token = end;

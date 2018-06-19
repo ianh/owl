@@ -759,24 +759,28 @@ static void generate_keyword_reader(struct generator *gen,
  struct generator_output *out) {
     output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info) {");
     output_line(out, "    switch (text[0]) {");
+    uint32_t n = gen->combined->number_of_keyword_tokens +
+     gen->grammar->number_of_comment_tokens;
     struct generated_token *tokens = malloc(sizeof(struct generated_token) *
-     (size_t)gen->combined->number_of_keyword_tokens);
+     (size_t)n);
     if (!tokens) {
         fputs("critical error: out of memory\n", stderr);
         exit(-1);
     }
-    for (uint32_t i = 0; i < gen->combined->number_of_keyword_tokens; ++i)
+    uint32_t i = 0;
+    for (; i < gen->combined->number_of_keyword_tokens; ++i)
         tokens[i].token = gen->combined->tokens[i];
-    qsort(tokens, gen->combined->number_of_keyword_tokens,
-     sizeof(struct generated_token), compare_tokens);
+    for (uint32_t j = 0; j < gen->grammar->number_of_comment_tokens; ++j)
+        tokens[i + j].token = gen->grammar->comment_tokens[j];
+    qsort(tokens, n, sizeof(struct generated_token), compare_tokens);
     size_t shared_length = 0;
     struct generated_token *prefix = 0;
-    for (uint32_t i = 0; i < gen->combined->number_of_keyword_tokens; ++i) {
+    for (uint32_t i = 0; i < n; ++i) {
         struct generated_token *token = &tokens[i];
         struct token keyword = token->token;
         struct generated_token *next = 0;
         size_t next_length = 0;
-        if (i + 1 < gen->combined->number_of_keyword_tokens) {
+        if (i + 1 < n) {
             next = &tokens[i + 1];
             next_length = next->token.length;
         }
