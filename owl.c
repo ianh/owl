@@ -500,9 +500,12 @@ static int terminal_colors(int fileno)
         void *handle = dlopen(libs[i], RTLD_LAZY | RTLD_LOCAL);
         if (!handle)
             continue;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
         int (*setupterm)(char *, int, int *) =
          (int (*)(char *, int, int *))dlsym(handle, "setupterm");
         int (*tigetnum)(char *) = (int (*)(char *))dlsym(handle, "tigetnum");
+#pragma GCC diagnostic pop
         int value = -1;
         int err;
         if (setupterm && tigetnum && !setupterm(0, fileno, &err))
