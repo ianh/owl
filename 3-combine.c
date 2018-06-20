@@ -312,6 +312,9 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     free(automaton_for_rule);
 }
 
+// This function substitutes automata into slots while renaming symbols.  We
+// have to do all of this at once to avoid name collisions (where the result of
+// a substitution is mistakenly substituted a second time).
 static void substitute_slots(struct grammar *grammar, struct rule *rule,
  uint32_t min_rule_index, struct automaton *a,
  struct automaton *automaton_for_rule, struct rename *renames,

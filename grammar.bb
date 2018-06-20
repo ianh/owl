@@ -1,3 +1,6 @@
+# This is the grammar for bluebird itself.
+# Compile with `bluebird -c grammar.bb -o 1-parse.h`.
+
 grammar = (comment-token | rule)*
 comment-token = 'line-comment-token' string
 rule = identifier '=' body

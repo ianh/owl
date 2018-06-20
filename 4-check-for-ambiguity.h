@@ -7,8 +7,10 @@
 
 struct ambiguity_path {
     uint16_t *actions;
-    uint32_t *offsets;
     uint32_t number_of_actions;
+
+    // These are the offsets into the tokens list corresponding to each action.
+    uint32_t *offsets;
 };
 
 struct ambiguity {

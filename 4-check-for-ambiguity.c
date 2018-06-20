@@ -5,6 +5,22 @@
 #include "fnv.h"
 #include <assert.h>
 
+// The goal of ambiguity checking is to find one of two things:
+// 1. An intrinsically ambiguous set of edges between two states.  That is,
+//  - a pair of distinct epsilon-transition paths between two states,
+//  - a pair of distinct bracket transitions whose corresponding accepting
+//    states are simultaneously reachable, or
+//  - a single bracket transition whose accepting state is part of an ambiguity.
+// 2. A pair of distinct states which can both be reached using the same symbols
+//    as input.
+//
+// We perform a search in the product automaton for one of these two cases.  The
+// "disambiguation" procedure we did in the combine step ensures that different
+// paths through the automaton have distinguishable sequences of actions.  If we
+// find a path in the product automaton with a pair of distinct states, we have
+// two different paths in the original automaton, and therefore two
+// distinguishable sequences of actions for the same input -- an ambiguity.
+
 // This is the "epsilon filtering" technique from [1], simplified a little bit
 // because we follow an entire path at once.
 enum epsilon_state {
@@ -146,6 +162,9 @@ static void path_node_copy(struct context *context,
  struct state_pair_table *table, struct path_node *which_paths,
  struct path_node *node);
 
+static struct path_node *ambiguous_bracket_path(struct context *context,
+ symbol_id symbol);
+
 static uint32_t state_pair_table_add(struct state_pair_table *table,
  struct state_pair pair, uint32_t hash);
 static uint32_t state_pair_table_lookup(struct state_pair_table *table,
@@ -244,12 +263,12 @@ void check_for_ambiguity(struct combined_grammar *combined,
                 *in = table.ain_paths[path_index];
             path_node_copy(&context, &table, table.in_paths, in);
             path_node_copy(&context, &table, table.out_paths, out);
-            context.ambiguous_bracket_paths[s.transition_symbol -
-             combined->number_of_tokens] = (struct path_node) {
+            *ambiguous_bracket_path(&context, s.transition_symbol) =
+             (struct path_node){
                 .type = JOIN_NODE,
                 .flags = AMBIGUOUS_NODE,
                 .join = { in, out },
-            };
+             };
         } else {
             // No more progress can be made toward finding an ambiguous path.
             // That means we're done here.
@@ -288,6 +307,9 @@ static void build_ambiguity_path(struct context *context,
  struct ambiguity *ambiguity, struct path_offset offset, struct path_node *node,
  int32_t direction, bool swapped)
 {
+    // Here, we fill in the `ambiguity` struct based on a path through the
+    // product automaton.  We use the offsets computed in `path_node_copy` to
+    // figure out where to put each action and symbol.
     for (; node && node->type != BOUNDARY_NODE; node = node->next) {
         if (node->flags & SWAPPED_PATH)
             swapped = !swapped;
@@ -320,17 +342,18 @@ static void build_ambiguity_path(struct context *context,
             assert(context->bracket_paths.status[i] == LOCKED);
             struct path_node in = context->bracket_paths.in_paths[i];
             assert(in.flags & COPIED_PATH);
+            bool parity = swapped == !(node->flags & SWAPPED_BRACKET_PATH);
             if (direction == 1) {
                 offset.symbols += in.offset.symbols;
                 for (int i = 0; i < 2; ++i)
-                    offset.actions[swapped ? 1 - i : i] += in.offset.actions[(node->flags & SWAPPED_BRACKET_PATH) ? 1 - i : i];
+                    offset.actions[parity ? 1 - i : i] += in.offset.actions[i];
             }
             build_ambiguity_path(context, ambiguity, offset, &in, -1,
              node->flags & SWAPPED_BRACKET_PATH ? !swapped : swapped);
             if (direction == -1) {
                 offset.symbols -= in.offset.symbols;
                 for (int i = 0; i < 2; ++i)
-                    offset.actions[swapped ? 1 - i : i] -= in.offset.actions[(node->flags & SWAPPED_BRACKET_PATH) ? 1 - i : i];
+                    offset.actions[parity ? 1 - i : i] -= in.offset.actions[i];
             }
             break;
         }
@@ -372,9 +395,10 @@ static void search_state_pairs(struct context *context,
         struct state s = automaton->states[automaton->start_state];
         for (uint32_t i = 0; i < s.number_of_transitions; ++i) {
             state_id target = s.transitions[i].target;
-            if (direction == BACKWARD_UNRESOLVED && context->ambiguous_bracket_paths[automaton->states[target].transition_symbol - context->combined->number_of_tokens].type != INVALID_NODE) {
+            if (direction == BACKWARD_UNRESOLVED &&
+             ambiguous_bracket_path(context, automaton->states[target].
+             transition_symbol)->type != INVALID_NODE)
                 continue;
-            }
             follow_state_pair_transition(boundary_node, target, target, 0,
              BACKWARD, table, &worklist);
         }
@@ -478,10 +502,15 @@ static void search_state_pairs(struct context *context,
                         continue;
                     if (bt.symbol < context->combined->number_of_tokens)
                         continue;
-                    state_id sa = context->bracket_states[at.symbol - context->combined->number_of_tokens];
-                    state_id sb = context->bracket_states[bt.symbol - context->combined->number_of_tokens];
-                    struct state_pair p = state_pair_make(sa, sb, DISALLOW_EPSILON_SUCCESSORS);
-                    uint32_t k = state_pair_table_lookup(&context->bracket_paths, p, fnv(&p, sizeof(p)));
+                    state_id sa = context->bracket_states[at.symbol -
+                     context->combined->number_of_tokens];
+                    state_id sb = context->bracket_states[bt.symbol -
+                     context->combined->number_of_tokens];
+                    struct state_pair p = state_pair_make(sa, sb,
+                     DISALLOW_EPSILON_SUCCESSORS);
+                    uint32_t k;
+                    k = state_pair_table_lookup(&context->bracket_paths, p,
+                     fnv(&p, sizeof(p)));
                     if (context->bracket_paths.status[k] == LOCKED) {
                         follow_state_pair_transition((struct path_node){
                             .type = BRACKET_TRANSITION_NODE,
@@ -494,9 +523,8 @@ static void search_state_pairs(struct context *context,
                          &worklist);
                     }
                     if (at.symbol == bt.symbol) {
-                        struct path_node n;
-                        n = context->ambiguous_bracket_paths[at.symbol -
-                         context->combined->number_of_tokens];
+                        struct path_node n = *ambiguous_bracket_path(context,
+                         at.symbol);
                         if (n.type != INVALID_NODE) {
                             n.next_pair = s;
                             follow_state_pair_transition(n, at.target,
@@ -538,6 +566,9 @@ static void follow_state_pair_transition(struct path_node node, state_id a,
         table->out_paths[index] = node;
         if ((pair.a != pair.b && table->in_paths[index].type != INVALID_NODE) ||
          table->ain_paths[index].type != INVALID_NODE) {
+            // We found a complete path which satisfies our requirements: i.e.,
+            // - it contains two distinct states, or
+            // - it contains an intrinsically ambiguous edge.
             // TODO: find minimum path, not just the first one we come across.
             table->has_ambiguity = true;
             table->ambiguity = pair;
@@ -598,8 +629,9 @@ static void path_node_copy(struct context *context,
             struct path_node in = context->bracket_paths.in_paths[i];
             assert(in.flags & COPIED_PATH);
             offset->symbols += in.offset.symbols;
+            bool parity = swapped == !(node->flags & SWAPPED_BRACKET_PATH);
             for (int i = 0; i < 2; ++i)
-                offset->actions[swapped ? 1 - i : i] += in.offset.actions[(node->flags & SWAPPED_BRACKET_PATH) ? 1 - i : i];
+                offset->actions[parity ? 1 - i : i] += in.offset.actions[i];
             break;
         }
         case JOIN_NODE:
@@ -626,6 +658,13 @@ static void path_node_copy(struct context *context,
         }
         node->flags |= COPIED_PATH;
     }
+}
+
+static struct path_node *ambiguous_bracket_path(struct context *context,
+ symbol_id symbol)
+{
+    return &context->ambiguous_bracket_paths[symbol -
+     context->combined->number_of_tokens];
 }
 
 static uint32_t state_pair_table_add(struct state_pair_table *table,

@@ -1026,10 +1026,8 @@ static void generate_actions(struct generator_output *out,
         if (map->actions[i] == 0)
             break;
         set_unsigned_number_substitution(out, "action-id", map->actions[i]);
-        set_unsigned_number_substitution(out, "action-slot", CONSTRUCT_ACTION_GET_SLOT(map->actions[i]));
         if (is_end_action(map->actions[i]))
             include_whitespace = false;
-        // TODO: end vs end + whitespace depending on whether it's an end action
         if (include_whitespace)
             output_line(out, "                construct_action_apply(&construct_state, %%action-id, end + whitespace);");
         else
