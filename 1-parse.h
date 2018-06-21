@@ -1427,6 +1427,10 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
     return tree;
 }
 void bluebird_tree_destroy(struct bluebird_tree *tree) {
+    free(tree->parse_tree);
+    free(tree->identifier_tokens);
+    free(tree->number_tokens);
+    free(tree->string_tokens);
     free(tree);
 }
 static bool grow_state_stack(struct state_stack *stack) {

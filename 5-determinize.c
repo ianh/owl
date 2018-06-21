@@ -242,6 +242,7 @@ static void determinize_automaton(struct context context)
                 automaton_add_transition_with_action(result, state, target,
                  SYMBOL_EPSILON, actions[n]);
             }
+            free(actions);
         }
     }
 
@@ -277,6 +278,13 @@ static void determinize_automaton(struct context context)
             bitset_destroy(&s);
         }
     }
+
+    // Clean up memory.
+    free(worklist.subsets);
+    free(worklist.subset_states);
+    memset(&worklist, 0, sizeof(worklist));
+    state_array_destroy(&next_subset);
+    subset_table_destroy(&subsets);
 
     // Remove unreachable action map transitions.
     if (context.action_map) {
@@ -325,9 +333,6 @@ static void determinize_automaton(struct context context)
         bitset_destroy(&reachable);
         state_array_destroy(&worklist);
     }
-
-    state_array_destroy(&next_subset);
-    subset_table_destroy(&subsets);
 }
 
 static int compare_state_ids(const void *aa, const void *bb);
@@ -470,9 +475,11 @@ static void find_bracket_transitions(struct context context,
             printf("\n");
         }
 #endif
+        bracket_transitions_destroy(&transitions);
         transitions = *result;
         *result = (struct bracket_transitions){0};
     }
+    bracket_transitions_destroy(&transitions);
     automaton_destroy(&a);
 }
 
@@ -574,11 +581,14 @@ static void action_map_destroy(struct action_map *map)
 
 void deterministic_grammar_destroy(struct deterministic_grammar *grammar)
 {
+    for (uint32_t i = 0; i < grammar->bracket_automaton.number_of_states; ++i)
+        bitset_destroy(&grammar->bracket_reachability[i]);
+    free(grammar->bracket_reachability);
     automaton_destroy(&grammar->automaton);
     automaton_destroy(&grammar->bracket_automaton);
     action_map_destroy(&grammar->action_map);
     action_map_destroy(&grammar->bracket_action_map);
-    free(grammar->transitions.transitions);
+    bracket_transitions_destroy(&grammar->transitions);
     memset(grammar, 0, sizeof(*grammar));
 }
 
@@ -667,6 +677,7 @@ static uint32_t subset_table_adopt_subset(struct subset_table *table,
         // If we got here, we've found the subset we're looking for.  This
         // function adopts the `subset` array, so we need to free it before
         // returning.
+        state_array_destroy(subset);
         free(subset);
         return index;
 
@@ -682,6 +693,12 @@ static uint32_t subset_table_adopt_subset(struct subset_table *table,
 
 static void subset_table_destroy(struct subset_table *table)
 {
+    for (uint32_t i = 0; i < table->available_size; ++i) {
+        if (table->subsets[i]) {
+            state_array_destroy(table->subsets[i]);
+            free(table->subsets[i]);
+        }
+    }
     free(table->subsets);
     free(table->subset_hashes);
     free(table->subset_states);
@@ -740,6 +757,8 @@ static bool equal_bracket_transitions(struct bracket_transitions *a,
 
 static void bracket_transitions_destroy(struct bracket_transitions *transitions)
 {
+    for (uint32_t i = 0; i < transitions->number_of_transitions; ++i)
+        bitset_destroy(&transitions->transitions[i].transition_symbols);
     free(transitions->transitions);
     memset(transitions, 0, sizeof(*transitions));
 }

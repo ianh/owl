@@ -167,6 +167,7 @@ void automaton_invalidate_epsilon_closure(struct automaton *a)
     for (uint32_t i = 0; i < a->number_of_states; ++i) {
         struct epsilon_closure *closure = &a->epsilon_closure_for_state[i];
         state_array_destroy(&closure->reachable);
+        free(closure->ambiguous_action_indexes);
         free(closure->action_indexes);
         free(closure->actions);
     }

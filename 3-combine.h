@@ -26,4 +26,6 @@ struct combined_grammar {
 
 void combine(struct combined_grammar *result, struct grammar *grammar);
 
+void combined_grammar_destroy(struct combined_grammar *grammar);
+
 #endif

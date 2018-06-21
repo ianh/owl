@@ -190,6 +190,7 @@ enum root_mode { PRINT_ROOT_NODE, HIDE_ROOT_NODE };
 static void initialize_document(struct interpret_context *ctx,
  struct interpret_node *root, uint32_t number_of_token_labels,
  enum root_mode root_mode);
+static void destroy_document(struct document *document);
 
 static uint32_t offset_labels(struct document *document, uint32_t start,
  uint32_t end, uint32_t offset, uint32_t color);
@@ -258,6 +259,7 @@ static void output_ambiguity_path(struct interpreter *interpreter,
     }
     output_document(output, &context.document, interpreter->terminal_info);
     *row_count = context.document.number_of_rows;
+    destroy_document(&context.document);
 }
 
 void output_ambiguity(struct interpreter *interpreter,
@@ -351,6 +353,12 @@ void output_ambiguity(struct interpreter *interpreter,
     output_ambiguity_path(interpreter, ambiguity, 1, token_labels, &row_count,
      output);
     fputs("\n", output);
+
+    for (uint32_t i = 0; i < ambiguity->number_of_tokens; ++i) {
+        if (ambiguity->tokens[i] >= combined->number_of_keyword_tokens)
+            free((void *)token_labels[i * 2].text);
+    }
+    free(token_labels);
 }
 
 static void count_row_labels(struct interpret_context *ctx,
@@ -480,6 +488,18 @@ static void initialize_document(struct interpret_context *ctx,
     }
 }
 
+static void destroy_document(struct document *document)
+{
+    for (uint32_t i = 0; i < document->number_of_rows; ++i) {
+        struct row row = document->rows[i];
+        if (i != 0) {
+            for (uint32_t j = 0; j < row.number_of_labels; ++j)
+                free((void *)row.labels[j].text);
+        }
+        free(row.labels);
+    }
+}
+
 void interpret(struct interpreter *interpreter, const char *text, FILE *output)
 {
     struct grammar *grammar = interpreter->grammar;
@@ -599,6 +619,10 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
     }
 #endif
     output_document(output, &context.document, interpreter->terminal_info);
+    destroy_document(&context.document);
+    free(context.document.rows);
+    free(context.offset_table);
+    free(context.bracket_transition_for_symbol);
 }
 
 // on enter bracket:
@@ -747,7 +771,9 @@ static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
                 push_action_offsets(ctx, end, end - len);
             whitespace = end - offset - len;
         }
+        struct bluebird_token_run *old = run;
         run = run->prev;
+        free(old);
     }
     follow_transition_reversed(ctx, &nfa_state, UINT32_MAX, UINT32_MAX,
      offset, offset + whitespace);

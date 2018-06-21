@@ -366,6 +366,14 @@ static void substitute_slots(struct grammar *grammar, struct rule *rule,
     }
 }
 
+void combined_grammar_destroy(struct combined_grammar *grammar)
+{
+    automaton_destroy(&grammar->automaton);
+    automaton_destroy(&grammar->bracket_automaton);
+    free(grammar->tokens);
+    memset(grammar, 0, sizeof(*grammar));
+}
+
 static void update_number_of_symbols(struct automaton *a)
 {
     uint32_t n = a->number_of_states;

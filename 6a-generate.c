@@ -552,6 +552,10 @@ void generate(struct generator *gen)
     output_line(out, "    return tree;");
     output_line(out, "}");
     output_line(out, "void bluebird_tree_destroy(struct bluebird_tree *tree) {");
+    output_line(out, "    free(tree->parse_tree);");
+    output_line(out, "    free(tree->identifier_tokens);");
+    output_line(out, "    free(tree->number_tokens);");
+    output_line(out, "    free(tree->string_tokens);");
     output_line(out, "    free(tree);");
     output_line(out, "}");
     output_line(out, "static bool grow_state_stack(struct state_stack *stack) {");
