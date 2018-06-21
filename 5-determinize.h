@@ -60,6 +60,8 @@ struct deterministic_grammar {
 void determinize(struct combined_grammar *grammar,
  struct deterministic_grammar *result);
 
+void deterministic_grammar_destroy(struct deterministic_grammar *grammar);
+
 struct action_map_entry *action_map_find(struct action_map *map,
  state_id target_nfa_state, state_id dfa_state, symbol_id dfa_symbol);
 

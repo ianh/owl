@@ -263,6 +263,7 @@ int main(int argc, char *argv[])
     }
 
     fclose(output_file);
+    deterministic_grammar_destroy(&deterministic);
     bluebird_tree_destroy(tree);
     free(grammar_string);
     return 0;

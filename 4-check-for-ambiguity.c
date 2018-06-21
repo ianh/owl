@@ -170,6 +170,7 @@ static uint32_t state_pair_table_add(struct state_pair_table *table,
 static uint32_t state_pair_table_lookup(struct state_pair_table *table,
  struct state_pair pair, uint32_t hash);
 static void state_pair_table_clear(struct state_pair_table *table);
+static void state_pair_table_destroy(struct state_pair_table *table);
 static void state_pair_table_rehash(struct state_pair_table *table,
  uint32_t new_size);
 
@@ -272,8 +273,7 @@ void check_for_ambiguity(struct combined_grammar *combined,
         } else {
             // No more progress can be made toward finding an ambiguous path.
             // That means we're done here.
-            ambiguity->has_ambiguity = false;
-            return;
+            break;
         }
 
         // We found some new bracket ambiguities.  Loop around and see if we can
@@ -281,26 +281,36 @@ void check_for_ambiguity(struct combined_grammar *combined,
         state_pair_table_clear(&table);
     }
 
-    // We found an ambiguous path through the root automaton.
-    ambiguity->has_ambiguity = true;
-    uint32_t path_index = state_pair_table_lookup(&table, table.ambiguity,
-     fnv(&table.ambiguity, sizeof(table.ambiguity)));
-    struct path_node in = table.in_paths[path_index];
-    struct path_node out = table.out_paths[path_index];
-    if (table.ain_paths[path_index].type != INVALID_NODE)
-        in = table.ain_paths[path_index];
-    path_node_copy(&context, &table, table.in_paths, &in);
-    path_node_copy(&context, &table, table.out_paths, &out);
-    ambiguity->number_of_tokens = in.offset.symbols + out.offset.symbols;
-    ambiguity->tokens = calloc(ambiguity->number_of_tokens, sizeof(symbol_id));
-    for (int i = 0; i < 2; ++i) {
-        uint32_t n = in.offset.actions[i] + out.offset.actions[i];
-        ambiguity->paths[i].number_of_actions = n;
-        ambiguity->paths[i].actions = calloc(n, sizeof(uint16_t));
-        ambiguity->paths[i].offsets = calloc(n, sizeof(uint32_t));
+    ambiguity->has_ambiguity = table.has_ambiguity;
+    if (table.has_ambiguity) {
+        // We found an ambiguous path through the root automaton.
+        uint32_t path_index = state_pair_table_lookup(&table, table.ambiguity,
+         fnv(&table.ambiguity, sizeof(table.ambiguity)));
+        struct path_node in = table.in_paths[path_index];
+        struct path_node out = table.out_paths[path_index];
+        if (table.ain_paths[path_index].type != INVALID_NODE)
+            in = table.ain_paths[path_index];
+        path_node_copy(&context, &table, table.in_paths, &in);
+        path_node_copy(&context, &table, table.out_paths, &out);
+        ambiguity->number_of_tokens = in.offset.symbols + out.offset.symbols;
+        ambiguity->tokens = calloc(ambiguity->number_of_tokens,
+         sizeof(symbol_id));
+        for (int i = 0; i < 2; ++i) {
+            uint32_t n = in.offset.actions[i] + out.offset.actions[i];
+            ambiguity->paths[i].number_of_actions = n;
+            ambiguity->paths[i].actions = calloc(n, sizeof(uint16_t));
+            ambiguity->paths[i].offsets = calloc(n, sizeof(uint32_t));
+        }
+        build_ambiguity_path(&context, ambiguity, in.offset, &out, 1, false);
+        build_ambiguity_path(&context, ambiguity, in.offset, &in, -1, false);
     }
-    build_ambiguity_path(&context, ambiguity, in.offset, &out, 1, false);
-    build_ambiguity_path(&context, ambiguity, in.offset, &in, -1, false);
+
+    automaton_destroy(&reversed);
+    automaton_destroy(&bracket_reversed);
+    state_pair_table_destroy(&table);
+    state_pair_table_destroy(&context.bracket_paths);
+    free(context.ambiguous_bracket_paths);
+    free(context.bracket_states);
 }
 
 static void build_ambiguity_path(struct context *context,
@@ -535,6 +545,7 @@ static void search_state_pairs(struct context *context,
             }
         }
     }
+    free(worklist.items);
 }
 
 static void follow_state_pair_transition(struct path_node node, state_id a,
@@ -709,6 +720,16 @@ static void state_pair_table_clear(struct state_pair_table *table)
 {
     memset(table->status, 0, sizeof(uint8_t) * table->available_size);
     table->used_size = 0;
+}
+
+static void state_pair_table_destroy(struct state_pair_table *table)
+{
+    free(table->pairs);
+    free(table->in_paths);
+    free(table->out_paths);
+    free(table->ain_paths);
+    free(table->status);
+    memset(table, 0, sizeof(*table));
 }
 
 static void state_pair_table_rehash(struct state_pair_table *table,

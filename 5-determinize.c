@@ -21,6 +21,8 @@ struct subset_table {
 static uint32_t subset_table_adopt_subset(struct subset_table *table,
  struct state_array *subset, uint32_t hash, state_id subset_state);
 
+static void subset_table_destroy(struct subset_table *table);
+
 // The worklist stores a list of deterministic states (and their corresponding
 // subsets) whose transitions have not yet been explored.
 struct worklist {
@@ -325,6 +327,7 @@ static void determinize_automaton(struct context context)
     }
 
     state_array_destroy(&next_subset);
+    subset_table_destroy(&subsets);
 }
 
 static int compare_state_ids(const void *aa, const void *bb);
@@ -562,6 +565,23 @@ void determinize(struct combined_grammar *grammar,
     automaton_destroy(&reversed);
 }
 
+static void action_map_destroy(struct action_map *map)
+{
+    free(map->actions);
+    free(map->entries);
+    memset(map, 0, sizeof(*map));
+}
+
+void deterministic_grammar_destroy(struct deterministic_grammar *grammar)
+{
+    automaton_destroy(&grammar->automaton);
+    automaton_destroy(&grammar->bracket_automaton);
+    action_map_destroy(&grammar->action_map);
+    action_map_destroy(&grammar->bracket_action_map);
+    free(grammar->transitions.transitions);
+    memset(grammar, 0, sizeof(*grammar));
+}
+
 struct action_map_entry *action_map_find(struct action_map *map,
  state_id target_nfa_state, state_id dfa_state, symbol_id dfa_symbol)
 {
@@ -658,6 +678,14 @@ static uint32_t subset_table_adopt_subset(struct subset_table *table,
         if (index == (hash & mask))
             abort();
     }
+}
+
+static void subset_table_destroy(struct subset_table *table)
+{
+    free(table->subsets);
+    free(table->subset_hashes);
+    free(table->subset_states);
+    memset(table, 0, sizeof(*table));
 }
 
 static int compare_state_ids(const void *aa, const void *bb)
