@@ -498,6 +498,7 @@ static void destroy_document(struct document *document)
         }
         free(row.labels);
     }
+    free(document->rows);
 }
 
 void interpret(struct interpreter *interpreter, const char *text, FILE *output)
@@ -620,7 +621,6 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
 #endif
     output_document(output, &context.document, interpreter->terminal_info);
     destroy_document(&context.document);
-    free(context.document.rows);
     free(context.offset_table);
     free(context.bracket_transition_for_symbol);
 }

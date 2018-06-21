@@ -265,6 +265,7 @@ int main(int argc, char *argv[])
     fclose(output_file);
     deterministic_grammar_destroy(&deterministic);
     combined_grammar_destroy(&combined);
+    grammar_destroy(&grammar);
     bluebird_tree_destroy(tree);
     free(grammar_string);
     return 0;

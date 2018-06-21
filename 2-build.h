@@ -25,6 +25,8 @@ struct token;
 // to be full of zeros.
 void build(struct grammar *grammar, struct bluebird_tree *tree);
 
+void grammar_destroy(struct grammar *grammar);
+
 struct grammar {
     struct rule *rules;
     uint32_t rules_allocated_bytes;

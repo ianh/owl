@@ -161,6 +161,8 @@ static void follow_state_pair_transition(struct path_node node, state_id a,
 static void path_node_copy(struct context *context,
  struct state_pair_table *table, struct path_node *which_paths,
  struct path_node *node);
+// Destroy a copied path node.
+static void path_node_destroy(struct path_node *node);
 
 static struct path_node *ambiguous_bracket_path(struct context *context,
  symbol_id symbol);
@@ -303,12 +305,26 @@ void check_for_ambiguity(struct combined_grammar *combined,
         }
         build_ambiguity_path(&context, ambiguity, in.offset, &out, 1, false);
         build_ambiguity_path(&context, ambiguity, in.offset, &in, -1, false);
+        path_node_destroy(in.next);
+        path_node_destroy(out.next);
     }
 
+    // Clean up.
     automaton_destroy(&reversed);
     automaton_destroy(&bracket_reversed);
     state_pair_table_destroy(&table);
+    for (uint32_t i = 0; i < context.bracket_paths.available_size; ++i) {
+        if (context.bracket_paths.status[i] == EMPTY)
+            continue;
+        if (context.bracket_paths.in_paths[i].flags & COPIED_PATH)
+            path_node_destroy(context.bracket_paths.in_paths[i].next);
+    }
     state_pair_table_destroy(&context.bracket_paths);
+    for (uint32_t i = 0; i < combined->number_of_bracket_transition_symbols;
+     ++i) {
+        path_node_destroy(context.ambiguous_bracket_paths[i].join[0]);
+        path_node_destroy(context.ambiguous_bracket_paths[i].join[1]);
+    }
     free(context.ambiguous_bracket_paths);
     free(context.bracket_states);
 }
@@ -661,13 +677,22 @@ static void path_node_copy(struct context *context,
             continue;
         struct state_pair p = node->next_pair;
         uint32_t i = state_pair_table_lookup(table, p, fnv(&p, sizeof(p)));
-        if (table->status[i] == EMPTY)
+        if (table->status[i] == EMPTY || which_paths[i].type == BOUNDARY_NODE)
             node->next = 0;
         else {
             node->next = malloc(sizeof(struct path_node));
             *node->next = which_paths[i];
         }
         node->flags |= COPIED_PATH;
+    }
+}
+
+static void path_node_destroy(struct path_node *node)
+{
+    while (node && (node->flags & COPIED_PATH)) {
+        struct path_node *next = node->next;
+        free(node);
+        node = next;
     }
 }
 

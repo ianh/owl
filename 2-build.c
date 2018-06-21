@@ -614,3 +614,25 @@ static uint32_t find_rule(struct context *ctx, const char *name, size_t len)
     }
     return UINT32_MAX;
 }
+
+void grammar_destroy(struct grammar *grammar)
+{
+    for (uint32_t i = 0; i < grammar->number_of_rules; ++i) {
+        struct rule r = grammar->rules[i];
+        for (uint32_t j = 0; j < r.number_of_choices; ++j)
+            automaton_destroy(&r.choices[j].automaton);
+        free(r.choices);
+        for (uint32_t j = 0; j < r.number_of_operators; ++j)
+            automaton_destroy(&r.operators[j].automaton);
+        free(r.operators);
+        for (uint32_t j = 0; j < r.number_of_brackets; ++j)
+            automaton_destroy(&r.brackets[j].automaton);
+        free(r.brackets);
+        free(r.slots);
+        free(r.keyword_tokens);
+        automaton_destroy(&r.automaton);
+    }
+    free(grammar->rules);
+    free(grammar->comment_tokens);
+    memset(grammar, 0, sizeof(*grammar));
+}
