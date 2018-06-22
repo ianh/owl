@@ -22,7 +22,7 @@ static void generate_action_automaton(struct generator *gen,
  struct generator_output *out, struct action_map *map, uint32_t dfa_offset,
  uint32_t nfa_offset, uint32_t bracket_nfa_offset, enum automaton_type type);
 static void generate_actions(struct generator_output *out,
- struct action_map *map, uint32_t action_index);
+ struct action_map *map, uint16_t *actions);
 
 static void output_indentation(struct generator_output *out,
  size_t indentation);
@@ -955,7 +955,7 @@ static void generate_action_automaton(struct generator *gen,
             if (!final_entry) {
                 output_line(out, "                break;");
             } else {
-                generate_actions(out, map, final_entry->action_index);
+                generate_actions(out, map, final_entry->actions);
                 output_line(out, "                goto finish;");
             }
             output_line(out, "            }");
@@ -980,7 +980,7 @@ static void generate_action_automaton(struct generator *gen,
             output_line(out, "            case %%entry-symbol:");
             if (entry.dfa_symbol < gen->combined->number_of_tokens)
                 output_line(out, "                len = decode_token_length(run, &length_offset, &offset);");
-            generate_actions(out, map, entry.action_index);
+            generate_actions(out, map, entry.actions);
             output_line(out, "                whitespace = end - offset - len;");
             set_unsigned_number_substitution(out, "entry-nfa-state",
              entry.nfa_state + nfa_offset);
@@ -1023,14 +1023,12 @@ static void generate_action_automaton(struct generator *gen,
 }
 
 static void generate_actions(struct generator_output *out,
- struct action_map *map, uint32_t action_index)
+ struct action_map *map, uint16_t *actions)
 {
     bool include_whitespace = true;
-    for (uint32_t i = action_index; i < map->number_of_actions; ++i) {
-        if (map->actions[i] == 0)
-            break;
-        set_unsigned_number_substitution(out, "action-id", map->actions[i]);
-        if (is_end_action(map->actions[i]))
+    for (; actions && *actions; ++actions) {
+        set_unsigned_number_substitution(out, "action-id", *actions);
+        if (is_end_action(*actions))
             include_whitespace = false;
         if (include_whitespace)
             output_line(out, "                construct_action_apply(&construct_state, %%action-id, end + whitespace);");

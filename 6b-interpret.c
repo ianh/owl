@@ -846,20 +846,18 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         }
     }
     size_t offset = end;
-    for (uint32_t i = entry->action_index; i < map->number_of_actions; i++) {
-        if (map->actions[i] == 0)
-            break;
+    for (uint16_t *a = entry->actions; a && *a; a++) {
         uint32_t action_offset = ctx->next_action_offset;
-        if (is_end_action(map->actions[i]) && offset != start)
+        if (is_end_action(*a) && offset != start)
             offset = push_action_offsets(ctx, offset, start);
         action_offset = ctx->next_action_offset - 1;
         // TODO: make sure the start of two different things at the same level
         // can't be the same (to avoid problems with sorting/stability/etc)
 #if 0
         printf("action: %u\n", offset);
-        print_action(map->actions[i], action_offset);
+        print_action(*a, action_offset);
 #endif
-        construct_action_apply(&ctx->construct_state, map->actions[i],
+        construct_action_apply(&ctx->construct_state, *a,
          SIZE_MAX - action_offset);
     }
     if (offset != start)

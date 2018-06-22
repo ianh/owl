@@ -22,7 +22,7 @@ struct action_map_entry {
     symbol_id dfa_symbol;
     state_id nfa_state;
     symbol_id nfa_symbol;
-    uint32_t action_index;
+    uint16_t *actions;
 };
 struct action_map {
     // Sorted lexicographically by target_nfa_state, then by dfa_state, then by
@@ -31,11 +31,6 @@ struct action_map {
     struct action_map_entry *entries;
     uint32_t entries_allocated_bytes;
     uint32_t number_of_entries;
-
-    // Action lists are null-terminated.
-    uint16_t *actions;
-    uint32_t actions_allocated_bytes;
-    uint32_t number_of_actions;
 };
 struct deterministic_grammar {
     struct automaton automaton;

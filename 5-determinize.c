@@ -355,13 +355,6 @@ static void follow_subset_transition(struct automaton *a,
         return;
     }
 
-    uint32_t action_index = map->number_of_actions;
-    map->number_of_actions += closure->number_of_actions;
-    map->actions = grow_array(map->actions, &map->actions_allocated_bytes,
-     map->number_of_actions * sizeof(uint16_t));
-    memcpy(map->actions + action_index, closure->actions,
-     closure->number_of_actions * sizeof(uint16_t));
-
     state_array_push(next_subset, target_nfa_state);
     add_action_map_entry(map, (struct action_map_entry){
         .dfa_state = dfa_state,
@@ -369,7 +362,6 @@ static void follow_subset_transition(struct automaton *a,
         .target_nfa_state = target_nfa_state,
         .dfa_symbol = dfa_symbol,
         .nfa_symbol = nfa_symbol,
-        .action_index = UINT32_MAX,
     });
     for (uint32_t i = 0; i < reachable->number_of_states; ++i) {
         state_array_push(next_subset, closure->reachable.states[i]);
@@ -379,7 +371,7 @@ static void follow_subset_transition(struct automaton *a,
             .target_nfa_state = closure->reachable.states[i],
             .dfa_symbol = dfa_symbol,
             .nfa_symbol = nfa_symbol,
-            .action_index = action_index + closure->action_indexes[i],
+            .actions = closure->actions + closure->action_indexes[i],
         });
     }
 }
@@ -574,7 +566,6 @@ void determinize(struct combined_grammar *grammar,
 
 static void action_map_destroy(struct action_map *map)
 {
-    free(map->actions);
     free(map->entries);
     memset(map, 0, sizeof(*map));
 }
