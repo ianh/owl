@@ -39,6 +39,10 @@ struct deterministic_grammar {
     struct action_map action_map;
     struct action_map bracket_action_map;
 
+    // Storage for the `actions` in the action maps.
+    uint16_t *actions;
+    uint32_t number_of_actions;
+
     // Accepting states of the bracket automaton are determinized, too -- the
     // `transitions` struct tracks which transition symbols of the determinized
     // automaton correspond to which transition symbols of the original, non-

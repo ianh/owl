@@ -58,6 +58,7 @@ static struct bitset transition_symbols_from_state(struct automaton *a,
  struct subset_table *subsets, uint32_t index);
 
 static int compare_actions(const void *a, const void *b);
+static int compare_entry_actions(const void *aa, const void *bb);
 
 enum options {
     // We provide an option to ignore the start state in order to determinize
@@ -511,21 +512,65 @@ void determinize(struct combined_grammar *grammar,
         .input = &grammar->bracket_automaton,
         .first_transition_symbol = grammar->number_of_tokens,
     }, &result->transitions);
+    struct action_map *action_map = &result->action_map;
     determinize_automaton((struct context){
         .input = &grammar->automaton,
         .result = &result->automaton,
         .in_transitions = result->transitions,
         .first_transition_symbol = grammar->number_of_tokens,
-        .action_map = &result->action_map,
+        .action_map = action_map,
     });
+    struct action_map *bracket_action_map = &result->bracket_action_map;
     determinize_automaton((struct context){
         .input = &grammar->bracket_automaton,
         .result = &result->bracket_automaton,
         .in_transitions = result->transitions,
         .first_transition_symbol = grammar->number_of_tokens,
-        .action_map = &result->bracket_action_map,
+        .action_map = bracket_action_map,
         .options = MARK_ACCEPTING_BRACKET_STATES,
     });
+
+    // De-duplicate actions and copy them into a single array.
+    uint32_t number_of_entries = action_map->number_of_entries +
+     bracket_action_map->number_of_entries;
+    struct action_map_entry **entries = calloc(number_of_entries,
+     sizeof(struct action_map_entry *));
+    uint32_t *action_indexes = calloc(number_of_entries, sizeof(uint32_t));
+    for (int i = 0; i < 2; ++i) {
+        struct action_map *map = i == 0 ? action_map : bracket_action_map;
+        uint32_t offset = i == 0 ? 0 : action_map->number_of_entries;
+        for (uint32_t j = 0; j < map->number_of_entries; ++j)
+            entries[offset + j] = &map->entries[j];
+    }
+    qsort(entries, number_of_entries, sizeof(struct action_map_entry *),
+     compare_entry_actions);
+    uint32_t result_actions_allocated_bytes = 0;
+    for (uint32_t i = 0; i < number_of_entries; ++i) {
+        if (i > 0 && compare_entry_actions(&entries[i], &entries[i - 1]) == 0)
+            action_indexes[i] = action_indexes[i - 1];
+        else if (entries[i]->actions) {
+            action_indexes[i] = result->number_of_actions;
+            uint16_t *a = entries[i]->actions;
+            uint32_t n = 0;
+            for (; a[n]; n++);
+            n++; // Include terminating zero.
+            result->number_of_actions += n;
+            result->actions = grow_array(result->actions,
+             &result_actions_allocated_bytes, result->number_of_actions *
+             sizeof(uint16_t));
+            memcpy(result->actions + action_indexes[i], entries[i]->actions,
+             n * sizeof(uint16_t));
+        } else
+            action_indexes[i] = UINT32_MAX;
+    }
+    for (uint32_t i = 0; i < number_of_entries; ++i) {
+        if (action_indexes[i] == UINT32_MAX)
+            entries[i]->actions = 0;
+        else
+            entries[i]->actions = result->actions + action_indexes[i];
+    }
+    free(action_indexes);
+    free(entries);
 
     // Fill in the bracket_reachability array.
     uint32_t n = result->bracket_automaton.number_of_states;
@@ -575,6 +620,7 @@ void deterministic_grammar_destroy(struct deterministic_grammar *grammar)
     for (uint32_t i = 0; i < grammar->bracket_automaton.number_of_states; ++i)
         bitset_destroy(&grammar->bracket_reachability[i]);
     free(grammar->bracket_reachability);
+    free(grammar->actions);
     automaton_destroy(&grammar->automaton);
     automaton_destroy(&grammar->bracket_automaton);
     action_map_destroy(&grammar->action_map);
@@ -724,6 +770,31 @@ static struct bitset transition_symbols_from_state(struct automaton *a,
 static int compare_actions(const void *a, const void *b)
 {
     return *(const uint16_t *)a - *(const uint16_t *)b;
+}
+
+static int compare_entry_actions(const void *aa, const void *bb)
+{
+    uint16_t *a = (*(struct action_map_entry * const *)aa)->actions;
+    uint16_t *b = (*(struct action_map_entry * const *)bb)->actions;
+    if (a == b)
+        return 0;
+    if (!a && b)
+        return -1;
+    if (a && !b)
+        return 1;
+    while (*a && *b) {
+        if (*a < *b)
+            return -1;
+        if (*a > *b)
+            return 1;
+        a++;
+        b++;
+    }
+    if (!*a && *b)
+        return -1;
+    if (*a && !*b)
+        return 1;
+    return 0;
 }
 
 static int compare_bracket_transitions(const void *aa, const void *bb)
