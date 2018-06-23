@@ -545,6 +545,11 @@ void determinize(struct combined_grammar *grammar,
     qsort(entries, number_of_entries, sizeof(struct action_map_entry *),
      compare_entry_actions);
     uint32_t result_actions_allocated_bytes = 0;
+    result->number_of_actions = 1;
+    result->actions = grow_array(result->actions,
+     &result_actions_allocated_bytes, result->number_of_actions *
+     sizeof(uint16_t));
+    result->actions[0] = 0;
     for (uint32_t i = 0; i < number_of_entries; ++i) {
         if (i > 0 && compare_entry_actions(&entries[i], &entries[i - 1]) == 0)
             action_indexes[i] = action_indexes[i - 1];
@@ -561,14 +566,10 @@ void determinize(struct combined_grammar *grammar,
             memcpy(result->actions + action_indexes[i], entries[i]->actions,
              n * sizeof(uint16_t));
         } else
-            action_indexes[i] = UINT32_MAX;
+            action_indexes[i] = 0;
     }
-    for (uint32_t i = 0; i < number_of_entries; ++i) {
-        if (action_indexes[i] == UINT32_MAX)
-            entries[i]->actions = 0;
-        else
-            entries[i]->actions = result->actions + action_indexes[i];
-    }
+    for (uint32_t i = 0; i < number_of_entries; ++i)
+        entries[i]->actions = result->actions + action_indexes[i];
     free(action_indexes);
     free(entries);
 
