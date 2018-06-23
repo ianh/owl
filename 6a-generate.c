@@ -31,6 +31,17 @@ static bool should_escape(char c);
 
 static int compare_tokens(const void *a, const void *b);
 
+static int compare_choice_names(const void *aa, const void *bb)
+{
+    struct choice *a = *(struct choice * const*)aa;
+    struct choice *b = *(struct choice * const*)bb;
+    if (a->name_length < b->name_length)
+        return -1;
+    if (a->name_length > b->name_length)
+        return 1;
+    return memcmp(a->name, b->name, a->name_length);
+}
+
 void generate(struct generator *gen)
 {
     struct generator_output *out = output_create(gen->output);
@@ -91,32 +102,51 @@ void generate(struct generator *gen)
     output_line(out, "};");
 
     uint32_t n = gen->grammar->number_of_rules;
+    struct choice **choices = 0;
+    uint32_t choices_allocated_bytes = 0;
+    uint32_t choice_index = 0;
+    for (uint32_t i = 0; i < n; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        for (uint32_t j = 0; j < rule->number_of_choices; ++j) {
+            uint32_t k = choice_index++;
+            choices = grow_array(choices, &choices_allocated_bytes,
+             choice_index * sizeof(struct choice *));
+            choices[k] = &rule->choices[j];
+        }
+        for (uint32_t j = 0; j < rule->number_of_operators; ++j) {
+            uint32_t k = choice_index++;
+            choices = grow_array(choices, &choices_allocated_bytes,
+             choice_index * sizeof(struct choice *));
+            choices[k] = &rule->operators[j];
+        }
+    }
+    if (choice_index > 0) {
+        qsort(choices, choice_index, sizeof(struct choice *),
+         compare_choice_names);
+        output_line(out, "enum parsed_type {");
+        for (uint32_t i = 0; i < choice_index; ++i) {
+            size_t len = choices[i]->name_length;
+            if (i > 0 && choices[i - 1]->name_length == len &&
+             !memcmp(choices[i - 1]->name, choices[i]->name, len))
+                continue;
+            set_substitution(out, "choice-name", choices[i]->name, len,
+             UPPERCASE_WITH_UNDERSCORES);
+            output_line(out, "    PARSED_%%choice-name,");
+        }
+        output_line(out, "};");
+    }
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
         output_line(out, "");
-        if (rule->number_of_choices > 0) {
-            output_line(out, "enum parsed_%%rule_type {");
-            for (uint32_t j = 0; j < rule->number_of_choices; ++j) {
-                set_substitution(out, "choice-name", rule->choices[j].name,
-                 rule->choices[j].name_length, UPPERCASE_WITH_UNDERSCORES);
-                output_line(out, "    PARSED_%%choice-name,");
-            }
-            for (uint32_t j = 0; j < rule->number_of_operators; ++j) {
-                set_substitution(out, "operator-name", rule->operators[j].name,
-                 rule->operators[j].name_length, UPPERCASE_WITH_UNDERSCORES);
-                output_line(out, "    PARSED_%%operator-name,");
-            }
-            output_line(out, "};");
-        }
         output_line(out, "struct parsed_%%rule {");
         output_line(out, "    struct bluebird_tree *_tree;");
         output_line(out, "    parsed_id _next;");
         output_line(out, "    struct source_range range;");
         output_line(out, "    bool empty;");
         if (rule->number_of_choices > 0)
-            output_line(out, "    enum parsed_%%rule_type type;");
+            output_line(out, "    enum parsed_type type;");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
             struct slot slot = rule->slots[j];
             set_substitution(out, "referenced-slot", slot.name,
@@ -376,6 +406,8 @@ void generate(struct generator *gen)
                 output_line(out, "            printf(\" : %%operator-name\");");
                 output_line(out, "            break;");
             }
+            output_line(out, "        default:");
+            output_line(out, "            break;");
             output_line(out, "        }");
         }
         if (rule->is_token) {
