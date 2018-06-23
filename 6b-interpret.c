@@ -174,7 +174,6 @@ static void follow_transition_reversed(struct interpret_context *ctx,
 
 static size_t push_action_offsets(struct interpret_context *ctx, size_t start,
  size_t end);
-static bool is_end_action(uint16_t action);
 
 #if 0
 static void print_action(uint16_t action, size_t offset)
@@ -226,7 +225,7 @@ static void output_ambiguity_path(struct interpreter *interpreter,
     size_t offset = SIZE_MAX;
     for (uint32_t i = n - 1; i < n; --i) {
         size_t next_offset = path->offsets[i] * 4;
-        if (is_end_action(path->actions[i]) && next_offset > 0)
+        if (CONSTRUCT_IS_END_ACTION(path->actions[i]) && next_offset > 0)
             next_offset -= 2;
         if (next_offset < offset)
             offset = next_offset;
@@ -848,7 +847,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
     size_t offset = end;
     for (uint16_t *a = entry->actions; a && *a; a++) {
         uint32_t action_offset = ctx->next_action_offset;
-        if (is_end_action(*a) && offset != start)
+        if (CONSTRUCT_IS_END_ACTION(*a) && offset != start)
             offset = push_action_offsets(ctx, offset, start);
         action_offset = ctx->next_action_offset - 1;
         // TODO: make sure the start of two different things at the same level

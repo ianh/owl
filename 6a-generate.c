@@ -1028,7 +1028,7 @@ static void generate_actions(struct generator_output *out,
     bool include_whitespace = true;
     for (; actions && *actions; ++actions) {
         set_unsigned_number_substitution(out, "action-id", *actions);
-        if (is_end_action(*actions))
+        if (CONSTRUCT_IS_END_ACTION(*actions))
             include_whitespace = false;
         if (include_whitespace)
             output_line(out, "                construct_action_apply(&construct_state, %%action-id, end + whitespace);");
