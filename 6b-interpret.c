@@ -440,7 +440,7 @@ static void fill_rows(struct interpret_context *ctx,
     if (rule->number_of_choices) {
         append_string(&str, &len, &bytes, ":", 1);
         if (node->choice_index >= rule->number_of_choices) {
-            struct operator *op = &rule->operators[node->choice_index -
+            struct choice *op = &rule->operators[node->choice_index -
              rule->number_of_choices];
             append_string(&str, &len, &bytes, op->name,
              op->name_length);
@@ -1045,7 +1045,7 @@ static int fixity_associativity_lookup(uint32_t rule_index, uint32_t choice,
 {
     struct rule *rule = &context->grammar->rules[rule_index];
     assert(choice >= rule->number_of_choices);
-    struct operator op = rule->operators[choice - rule->number_of_choices];
+    struct choice op = rule->operators[choice - rule->number_of_choices];
     switch (op.fixity) {
     case PREFIX:
         return CONSTRUCT_PREFIX;

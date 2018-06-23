@@ -42,7 +42,6 @@ struct grammar {
 
 struct bracket;
 struct choice;
-struct operator;
 struct slot;
 
 struct rule {
@@ -73,7 +72,7 @@ struct rule {
     // Operators are choices that appear after the '.operators' keyword.
     // They're represented separately and include information like fixity,
     // associativity and precedence.
-    struct operator *operators;
+    struct choice *operators;
     uint32_t operators_allocated_bytes;
     uint32_t number_of_operators;
 
@@ -130,34 +129,21 @@ struct rule {
 #define MAX_NUMBER_OF_SLOTS 4096
 #define MAX_NUMBER_OF_CHOICES 4096
 
+enum fixity { PREFIX, POSTFIX, INFIX };
+enum associativity { FLAT, LEFT, RIGHT, NONASSOC };
+
 struct choice {
     // The name; for example, a choice specified as `'int' : integer` will have
     // the name "integer".  This is a reference to the original parsed text.
     const char *name;
     size_t name_length;
 
-    // A deterministic automaton which recognizes this choice.
-    struct automaton automaton;
-
-    // For error reporting.
-    struct source_range name_range;
-    struct source_range expr_range;
-};
-
-enum fixity { PREFIX, POSTFIX, INFIX };
-enum associativity { FLAT, LEFT, RIGHT, NONASSOC };
-
-struct operator {
-    // The name; for example, an operator specified as `'+' : plus` will have
-    // the name "plus".  This is a reference to the original parsed text.
-    const char *name;
-    size_t name_length;
-
+    // Used for operator choices.
     enum fixity fixity;
     enum associativity associativity;
     int32_t precedence;
 
-    // A deterministic automaton which recognizes this operator.
+    // A deterministic automaton which recognizes this choice.
     struct automaton automaton;
 
     // For error reporting.

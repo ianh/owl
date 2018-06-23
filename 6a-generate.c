@@ -649,7 +649,7 @@ void generate(struct generator *gen)
         output_line(out, "    case %%rule-index:");
         output_line(out, "        switch (choice) {");
         for (uint32_t j = 0; j < rule->number_of_operators; ++j) {
-            struct operator op = rule->operators[j];
+            struct choice op = rule->operators[j];
             set_unsigned_number_substitution(out, "choice-index",
              j + rule->number_of_choices);
             set_signed_number_substitution(out, "operator-precedence",

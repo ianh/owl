@@ -127,7 +127,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                 // "transition" between a to_state and a from_state -- the
                 // fixity determines which states the operator is a transition
                 // between.
-                struct operator *op = &rule->operators[j];
+                struct choice *op = &rule->operators[j];
                 state_id to_state;
                 state_id from_state;
                 if (op->fixity == PREFIX) {
@@ -166,7 +166,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                 }
                 int precedence = op->precedence;
                 for (; j < rule->number_of_operators; ++j) {
-                    struct operator *op = &rule->operators[j];
+                    struct choice *op = &rule->operators[j];
                     if (op->precedence != precedence)
                         break;
                     // Embed each operator automaton and hook it up according

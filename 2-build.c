@@ -204,8 +204,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 uint32_t op_index = rule->number_of_operators++;
                 rule->operators = grow_array(rule->operators,
                  &rule->operators_allocated_bytes,
-                 sizeof(struct operator) * rule->number_of_operators);
-                struct operator *operator = &rule->operators[op_index];
+                 sizeof(struct choice) * rule->number_of_operators);
+                struct choice *operator = &rule->operators[op_index];
                 operator->name = op_choice.identifier;
                 operator->name_length = op_choice.length;
                 operator->name_range = op_choice.range;
@@ -226,7 +226,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         // Add slots for operands -- 'left'/'right' for infix operators, and
         // 'operand' for prefix and postfix operators.
         for (uint32_t i = 0; i < rule->number_of_operators; ++i) {
-            struct operator *operator = &rule->operators[i];
+            struct choice *operator = &rule->operators[i];
             char buf[256];
             if (operator->fixity == INFIX && operator->associativity != FLAT) {
                 snprintf(buf, sizeof(buf), "is reserved for the left operand "
