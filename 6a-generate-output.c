@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "grow-array.h"
+#include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -73,9 +74,12 @@ void output_string_length(struct generator_output *output, const char *string,
             output->output(string + next_output_index, i - next_output_index);
             switch (s->type) {
             case UNSIGNED_NUMBER: {
-                int len = snprintf(0, 0, "%uU", s->unsigned_number);
+                const char *f = "%u";
+                if (s->unsigned_number > INT_MAX)
+                    f = "%uU";
+                int len = snprintf(0, 0, f, s->unsigned_number);
                 format = grow_array(format, &format_bytes, (uint32_t)len + 1);
-                snprintf(format, len + 1, "%uU", s->unsigned_number);
+                snprintf(format, len + 1, f, s->unsigned_number);
                 output->output(format, len);
                 break;
             }
