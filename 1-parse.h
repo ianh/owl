@@ -25,9 +25,9 @@ typedef size_t parsed_id;
 // bluebird_tree_root() to get the root bluebird_id.
 struct bluebird_tree;
 
-// Creates a bluebird_tree from a string.  Remember to call
-// bluebird_tree_destroy() when you're done with it.  You'll have to free the
-// string yourself after destroying the tree.
+// Creates a bluebird_tree from a string.  The tree may directly reference
+// pieces of the string -- you're responsible for keeping it around until
+// bluebird_tree_destroy() is called.
 struct bluebird_tree *bluebird_tree_create_from_string(const char *string);
 
 // Creates a bluebird_tree by reading from a file.
@@ -36,7 +36,7 @@ struct bluebird_tree *bluebird_tree_create_from_file(FILE *file);
 // Destroys a bluebird_tree, freeing its resources back to the system.
 void bluebird_tree_destroy(struct bluebird_tree *);
 
-// Prints a representation of the tree to stdout.
+// Prints a representation of the tree to standard output.
 void bluebird_tree_print(struct bluebird_tree *);
 
 // Returns the root parsed_id.
@@ -359,7 +359,7 @@ static void write_tree(struct bluebird_tree *tree, parsed_id value)
     // Reserve 10 bytes (the maximum encoded size of a 64-bit value).
     size_t reserved_size = tree->next_id + 10;
     if (tree->parse_tree_size <= reserved_size && !grow_tree(tree, reserved_size))
-        return;
+        abort();
     tree->parse_tree[tree->next_id++] = value & 0x7f;
     value >>= 7;
     while (value > 0) {
@@ -1532,7 +1532,11 @@ static bool grow_state_stack(struct state_stack *stack) {
 static void fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont) {
     uint16_t token_index = 0;
     uint16_t number_of_tokens = run->number_of_tokens;
-    uint16_t start_state = cont->state;
+    uint32_t start_state = cont->state;
+    if (start_state == 0) {
+        // This is unnecessary, but it avoids a compiler warning about unused labels.
+        goto state_0;
+    }
 start:
     switch (start_state) {
     case 0:

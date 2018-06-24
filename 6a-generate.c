@@ -36,8 +36,8 @@
 #include "6a-generate.h"
 
 #include "6a-generate-output.h"
+#include "construct-actions.h"
 #include "grow-array.h"
-#include "x-construct-actions.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -111,9 +111,9 @@ void generate(struct generator *gen)
     output_line(out, "// bluebird_tree_root() to get the root bluebird_id.");
     output_line(out, "struct bluebird_tree;");
     output_line(out, "");
-    output_line(out, "// Creates a bluebird_tree from a string.  Remember to call");
-    output_line(out, "// bluebird_tree_destroy() when you're done with it.  You'll have to free the");
-    output_line(out, "// string yourself after destroying the tree.");
+    output_line(out, "// Creates a bluebird_tree from a string.  The tree may directly reference");
+    output_line(out, "// pieces of the string -- you're responsible for keeping it around until");
+    output_line(out, "// bluebird_tree_destroy() is called.");
     output_line(out, "struct bluebird_tree *bluebird_tree_create_from_string(const char *string);");
     output_line(out, "");
     output_line(out, "// Creates a bluebird_tree by reading from a file.");
@@ -122,7 +122,7 @@ void generate(struct generator *gen)
     output_line(out, "// Destroys a bluebird_tree, freeing its resources back to the system.");
     output_line(out, "void bluebird_tree_destroy(struct bluebird_tree *);");
     output_line(out, "");
-    output_line(out, "// Prints a representation of the tree to stdout.");
+    output_line(out, "// Prints a representation of the tree to standard output.");
     output_line(out, "void bluebird_tree_print(struct bluebird_tree *);");
     output_line(out, "");
     output_line(out, "// Returns the root parsed_id.");
@@ -299,8 +299,7 @@ void generate(struct generator *gen)
     output_line(out, "    // Reserve 10 bytes (the maximum encoded size of a 64-bit value).");
     output_line(out, "    size_t reserved_size = tree->next_id + 10;");
     output_line(out, "    if (tree->parse_tree_size <= reserved_size && !grow_tree(tree, reserved_size))");
-    // FIXME: Should we handle this case?
-    output_line(out, "        return;");
+    output_line(out, "        abort();");
     output_line(out, "    tree->parse_tree[tree->next_id++] = value & 0x7f;");
     output_line(out, "    value >>= 7;");
     output_line(out, "    while (value > 0) {");
@@ -631,7 +630,11 @@ void generate(struct generator *gen)
     output_line(out, "static void fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont) {");
     output_line(out, "    uint16_t token_index = 0;");
     output_line(out, "    uint16_t number_of_tokens = run->number_of_tokens;");
-    output_line(out, "    uint16_t start_state = cont->state;");
+    output_line(out, "    %%state-type start_state = cont->state;");
+    output_line(out, "    if (start_state == %%start-state) {");
+    output_line(out, "        // This is unnecessary, but it avoids a compiler warning about unused labels.");
+    output_line(out, "        goto state_%%start-state;");
+    output_line(out, "    }");
     output_line(out, "start:");
     output_line(out, "    switch (start_state) {");
     generate_automaton(gen, out, a, 0, NORMAL_AUTOMATON);

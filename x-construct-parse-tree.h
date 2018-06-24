@@ -1,7 +1,7 @@
 // These "x-files" are written in a somewhat unusual way.  When interpreting a
 // grammar, we use the code in this file directly.  When compiling a grammar, we
 // turn this code into a string to include in the generated file.  To avoid
-// involving any external build tools, we enclose the entire file in a macro
+// involving any external build tools, we enclose the source code in a macro
 // invocation.  The interpreter includes the source directly, while the compiler
 // redefines the macro to return the source code as a string.
 
@@ -51,7 +51,7 @@
  fixity_associativity_variable, precedence_variable, rule, choice, info) macro.
 #endif
 
-#include "x-construct-actions.h"
+#include "construct-actions.h"
 
 CONSTRUCT_BODY
 (

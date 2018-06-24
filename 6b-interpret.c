@@ -1,7 +1,7 @@
 #include "6b-interpret.h"
 
 #include "alloc.h"
-#include "x-construct-actions.h"
+#include "construct-actions.h"
 #include <assert.h>
 #include <stdio.h>
 

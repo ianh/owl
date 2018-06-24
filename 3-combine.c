@@ -2,7 +2,7 @@
 
 #include "5-determinize.h"
 #include "alloc.h"
-#include "x-construct-actions.h"
+#include "construct-actions.h"
 #include <assert.h>
 #include <stdio.h>
 
