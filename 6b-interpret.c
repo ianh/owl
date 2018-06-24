@@ -837,8 +837,8 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         // TODO: Use a table.
         for (state_id i = 0; i <
          ctx->combined->bracket_automaton.number_of_states; ++i) {
-            if (ctx->combined->bracket_automaton.states[i].transition_symbol
-             != entry->nfa_symbol)
+            struct state s = ctx->combined->bracket_automaton.states[i];
+            if (!s.accepting || s.transition_symbol != entry->nfa_symbol)
                 continue;
             nfa_state = i;
             break;
