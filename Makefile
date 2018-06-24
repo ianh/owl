@@ -7,7 +7,7 @@ LDLIBS_no=
 LDLIBS_=-ldl
 
 CC=/usr/bin/cc
-CFLAGS=-Os -g -pedantic -std=c11 -Wall -Wno-missing-braces -Wno-overlength-strings
+CFLAGS=-O3 -g -pedantic -std=c11 -Wall -Wno-missing-braces -Wno-overlength-strings
 LDLIBS=$(LDLIBS_$(LIBDL))
 
 bluebird: 1-parse.o *.c *.h
