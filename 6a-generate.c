@@ -284,7 +284,6 @@ void generate(struct generator *gen)
     output_line(out, "    uint8_t *parse_tree = realloc(tree->parse_tree, n);");
     output_line(out, "    if (!parse_tree)");
     output_line(out, "        return false;");
-    output_line(out, "    memset(parse_tree + tree->parse_tree_size, 0, n - tree->parse_tree_size);");
     output_line(out, "    tree->parse_tree_size = n;");
     output_line(out, "    tree->parse_tree = parse_tree;");
     output_line(out, "    return true;");

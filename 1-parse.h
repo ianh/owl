@@ -344,7 +344,6 @@ static bool grow_tree(struct bluebird_tree *tree, size_t size)
     uint8_t *parse_tree = realloc(tree->parse_tree, n);
     if (!parse_tree)
         return false;
-    memset(parse_tree + tree->parse_tree_size, 0, n - tree->parse_tree_size);
     tree->parse_tree_size = n;
     tree->parse_tree = parse_tree;
     return true;
