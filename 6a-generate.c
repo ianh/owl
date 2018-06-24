@@ -60,8 +60,6 @@ static void generate_action_table(struct generator *gen,
 static void output_indentation(struct generator_output *out,
  size_t indentation);
 
-static bool should_escape(char c);
-
 static int compare_tokens(const void *a, const void *b);
 
 static int compare_choice_names(const void *aa, const void *bb)
@@ -816,21 +814,18 @@ static void generate_keyword_reader(struct generator *gen,
             set_unsigned_number_substitution(out, "offset",
              (uint32_t)(shared_length + 1));
             output_indentation(out, shared_length + 2);
-            output_string(out, "if (strncmp(text + %%offset, \"");
+            output_string(out, "if (");
             for (size_t j = shared_length + 1; j < keyword.length; ++j) {
-                if (!should_escape(keyword.string[j])) {
-                    gen->output(&keyword.string[j], 1);
-                    continue;
-                }
-                char string[8];
-                snprintf(string, sizeof(string), "\\x%02x", keyword.string[j]);
-                gen->output(string, strlen(string));
+                set_unsigned_number_substitution(out, "character",
+                 keyword.string[j]);
+                set_unsigned_number_substitution(out, "index", (uint32_t)j);
+                output_string(out, "text[%%index] == %%character");
+                if (j + 1 < keyword.length)
+                    output_string(out, " && ");
             }
             if (keyword.length - shared_length - 1 > UINT32_MAX)
                 abort();
-            set_unsigned_number_substitution(out, "token-length",
-             (uint32_t)(keyword.length - shared_length - 1));
-            output_line(out, "\", %%token-length) == 0) {");
+            output_line(out, ") {");
             generate_keyword(out, keyword, shared_length + 3);
             output_indentation(out, shared_length + 2);
             output_line(out, "} else {");
@@ -1260,22 +1255,6 @@ static void output_indentation(struct generator_output *out, size_t indentation)
 {
     for (int i = 0; i < indentation; ++i)
         output_string(out, "    ");
-}
-
-static bool should_escape(char c)
-{
-    if (c >= 'a' && c <= 'z')
-        return false;
-    if (c >= 'A' && c <= 'Z')
-        return false;
-    if (c >= '0' && c <= '9')
-        return false;
-    const char *symbols = "!#%&'()*+,-./:;<=>?[]^_{|}~";
-    for (size_t i = 0; symbols[i]; ++i) {
-        if (c == symbols[i])
-            return false;
-    }
-    return true;
 }
 
 static int compare_tokens(const void *aa, const void *bb)

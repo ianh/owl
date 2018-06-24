@@ -5908,7 +5908,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *t
         *token = 17;
         return 1;
     case 46:
-        if (strncmp(text + 1, "operators", 9) == 0) {
+        if (text[1] == 111 && text[2] == 112 && text[3] == 101 && text[4] == 114 && text[5] == 97 && text[6] == 116 && text[7] == 111 && text[8] == 114 && text[9] == 115) {
             *end_token = false;
             *token = 3;
             return 10;
@@ -5940,7 +5940,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *t
         *token = 15;
         return 1;
     case 102:
-        if (strncmp(text + 1, "lat", 3) == 0) {
+        if (text[1] == 108 && text[2] == 97 && text[3] == 116) {
             *end_token = false;
             *token = 7;
             return 4;
@@ -5948,7 +5948,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *t
             return 0;
         }
     case 105:
-        if (strncmp(text + 1, "nfix", 4) == 0) {
+        if (text[1] == 110 && text[2] == 102 && text[3] == 105 && text[4] == 120) {
             *end_token = false;
             *token = 6;
             return 5;
@@ -5958,7 +5958,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *t
     case 108:
         switch (text[1]) {
         case 101:
-            if (strncmp(text + 2, "ft", 2) == 0) {
+            if (text[2] == 102 && text[3] == 116) {
                 *end_token = false;
                 *token = 8;
                 return 4;
@@ -5966,7 +5966,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *t
                 return 0;
             }
         case 105:
-            if (strncmp(text + 2, "ne-comment-token", 16) == 0) {
+            if (text[2] == 110 && text[3] == 101 && text[4] == 45 && text[5] == 99 && text[6] == 111 && text[7] == 109 && text[8] == 109 && text[9] == 101 && text[10] == 110 && text[11] == 116 && text[12] == 45 && text[13] == 116 && text[14] == 111 && text[15] == 107 && text[16] == 101 && text[17] == 110) {
                 *end_token = false;
                 *token = 0;
                 return 18;
@@ -5977,7 +5977,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *t
             return 0;
         }
     case 110:
-        if (strncmp(text + 1, "onassoc", 7) == 0) {
+        if (text[1] == 111 && text[2] == 110 && text[3] == 97 && text[4] == 115 && text[5] == 115 && text[6] == 111 && text[7] == 99) {
             *end_token = false;
             *token = 10;
             return 8;
@@ -5987,7 +5987,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *t
     case 112:
         switch (text[1]) {
         case 111:
-            if (strncmp(text + 2, "stfix", 5) == 0) {
+            if (text[2] == 115 && text[3] == 116 && text[4] == 102 && text[5] == 105 && text[6] == 120) {
                 *end_token = false;
                 *token = 4;
                 return 7;
@@ -5995,7 +5995,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *t
                 return 0;
             }
         case 114:
-            if (strncmp(text + 2, "efix", 4) == 0) {
+            if (text[2] == 101 && text[3] == 102 && text[4] == 105 && text[5] == 120) {
                 *end_token = false;
                 *token = 5;
                 return 6;
@@ -6006,7 +6006,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *t
             return 0;
         }
     case 114:
-        if (strncmp(text + 1, "ight", 4) == 0) {
+        if (text[1] == 105 && text[2] == 103 && text[3] == 104 && text[4] == 116) {
             *end_token = false;
             *token = 9;
             return 5;
