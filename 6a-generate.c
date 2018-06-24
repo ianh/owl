@@ -330,8 +330,27 @@ void generate(struct generator *gen)
         set_unsigned_number_substitution(out, "rule-index", i);
         output_line(out, "    case %%rule-index: {");
 //        output_line(out, "        printf(\"next = %lu\\n\", next_sibling);");
-        if (rule->number_of_choices > 0)
-            output_line(out, "        write_tree(tree, choice);");
+        if (rule->number_of_choices > 0) {
+            output_line(out, "        switch (choice) {");
+            for (uint32_t i = 0; i < rule->number_of_choices; ++i) {
+                set_unsigned_number_substitution(out, "choice-index", i);
+                set_substitution(out, "choice-name", rule->choices[i].name,
+                 rule->choices[i].name_length, UPPERCASE_WITH_UNDERSCORES);
+                output_line(out, "        case %%choice-index:");
+                output_line(out, "            write_tree(tree, PARSED_%%choice-name);");
+                output_line(out, "            break;");
+            }
+            for (uint32_t i = 0; i < rule->number_of_operators; ++i) {
+                set_unsigned_number_substitution(out, "choice-index", i +
+                 rule->number_of_choices);
+                set_substitution(out, "choice-name", rule->operators[i].name,
+                 rule->operators[i].name_length, UPPERCASE_WITH_UNDERSCORES);
+                output_line(out, "        case %%choice-index:");
+                output_line(out, "            write_tree(tree, PARSED_%%choice-name);");
+                output_line(out, "            break;");
+            }
+            output_line(out, "        }");
+        }
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
             set_unsigned_number_substitution(out, "slot-index", j);
 //            output_line(out, "        printf(\"slot %%slot-index = %lu\\n\", slots[%%slot-index]);");
