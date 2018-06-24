@@ -339,7 +339,7 @@ static inline parsed_id read_tree(parsed_id *id, struct bluebird_tree *tree) {
 static bool grow_tree(struct bluebird_tree *tree, size_t size)
 {
     size_t n = tree->parse_tree_size;
-    while (size > n)
+    while (n < size || n < 4096)
         n = (n + 1) * 3 / 2;
     uint8_t *parse_tree = realloc(tree->parse_tree, n);
     if (!parse_tree)
