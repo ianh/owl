@@ -10,9 +10,10 @@
 #ifndef _BLUEBIRD_PARSER_H_
 #define _BLUEBIRD_PARSER_H_
 
-#include "stdbool.h"
-#include "stddef.h"
-#include "stdint.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 
 // A parsed_id represents an element in the parse tree.  Use the
 // parsed_..._get() function corresponding to the element type to unpack the
@@ -25,8 +26,12 @@ typedef size_t parsed_id;
 struct bluebird_tree;
 
 // Creates a bluebird_tree from a string.  Remember to call
-// bluebird_tree_destroy() when you're done with it.
+// bluebird_tree_destroy() when you're done with it.  You'll have to free the
+// string yourself after destroying the tree.
 struct bluebird_tree *bluebird_tree_create_from_string(const char *string);
+
+// Creates a bluebird_tree by reading from a file.
+struct bluebird_tree *bluebird_tree_create_from_file(FILE *file);
 
 // Destroys a bluebird_tree, freeing its resources back to the system.
 void bluebird_tree_destroy(struct bluebird_tree *);
@@ -249,6 +254,7 @@ static inline struct parsed_string parsed_string_next(struct parsed_string parse
 
 struct bluebird_tree {
     const char *string;
+    bool owns_string;
     uint8_t *parse_tree;
     size_t parse_tree_size;
     parsed_id next_id;
@@ -1478,7 +1484,34 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
     tree->root_id = build_parse_tree(&tokenizer, token_run, tree);
     return tree;
 }
+struct bluebird_tree *bluebird_tree_create_from_file(FILE *file) {
+    // TODO: Error codes?
+    if (fseek(file, 0, SEEK_END))
+        return 0;
+    long len = ftell(file);
+    if (len < 0)
+        return 0;
+    char *str = malloc(len + 1);
+    if (!str)
+        return 0;
+    fseek(file, 0, SEEK_SET);
+    size_t n = fread(str, 1, len, file);
+    if (n < len) {
+        free(str);
+        return 0;
+    }
+    str[len] = '\0';
+    struct bluebird_tree *tree = bluebird_tree_create_from_string(str);
+    if (!tree) {
+        free(str);
+        return 0;
+    }
+    tree->owns_string = true;
+    return tree;
+}
 void bluebird_tree_destroy(struct bluebird_tree *tree) {
+    if (tree->owns_string)
+        free((void *)tree->string);
     free(tree->parse_tree);
     free(tree->identifier_tokens);
     free(tree->number_tokens);
