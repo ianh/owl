@@ -1,11 +1,10 @@
 #ifndef _STATE_ARRAY_H_
 #define _STATE_ARRAY_H_
 
+#include "grow-array.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "grow-array.h"
 
 typedef uint32_t state_id;
 
