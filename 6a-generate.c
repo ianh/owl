@@ -146,12 +146,6 @@ void generate(struct generator *gen)
              choice_index * sizeof(struct choice *));
             choices[k] = &rule->choices[j];
         }
-        for (uint32_t j = 0; j < rule->number_of_operators; ++j) {
-            uint32_t k = choice_index++;
-            choices = grow_array(choices, &choices_allocated_bytes,
-             choice_index * sizeof(struct choice *));
-            choices[k] = &rule->operators[j];
-        }
     }
     if (choice_index > 0) {
         qsort(choices, choice_index, sizeof(struct choice *),
@@ -373,15 +367,6 @@ void generate(struct generator *gen)
                 output_line(out, "            write_tree(tree, PARSED_%%choice-name);");
                 output_line(out, "            break;");
             }
-            for (uint32_t i = 0; i < rule->number_of_operators; ++i) {
-                set_unsigned_number_substitution(out, "choice-index", i +
-                 rule->number_of_choices);
-                set_substitution(out, "choice-name", rule->operators[i].name,
-                 rule->operators[i].name_length, UPPERCASE_WITH_UNDERSCORES);
-                output_line(out, "        case %%choice-index:");
-                output_line(out, "            write_tree(tree, PARSED_%%choice-name);");
-                output_line(out, "            break;");
-            }
             output_line(out, "        }");
         }
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
@@ -449,13 +434,6 @@ void generate(struct generator *gen)
                  rule->choices[j].name_length, UPPERCASE_WITH_UNDERSCORES);
                 output_line(out, "        case PARSED_%%choice-name:");
                 output_line(out, "            printf(\" : %%choice-name\");");
-                output_line(out, "            break;");
-            }
-            for (uint32_t j = 0; j < rule->number_of_operators; ++j) {
-                set_substitution(out, "operator-name", rule->operators[j].name,
-                 rule->operators[j].name_length, UPPERCASE_WITH_UNDERSCORES);
-                output_line(out, "        case PARSED_%%operator-name:");
-                output_line(out, "            printf(\" : %%operator-name\");");
                 output_line(out, "            break;");
             }
             output_line(out, "        default:");
@@ -659,15 +637,15 @@ void generate(struct generator *gen)
     output_line(out, "    switch (rule) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
-        if (rule->number_of_operators == 0)
+        if (rule->first_operator_choice == rule->number_of_choices)
             continue;
         set_unsigned_number_substitution(out, "rule-index", i);
         output_line(out, "    case %%rule-index:");
         output_line(out, "        switch (choice) {");
-        for (uint32_t j = 0; j < rule->number_of_operators; ++j) {
-            struct choice op = rule->operators[j];
-            set_unsigned_number_substitution(out, "choice-index",
-             j + rule->number_of_choices);
+        for (uint32_t j = rule->first_operator_choice;
+         j < rule->number_of_choices; ++j) {
+            struct choice op = rule->choices[j];
+            set_unsigned_number_substitution(out, "choice-index", j);
             set_signed_number_substitution(out, "operator-precedence",
              op.precedence);
             output_line(out, "        case %%choice-index:");

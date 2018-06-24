@@ -439,16 +439,8 @@ static void fill_rows(struct interpret_context *ctx,
     append_string(&str, &len, &bytes, rule->name, rule->name_length);
     if (rule->number_of_choices) {
         append_string(&str, &len, &bytes, ":", 1);
-        if (node->choice_index >= rule->number_of_choices) {
-            struct choice *op = &rule->operators[node->choice_index -
-             rule->number_of_choices];
-            append_string(&str, &len, &bytes, op->name,
-             op->name_length);
-        } else {
-            struct choice *choice = &rule->choices[node->choice_index];
-            append_string(&str, &len, &bytes, choice->name,
-             choice->name_length);
-        }
+        struct choice *choice = &rule->choices[node->choice_index];
+        append_string(&str, &len, &bytes, choice->name, choice->name_length);
     }
     if (s && (s->name_length != rule->name_length ||
      memcmp(s->name, rule->name, rule->name_length))) {
@@ -1044,8 +1036,8 @@ static int fixity_associativity_lookup(uint32_t rule_index, uint32_t choice,
  struct interpret_context *context)
 {
     struct rule *rule = &context->grammar->rules[rule_index];
-    assert(choice >= rule->number_of_choices);
-    struct choice op = rule->operators[choice - rule->number_of_choices];
+    assert(choice >= rule->first_operator_choice);
+    struct choice op = rule->choices[choice];
     switch (op.fixity) {
     case PREFIX:
         return CONSTRUCT_PREFIX;
@@ -1068,8 +1060,8 @@ static int precedence_lookup(uint32_t rule_index, uint32_t choice,
  struct interpret_context *context)
 {
     struct rule *rule = &context->grammar->rules[rule_index];
-    assert(choice >= rule->number_of_choices);
-    return rule->operators[choice - rule->number_of_choices].precedence;
+    assert(choice >= rule->first_operator_choice);
+    return rule->choices[choice].precedence;
 }
 
 static size_t number_of_slots_lookup(uint32_t rule,

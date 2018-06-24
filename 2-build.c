@@ -154,6 +154,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         // Create operator structs from each operator.
         struct parsed_operators ops;
         ops = parsed_operators_get(tree, body.operators);
+        rule->first_operator_choice = rule->number_of_choices;
         int32_t precedence = -1;
         while (!ops.empty) {
             // First, unpack the fixity and associativity from the parse tree.
@@ -191,21 +192,18 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 struct parsed_expr op_expr = parsed_expr_get(tree, op.expr);
                 struct parsed_identifier op_choice =
                  parsed_identifier_get(tree, op.identifier);
-                if (rule->number_of_operators + rule->number_of_choices >=
-                 MAX_NUMBER_OF_CHOICES) {
-                    errorf("rules with more than %u combined choice and "
-                     "operator clauses are currently unsupported",
-                     MAX_NUMBER_OF_CHOICES);
+                if (rule->number_of_choices >= MAX_NUMBER_OF_CHOICES) {
+                    errorf("rules with more than %u choice clauses are "
+                     "currently unsupported", MAX_NUMBER_OF_CHOICES);
                     error.ranges[0] = rule->name_range;
                     exit_with_error();
                 }
                 CHECK_FOR_DUPLICATE_CLAUSE(choice, op_choice);
-                CHECK_FOR_DUPLICATE_CLAUSE(operator, op_choice);
-                uint32_t op_index = rule->number_of_operators++;
-                rule->operators = grow_array(rule->operators,
-                 &rule->operators_allocated_bytes,
-                 sizeof(struct choice) * rule->number_of_operators);
-                struct choice *operator = &rule->operators[op_index];
+                uint32_t op_index = rule->number_of_choices++;
+                rule->choices = grow_array(rule->choices,
+                 &rule->choices_allocated_bytes,
+                 sizeof(struct choice) * rule->number_of_choices);
+                struct choice *operator = &rule->choices[op_index];
                 operator->name = op_choice.identifier;
                 operator->name_length = op_choice.length;
                 operator->name_range = op_choice.range;
@@ -225,8 +223,9 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
 
         // Add slots for operands -- 'left'/'right' for infix operators, and
         // 'operand' for prefix and postfix operators.
-        for (uint32_t i = 0; i < rule->number_of_operators; ++i) {
-            struct choice *operator = &rule->operators[i];
+        uint32_t i = rule->first_operator_choice;
+        for (; i < rule->number_of_choices; ++i) {
+            struct choice *operator = &rule->choices[i];
             char buf[256];
             if (operator->fixity == INFIX && operator->associativity != FLAT) {
                 snprintf(buf, sizeof(buf), "is reserved for the left operand "
@@ -622,9 +621,6 @@ void grammar_destroy(struct grammar *grammar)
         for (uint32_t j = 0; j < r.number_of_choices; ++j)
             automaton_destroy(&r.choices[j].automaton);
         free(r.choices);
-        for (uint32_t j = 0; j < r.number_of_operators; ++j)
-            automaton_destroy(&r.operators[j].automaton);
-        free(r.operators);
         for (uint32_t j = 0; j < r.number_of_brackets; ++j)
             automaton_destroy(&r.brackets[j].automaton);
         free(r.brackets);

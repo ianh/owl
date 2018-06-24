@@ -68,13 +68,9 @@ struct rule {
     struct choice *choices;
     uint32_t choices_allocated_bytes;
     uint32_t number_of_choices;
-
-    // Operators are choices that appear after the '.operators' keyword.
-    // They're represented separately and include information like fixity,
-    // associativity and precedence.
-    struct choice *operators;
-    uint32_t operators_allocated_bytes;
-    uint32_t number_of_operators;
+    // Operators are choices that appear after the '.operators' keyword. They
+    // include information like fixity, associativity and precedence.
+    uint32_t first_operator_choice;
 
     // Slots are places where children can appear in the parse tree.  Each
     // reference to a rule or named token class creates a slot with that name,

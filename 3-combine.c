@@ -31,8 +31,9 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     symbol_id **bracket_symbols_for_rule = calloc(n, sizeof(symbol_id *));
     uint32_t tokens_allocated_bytes = 0;
 
-    result->root_rule_is_expression =
-     grammar->rules[grammar->root_rule].number_of_operators > 0;
+    struct rule *root = &grammar->rules[grammar->root_rule];
+    result->root_rule_is_expression = root->number_of_choices >
+     root->first_operator_choice;
 
     // First pass: collect all the keyword tokens into the `tokens` result
     // array, making sure to combine duplicates using `find_token`.
@@ -106,13 +107,14 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
             state_id end = automaton_create_state(automaton);
             automaton_set_start_state(automaton, start);
             automaton_mark_accepting_state(automaton, end);
-            for (uint32_t j = 0; j < rule->number_of_choices; ++j) {
+            uint32_t j = 0;
+            for (; j < rule->first_operator_choice; ++j) {
                 // Embed each choice into the automaton, tracking it as an
                 // "operand" if this is an expression rule with operators.
                 struct choice *choice = &rule->choices[j];
                 uint16_t start_action = 0;
                 uint16_t end_action = 0;
-                if (rule->number_of_operators > 0) {
+                if (rule->first_operator_choice < rule->number_of_choices) {
                     start_action = CONSTRUCT_ACTION(ACTION_BEGIN_OPERAND, j);
                     end_action = CONSTRUCT_ACTION(ACTION_END_OPERAND, j);
                 } else
@@ -122,12 +124,12 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                 automaton_add_transition_with_action(automaton, start,
                  choice_start, SYMBOL_EPSILON, start_action);
             }
-            for (uint32_t j = 0; j < rule->number_of_operators; ) {
+            while (j < rule->number_of_choices) {
                 // Now we add the operator automata.  Operators are a virtual
                 // "transition" between a to_state and a from_state -- the
                 // fixity determines which states the operator is a transition
                 // between.
-                struct choice *op = &rule->operators[j];
+                struct choice *op = &rule->choices[j];
                 state_id to_state;
                 state_id from_state;
                 if (op->fixity == PREFIX) {
@@ -165,21 +167,18 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                     to_state = start;
                 }
                 int precedence = op->precedence;
-                for (; j < rule->number_of_operators; ++j) {
-                    struct choice *op = &rule->operators[j];
+                for (; j < rule->number_of_choices; ++j) {
+                    struct choice *op = &rule->choices[j];
                     if (op->precedence != precedence)
                         break;
                     // Embed each operator automaton and hook it up according
-                    // to the rules above.  Offset the "choice index" by
-                    // rule->number_of_choices to indicate this is an operator
-                    // instead of a normal choice.
-                    uint32_t op_index = j + rule->number_of_choices;
+                    // to the rules above.
                     state_id op_start = embed(automaton, &op->automaton,
                      to_state, SYMBOL_EPSILON,
-                     CONSTRUCT_ACTION(ACTION_END_OPERATOR, op_index));
+                     CONSTRUCT_ACTION(ACTION_END_OPERATOR, j));
                     automaton_add_transition_with_action(automaton, from_state,
                      op_start, SYMBOL_EPSILON,
-                     CONSTRUCT_ACTION(ACTION_BEGIN_OPERATOR, op_index));
+                     CONSTRUCT_ACTION(ACTION_BEGIN_OPERATOR, j));
                 }
             }
         }
@@ -345,7 +344,8 @@ static void substitute_slots(struct grammar *grammar, struct rule *rule,
                 uint16_t end_action = 0;
                 if (slot_rule->is_token)
                     end_action = CONSTRUCT_ACTION(ACTION_TOKEN_SLOT, k);
-                else if (slot_rule->number_of_operators > 0) {
+                else if (slot_rule->first_operator_choice <
+                 slot_rule->number_of_choices) {
                     begin_action =
                      CONSTRUCT_ACTION(ACTION_BEGIN_EXPRESSION_SLOT, k);
                     end_action =
