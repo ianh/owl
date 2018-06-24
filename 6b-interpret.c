@@ -112,6 +112,9 @@ struct interpret_context {
     size_t *offset_table;
     uint32_t offset_table_allocated_bytes;
     uint32_t next_action_offset;
+
+    // Used to keep nodes in a consistent order.
+    size_t next_node_order;
 };
 
 enum interpret_node_type {
@@ -142,6 +145,8 @@ struct interpret_node {
     struct interpret_node **children;
     // How deep this subtree is (longest path of NODE_RULE children).
     uint32_t depth;
+    // Used to establish order for nodes that appear at the same offset.
+    size_t order;
     // Which slot was this in the parent rule? (can be null if the slot isn't
     // shown or doesn't exist)
     struct slot *slot;
@@ -842,8 +847,6 @@ static void follow_transition_reversed(struct interpret_context *ctx,
         if (CONSTRUCT_IS_END_ACTION(*a) && offset != start)
             offset = push_action_offsets(ctx, offset, start);
         action_offset = ctx->next_action_offset - 1;
-        // TODO: make sure the start of two different things at the same level
-        // can't be the same (to avoid problems with sorting/stability/etc)
 #if 0
         printf("action: %u\n", offset);
         print_action(*a, action_offset);
@@ -949,10 +952,13 @@ static int compare_start_locations(const void *a, const void *b)
     struct interpret_node *nb = *(struct interpret_node **)b;
     if (na->start_location < nb->start_location)
         return -1;
-    else if (na->start_location > nb->start_location)
+    if (na->start_location > nb->start_location)
         return 1;
-    else
-        return 0;
+    if (na->order > nb->order)
+        return -1;
+    if (na->order < nb->order)
+        return 1;
+    return 0;
 }
 
 static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
@@ -966,6 +972,7 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
     node->next_sibling = next_sibling;
     node->start_location = start_location;
     node->end_location = end_location;
+    node->order = context->next_node_order++;
     node->number_of_slots = context->grammar->rules[rule].number_of_slots;
     node->slots = calloc(node->number_of_slots,
      sizeof(struct interpret_node *));
@@ -1000,7 +1007,6 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
             index++;
         }
     }
-    // TODO: offset start locations for multiple actions in the same place?
     qsort(node->children, node->number_of_children,
      sizeof(struct interpret_node *), compare_start_locations);
     return node;
