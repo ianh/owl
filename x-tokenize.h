@@ -139,12 +139,10 @@ static size_t decode_length(struct bluebird_token_run *run,
  uint16_t *length_offset)
 {
     size_t length = 0;
-    size_t shift_amount = 0;
-    while (*length_offset < sizeof(run->lengths) &&
-     shift_amount < sizeof(size_t) * 8) {
+    while (*length_offset < sizeof(run->lengths)) {
         size_t l = run->lengths[(*length_offset)--];
-        length += (l & 0x7f) << shift_amount;
-        shift_amount += 7;
+        length <<= 7;
+        length += l & 0x7f;
         if (!(l & 0x80))
             return length;
     }
