@@ -252,6 +252,8 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
             free(run);
             return false;
         }
+        if (end_token && number_of_tokens + 1 >= TOKEN_RUN_LENGTH)
+            break;
         if (!encode_token_length(run, &lengths_size, token_length, whitespace))
             break;
         if (token == IDENTIFIER_TOKEN) {
@@ -267,8 +269,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
         number_of_tokens++;
         offset += token_length;
         if (end_token) {
-            if (number_of_tokens >= TOKEN_RUN_LENGTH)
-                break;
+            assert(number_of_tokens < TOKEN_RUN_LENGTH);
             run->tokens[number_of_tokens] = BRACKET_TRANSITION_TOKEN;
             number_of_tokens++;
         }

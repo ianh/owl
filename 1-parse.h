@@ -1087,6 +1087,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
             free(run);
             return false;
         }
+        if (end_token && number_of_tokens + 1 >= 4096) break;
         if (!encode_token_length(run, &lengths_size, token_length, whitespace)) break;
         if (token == 20) {
             write_identifier_token(offset, token_length, tokenizer->info);
@@ -1102,7 +1103,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
         number_of_tokens++;
         offset += token_length;
         if (end_token) {
-            if (number_of_tokens >= 4096) break;
+            assert(number_of_tokens < 4096);
             run->tokens[number_of_tokens] = 4294967295U;
             number_of_tokens++;
         }
