@@ -18,11 +18,9 @@ enum automaton_type { NORMAL_AUTOMATON, BRACKET_AUTOMATON };
 static void generate_automaton(struct generator *gen,
  struct generator_output *out, struct automaton *a, uint32_t offset,
  enum automaton_type type);
-static void generate_action_automaton(struct generator *gen,
- struct generator_output *out, struct action_map *map, uint32_t dfa_offset,
- uint32_t nfa_offset, uint32_t bracket_nfa_offset, enum automaton_type type);
-static void generate_actions(struct generator_output *out,
- struct action_map *map, uint16_t *actions);
+
+static void generate_action_table(struct generator *gen,
+ struct generator_output *out);
 
 static void output_indentation(struct generator_output *out,
  size_t indentation);
@@ -634,38 +632,7 @@ void generate(struct generator *gen)
     generate_automaton(gen, out, b, a->number_of_states, BRACKET_AUTOMATON);
     output_line(out, "    }");
     output_line(out, "}");
-    set_unsigned_number_substitution(out, "final-nfa-state",
-     gen->combined->final_nfa_state);
-    output_line(out, "static parsed_id build_parse_tree(struct bluebird_default_tokenizer *tokenizer, struct bluebird_token_run *run, struct bluebird_tree *tree) {");
-    output_line(out, "    struct construct_state construct_state = { .info = tree };");
-    output_line(out, "    struct state_stack stack = {0};");
-    output_line(out, "    size_t whitespace = tokenizer->whitespace;");
-    output_line(out, "    size_t offset = tokenizer->offset - whitespace;");
-    if (gen->combined->root_rule_is_expression)
-        output_line(out, "    construct_begin(&construct_state, offset, CONSTRUCT_EXPRESSION_ROOT);");
-    else
-        output_line(out, "    construct_begin(&construct_state, offset, CONSTRUCT_NORMAL_ROOT);");
-    output_line(out, "    if (!run)");
-    output_line(out, "        goto finish;");
-    output_line(out, "    uint16_t token_index = run->number_of_tokens;");
-    output_line(out, "    uint16_t length_offset = run->lengths_size - 1;");
-    output_line(out, "    %%state-type start_state = %%final-nfa-state;");
-    output_line(out, "start:");
-    output_line(out, "    switch (start_state) {");
-    uint32_t nfa_offset = gen->combined->automaton.number_of_states;
-    generate_action_automaton(gen, out, &gen->deterministic->action_map, 0, 0,
-     nfa_offset, NORMAL_AUTOMATON);
-    generate_action_automaton(gen, out, &gen->deterministic->bracket_action_map,
-     a->number_of_states, nfa_offset, gen->combined->automaton.number_of_states,
-     BRACKET_AUTOMATON);
-    output_line(out, "    }");
-    // TODO: Free all remaining token runs here.
-    output_line(out, "    printf(\"error!\\n\");");
-    output_line(out, "    exit(-1);");
-    output_line(out, "finish:");
-    output_line(out, "    free(stack.states);");
-    output_line(out, "    return construct_finish(&construct_state, offset);");
-    output_line(out, "}");
+    generate_action_table(gen, out);
     generate_keyword_reader(gen, out);
     output_line(out, "static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context) {");
     output_line(out, "    switch (parent) {");
@@ -757,7 +724,6 @@ void generate(struct generator *gen)
     output_line(out, "}");
     output_line(out, "#endif");
     output_line(out, "");
-
     output_destroy(out);
 }
 
@@ -981,111 +947,325 @@ static void generate_automaton(struct generator *gen,
     }
 }
 
-static void generate_action_automaton(struct generator *gen,
- struct generator_output *out, struct action_map *map, uint32_t dfa_offset,
- uint32_t nfa_offset, uint32_t bracket_nfa_offset, enum automaton_type type)
+struct action_table_bucket_group {
+    uint32_t index;
+    uint32_t length;
+};
+
+struct action_table_bucket {
+    struct action_table_bucket *next;
+    // These include offsets for bracket states.
+    state_id target_nfa_state;
+    state_id dfa_state;
+    state_id nfa_state;
+    symbol_id dfa_symbol;
+    // For bracket transitions; this is the state to push on the stack.
+    state_id push_nfa_state;
+    uint32_t action_index;
+};
+
+static int compare_action_table_bucket_groups(const void *aa, const void *bb)
 {
-    for (uint32_t i = 0; i < map->number_of_entries; ++i) {
-        struct action_map_entry entry = map->entries[i];
-        struct action_map_entry *last_entry = 0;
-        if (i > 0)
-            last_entry = &map->entries[i - 1];
-        if (!last_entry || last_entry->target_nfa_state != entry.target_nfa_state) {
-            set_unsigned_number_substitution(out, "entry-target",
-             entry.target_nfa_state + nfa_offset);
-            output_line(out, "    case %%entry-target:");
-            output_line(out, "nfa_state_%%entry-target: {");
-            output_line(out, "        size_t end = offset;");
-            output_line(out, "        size_t len = 0;");
-            output_line(out, "        if (token_index == 0) {");
-            output_line(out, "            struct bluebird_token_run *last_run = run;");
-            output_line(out, "            run = run->prev;");
-            output_line(out, "            free(last_run);");
-            output_line(out, "            if (!run) {");
-            struct action_map_entry *final_entry = action_map_find(map, entry.target_nfa_state, UINT32_MAX, UINT32_MAX);
-            if (!final_entry) {
-                output_line(out, "                break;");
-            } else {
-                generate_actions(out, map, final_entry->actions);
-                output_line(out, "                goto finish;");
-            }
-            output_line(out, "            }");
-            output_line(out, "            token_index = run->number_of_tokens;");
-            output_line(out, "            length_offset = run->lengths_size - 1;");
-            output_line(out, "        }");
-            output_line(out, "        token_index--;");
-            output_line(out, "        switch (run->states[token_index]) {");
-        }
-        struct action_map_entry *next_entry = 0;
-        if (i + 1 < map->number_of_entries)
-            next_entry = &map->entries[i + 1];
-        if (entry.dfa_state != UINT32_MAX) {
-            if (!last_entry || last_entry->dfa_state != entry.dfa_state || last_entry->target_nfa_state != entry.target_nfa_state) {
-                set_unsigned_number_substitution(out, "entry-state-id",
-                 entry.dfa_state + dfa_offset);
-                output_line(out, "        case %%entry-state-id:");
-                output_line(out, "            switch (run->tokens[token_index]) {");
-            }
-            set_unsigned_number_substitution(out, "entry-symbol",
-             entry.dfa_symbol);
-            output_line(out, "            case %%entry-symbol:");
-            if (entry.dfa_symbol < gen->combined->number_of_tokens)
-                output_line(out, "                len = decode_token_length(run, &length_offset, &offset);");
-            generate_actions(out, map, entry.actions);
-            output_line(out, "                whitespace = end - offset - len;");
-            set_unsigned_number_substitution(out, "entry-nfa-state",
-             entry.nfa_state + nfa_offset);
-            if (type == BRACKET_AUTOMATON && entry.dfa_state ==
-             gen->deterministic->bracket_automaton.start_state) {
-                output_line(out, "                start_state = stack.states[--stack.depth];");
-                output_line(out, "                goto start;");
-            } else if (entry.dfa_symbol >= gen->combined->number_of_tokens) {
-                output_line(out, "                if (stack.depth >= stack.capacity) {");
-                output_line(out, "                    if (!grow_state_stack(&stack))");
-                output_line(out, "                        break;"); // TODO: Error handling.
-                output_line(out, "                }");
-                output_line(out, "                stack.states[stack.depth++] = %%entry-nfa-state;");
-                struct automaton *b = &gen->combined->bracket_automaton;
-                for (state_id j = 0; j < b->number_of_states; ++j) {
-                    if (!b->states[j].accepting)
-                        continue;
-                    if (b->states[j].transition_symbol != entry.nfa_symbol)
-                        continue;
-                    set_unsigned_number_substitution(out, "bracket-nfa-state",
-                     j + bracket_nfa_offset);
-                    output_line(out, "                goto nfa_state_%%bracket-nfa-state;");
-                    break;
-                }
-            } else
-                output_line(out, "                goto nfa_state_%%entry-nfa-state;");
-            if (!next_entry || next_entry->dfa_state != entry.dfa_state || next_entry->target_nfa_state != entry.target_nfa_state) {
-                output_line(out, "            default: break;");
-                output_line(out, "            }");
-                output_line(out, "            break;");
-            }
-        }
-        if (!next_entry || next_entry->target_nfa_state != entry.target_nfa_state) {
-            output_line(out, "        default: break;");
-            output_line(out, "        }");
-            output_line(out, "        break;");
-            output_line(out, "    }");
-        }
-    }
+    const struct action_table_bucket_group *a = aa;
+    const struct action_table_bucket_group *b = bb;
+    // Reverse-sort by length.
+    if (a->length > b->length)
+        return -1;
+    if (a->length < b->length)
+        return 1;
+    return 0;
 }
 
-static void generate_actions(struct generator_output *out,
- struct action_map *map, uint16_t *actions)
+// 0xe5aa55e5 is just an arbitrary 32-bit prime number.
+#define ACTION_TABLE_ENTRY_HASH(target_nfa_state, dfa_state, dfa_symbol) \
+ ((((((0xe5aa55e5 ^ (target_nfa_state)) * 0xe5aa55e5) ^ (dfa_state)) * \
+ 0xe5aa55e5) ^ (dfa_symbol)) * 0xe5aa55e5)
+
+static void generate_action_table(struct generator *gen,
+ struct generator_output *out)
 {
-    bool include_whitespace = true;
-    for (; actions && *actions; ++actions) {
-        set_unsigned_number_substitution(out, "action-id", *actions);
-        if (CONSTRUCT_IS_END_ACTION(*actions))
-            include_whitespace = false;
-        if (include_whitespace)
-            output_line(out, "                construct_action_apply(&construct_state, %%action-id, end + whitespace);");
-        else
-            output_line(out, "                construct_action_apply(&construct_state, %%action-id, end);");
+    struct deterministic_grammar *d = gen->deterministic;
+
+    // Collect all the "groups" of action map entries with the same
+    // target_nfa_state.  Sort the groups by size, longest to shortest.
+    struct action_table_bucket *buckets =
+     calloc(d->action_map.number_of_entries +
+     d->bracket_action_map.number_of_entries,
+     sizeof(struct action_table_bucket));
+    struct action_table_bucket_group *groups = 0;
+    state_id max_nfa_state = 0;
+    uint32_t groups_allocated_bytes = 0;
+    uint32_t number_of_groups = 0;
+    for (int i = 0; i < 2; ++i) {
+        struct action_map *map = i == 0 ? &d->action_map :
+         &d->bracket_action_map;
+        uint32_t offset = i == 0 ? 0 : d->action_map.number_of_entries;
+        uint32_t nfa_state_offset = i == 0 ? 0 :
+         gen->combined->automaton.number_of_states;
+        for (uint32_t j = 0; j < map->number_of_entries;) {
+            uint32_t length = 0;
+            for (; j + length < map->number_of_entries; ++length) {
+                struct action_table_bucket *b = &buckets[offset + j + length];
+                struct action_map_entry e = map->entries[j + length];
+                *b = (struct action_table_bucket){
+                    .target_nfa_state = e.target_nfa_state + nfa_state_offset,
+                    .dfa_state = e.dfa_state + (i==0 ? 0 :
+                     d->automaton.number_of_states),
+                    .nfa_state = e.nfa_state + nfa_state_offset,
+                    .dfa_symbol = e.dfa_symbol,
+                    .action_index = (uint32_t)(e.actions - d->actions),
+                };
+                if (e.dfa_symbol >= gen->combined->number_of_tokens) {
+                    // This is a bracket transition.  Find the corresponding
+                    // accepting state and store it in the table.
+                    struct automaton bracket = gen->combined->bracket_automaton;
+                    for (state_id i = 0; i < bracket.number_of_states; ++i) {
+                        struct state s = bracket.states[i];
+                        if (!s.accepting || s.transition_symbol != e.nfa_symbol)
+                            continue;
+                        b->push_nfa_state = b->nfa_state;
+                        b->nfa_state = i +
+                         gen->combined->automaton.number_of_states;
+                        break;
+                    }
+                }
+                if (b->target_nfa_state > max_nfa_state)
+                    max_nfa_state = b->target_nfa_state;
+                if (b->nfa_state > max_nfa_state)
+                    max_nfa_state = b->nfa_state;
+                if (map->entries[j].target_nfa_state !=
+                 map->entries[j + length].target_nfa_state)
+                    break;
+            }
+            groups = grow_array(groups, &groups_allocated_bytes,
+             (number_of_groups + 1) * sizeof(struct action_table_bucket_group));
+            groups[number_of_groups++] = (struct action_table_bucket_group){
+                .index = offset + j,
+                .length = length,
+            };
+            j += length;
+        }
     }
+    qsort(groups, number_of_groups, sizeof(struct action_table_bucket_group),
+     compare_action_table_bucket_groups);
+
+    // Size the table to a power of two.
+    uint32_t table_size = 1;
+    while (table_size <= d->action_map.number_of_entries +
+     d->bracket_action_map.number_of_entries)
+        table_size *= 2;
+    uint32_t table_mask = table_size - 1;
+
+    // This array maps old NFA states to new NFA states.
+    state_id *nfa_states = malloc((max_nfa_state + 1) * sizeof(state_id));
+    for (state_id i = 0; i < max_nfa_state + 1; ++i)
+        nfa_states[i] = i;
+
+    struct action_table_bucket **table_buckets = calloc(table_size,
+     sizeof(struct action_table_bucket *));
+    uint32_t *bucket_sizes = calloc(table_size, sizeof(uint32_t));
+    uint32_t nfa_state = max_nfa_state + 1;
+    uint32_t saved_nfa_state = 0;
+    // Start at a bucket limit of 1 and increase it.
+    uint32_t bucket_limit = 1;
+    // How many times should we try to randomize indexes?
+#define MAX_TRIES 100000
+    uint32_t tries_left = MAX_TRIES;
+    for (uint32_t i = 0; i < number_of_groups; ++i) {
+        struct action_table_bucket_group group = groups[i];
+        // TODO: remove
+//        printf("group size: %u (%u, %u, %u)\n", group.length, nfa_state, tries_left, bucket_limit);
+        while (true) {
+            if (nfa_state == UINT32_MAX)
+                abort();
+            uint32_t j = 0;
+            for (; j < group.length; ++j) {
+                struct action_table_bucket *bucket = &buckets[group.index + j];
+                uint32_t k = ACTION_TABLE_ENTRY_HASH(nfa_state,
+                 bucket->dfa_state, bucket->dfa_symbol);
+                k &= table_mask;
+                bucket->next = table_buckets[k];
+                table_buckets[k] = bucket;
+                if (bucket_sizes[k]++ >= bucket_limit)
+                    goto retry;
+            }
+            nfa_states[buckets[group.index].target_nfa_state] = nfa_state;
+            nfa_state++;
+            saved_nfa_state = nfa_state;
+            break;
+retry:
+            // Roll back changes and try a new nfa_state.
+            for (; j < group.length; --j) {
+                struct action_table_bucket *bucket = &buckets[group.index + j];
+                uint32_t k = ACTION_TABLE_ENTRY_HASH(nfa_state,
+                 bucket->dfa_state, bucket->dfa_symbol);
+                k &= table_mask;
+                bucket_sizes[k]--;
+                table_buckets[k] = table_buckets[k]->next;
+            }
+            nfa_state++;
+            if (tries_left-- == 0) {
+                // If we ran out of tries, give ourselves some more room and
+                // keep going.
+                bucket_limit += 1;
+                tries_left = MAX_TRIES;
+                nfa_state = saved_nfa_state;
+            }
+        }
+    }
+    const int actions_per_line = 30;
+    output_line(out, "static const uint16_t actions[] = {");
+    for (uint32_t i = 0; i < d->number_of_actions; ++i) {
+        set_unsigned_number_substitution(out, "action", d->actions[i]);
+        output_string(out, "%%action,");
+        if ((i + 1) % actions_per_line == 0)
+            output_line(out, "");
+    }
+    output_line(out, "};");
+    output_line(out, "struct action_table_entry {");
+    output_line(out, "    %%state-type target_nfa_state;");
+    output_line(out, "    %%state-type dfa_state;");
+    output_line(out, "    %%token-type dfa_symbol;");
+    output_line(out, "    %%state-type nfa_state;");
+    output_line(out, "    uint32_t actions;");
+    output_line(out, "    %%state-type push_nfa_state;");
+    output_line(out, "};");
+#define ACTION_TABLE_ENTRY_FLAG_PUSH 1
+#define ACTION_TABLE_ENTRY_FLAG_POP 2
+    set_unsigned_number_substitution(out, "table-size", table_size);
+    set_unsigned_number_substitution(out, "bucket-limit", bucket_limit);
+    output_line(out, "static const struct action_table_entry action_table[%%table-size][%%bucket-limit] = {");
+    const int entries_per_line = 6;
+    int next_newline = entries_per_line;
+    for (uint32_t i = 0; i < table_size; ++i) {
+        output_string(out, "{");
+        struct action_table_bucket *bucket = table_buckets[i];
+        if (!bucket)
+            output_string(out, "0");
+        for (; bucket; bucket = bucket->next) {
+            set_unsigned_number_substitution(out, "target-nfa-state",
+             nfa_states[bucket->target_nfa_state]);
+            set_unsigned_number_substitution(out, "dfa-state",
+             bucket->dfa_state);
+            set_unsigned_number_substitution(out, "dfa-symbol",
+             bucket->dfa_symbol);
+            set_unsigned_number_substitution(out, "nfa-state",
+             nfa_states[bucket->nfa_state]);
+            set_unsigned_number_substitution(out, "actions",
+             bucket->action_index);
+            output_string(out, "{%%target-nfa-state,%%dfa-state,%%dfa-symbol,%%nfa-state,%%actions");
+            if (bucket->dfa_symbol >= gen->combined->number_of_tokens) {
+                set_unsigned_number_substitution(out, "push-nfa-state",
+                 nfa_states[bucket->push_nfa_state]);
+                output_string(out, ",%%push-nfa-state");
+            }
+            output_string(out, "},");
+            if (--next_newline == 0 && bucket->next) {
+                output_line(out, "");
+                next_newline = entries_per_line;
+            }
+        }
+        output_string(out, "},");
+        if (next_newline == 0) {
+            output_line(out, "");
+            next_newline = entries_per_line;
+        }
+    }
+    output_line(out, "};");
+    output_line(out, "");
+    output_line(out, "static const struct action_table_entry *action_table_lookup(%%state-type nfa_state, %%state-type dfa_state, %%token-type token) {");
+#define STRINGIFY(...) EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__)
+    set_literal_substitution(out, "action-table-entry-hash",
+     STRINGIFY(ACTION_TABLE_ENTRY_HASH(nfa_state, dfa_state, token)));
+    set_unsigned_number_substitution(out, "action-table-mask", table_mask);
+    output_line(out, "    uint32_t index = %%action-table-entry-hash & %%action-table-mask;");
+    output_line(out, "    uint32_t j = 0;");
+    output_line(out, "    const struct action_table_entry *entry = 0;");
+//    output_line(out, "    printf(\"Searching for: %u,%u,%u\\n\", nfa_state, dfa_state, token);");
+    output_line(out, "    for (; j < %%bucket-limit; ++j) {");
+    output_line(out, "        entry = &action_table[index][j];");
+    output_line(out, "        if (entry->target_nfa_state == nfa_state && entry->dfa_state == dfa_state && entry->dfa_symbol == token)");
+    output_line(out, "            break;");
+    output_line(out, "    }");
+//    output_line(out, "    printf(\"Found: %u,%u\\n\", entry->nfa_state, entry->actions);");
+    output_line(out, "    if (j >= %%bucket-limit) {");
+    // TODO: Handle error properly
+    output_line(out, "        printf(\"Internal error!\\n\");");
+    output_line(out, "        return 0;");
+    output_line(out, "    }");
+    output_line(out, "    return entry;");
+    output_line(out, "}");
+    output_line(out, "static void apply_actions(struct construct_state *state, uint32_t index, size_t start, size_t end) {");
+    output_line(out, "    size_t offset = end;");
+    output_line(out, "    for (uint32_t i = index; actions[i]; ++i) {");
+    set_literal_substitution(out, "is-end-action", STRINGIFY(CONSTRUCT_IS_END_ACTION(actions[i])));
+    output_line(out, "        if (%%is-end-action)");
+    output_line(out, "            offset = start;");
+    output_line(out, "        construct_action_apply(state, actions[i], offset);");
+    output_line(out, "    }");
+    output_line(out, "}");
+    output_line(out, "static parsed_id build_parse_tree(struct bluebird_default_tokenizer *tokenizer, struct bluebird_token_run *run, struct bluebird_tree *tree) {");
+    output_line(out, "    struct construct_state construct_state = { .info = tree };");
+    output_line(out, "    struct state_stack stack = {0};");
+    output_line(out, "    size_t whitespace = tokenizer->whitespace;");
+    output_line(out, "    size_t offset = tokenizer->offset - whitespace;");
+    if (gen->combined->root_rule_is_expression)
+        output_line(out, "    construct_begin(&construct_state, offset, CONSTRUCT_EXPRESSION_ROOT);");
+    else
+        output_line(out, "    construct_begin(&construct_state, offset, CONSTRUCT_NORMAL_ROOT);");
+    set_unsigned_number_substitution(out, "final-nfa-state",
+     nfa_states[gen->combined->final_nfa_state]);
+    output_line(out, "    %%state-type nfa_state = %%final-nfa-state;");
+    output_line(out, "    while (run) {");
+    output_line(out, "        uint16_t length_offset = run->lengths_size - 1;");
+    output_line(out, "        uint16_t n = run->number_of_tokens;");
+    output_line(out, "        for (uint16_t i = n - 1; i < n; i--) {");
+    output_line(out, "            size_t end = offset;");
+    output_line(out, "            size_t len = 0;");
+    output_line(out, "            const struct action_table_entry *entry = action_table_lookup(nfa_state, run->states[i], run->tokens[i]);");
+    output_line(out, "            if (!entry) {");
+    // TODO: Handle error properly
+    output_line(out, "                printf(\"Internal error!\\n\");");
+    output_line(out, "                return 0;");
+    output_line(out, "            }");
+    set_unsigned_number_substitution(out, "number-of-tokens",
+     gen->combined->number_of_tokens);
+    output_line(out, "            if (entry->dfa_symbol < %%number-of-tokens)");
+    output_line(out, "                len = decode_token_length(run, &length_offset, &offset);");
+    output_line(out, "            else {");
+    output_line(out, "                if (stack.depth >= stack.capacity) {");
+    output_line(out, "                    if (!grow_state_stack(&stack))");
+    output_line(out, "                        break;"); // TODO: Error handling?
+    output_line(out, "                }");
+    output_line(out, "                stack.states[stack.depth++] = entry->push_nfa_state;");
+    output_line(out, "            }");
+    output_line(out, "            apply_actions(&construct_state, entry->actions, end, end + whitespace);");
+    set_unsigned_number_substitution(out, "bracket-start-state",
+     gen->deterministic->bracket_automaton.start_state +
+     gen->deterministic->automaton.number_of_states);
+    output_line(out, "            if (entry->dfa_state == %%bracket-start-state) {");
+    output_line(out, "                if (stack.depth == 0)");
+    output_line(out, "                    break;"); // TODO: Error handling?
+    output_line(out, "                nfa_state = stack.states[--stack.depth];");
+    output_line(out, "            } else");
+    output_line(out, "                nfa_state = entry->nfa_state;");
+    output_line(out, "            whitespace = end - offset - len;");
+    output_line(out, "        }");
+    output_line(out, "        struct bluebird_token_run *old = run;");
+    output_line(out, "        run = run->prev;");
+    output_line(out, "        free(old);");
+    output_line(out, "    }");
+    output_line(out, "    const struct action_table_entry *entry = action_table_lookup(nfa_state, UINT32_MAX, UINT32_MAX);");
+    output_line(out, "    if (!entry) {");
+    // TODO: Handle error properly
+    output_line(out, "        printf(\"Internal error!\\n\");");
+    output_line(out, "        return 0;");
+    output_line(out, "    }");
+    output_line(out, "    apply_actions(&construct_state, entry->actions, offset, offset + whitespace);");
+    // TODO: Free all remaining token runs here (or in the caller?).
+    output_line(out, "    free(stack.states);");
+    output_line(out, "    return construct_finish(&construct_state, offset);");
+    output_line(out, "}");
 }
 
 static bool rule_is_named(struct rule *rule, const char *name)
