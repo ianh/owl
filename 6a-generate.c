@@ -1,3 +1,38 @@
+// This stuff has to appear before any other #includes to avoid unwanted macro
+// expansion from standard headers (e.g., memset -> __builtin___memset_chk).
+#define EVALUATE_MACROS_AND_STRINGIFY(...) #__VA_ARGS__
+#define TOKEN_T %%token-type
+#define STATE_T %%state-type
+#define READ_KEYWORD_TOKEN read_keyword_token
+#define WRITE_NUMBER_TOKEN %%write-number-token
+#define WRITE_IDENTIFIER_TOKEN %%write-identifier-token
+#define WRITE_STRING_TOKEN %%write-string-token
+#define ALLOW_DASHES_IN_IDENTIFIERS(...) %%allow-dashes-in-identifiers
+#define IDENTIFIER_TOKEN %%identifier-token
+#define NUMBER_TOKEN %%number-token
+#define STRING_TOKEN %%string-token
+#define BRACKET_TRANSITION_TOKEN %%bracket-transition-token
+#define TOKENIZE_BODY(...) static const char *tokenizer_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
+#include "x-tokenize.h"
+#define FINISHED_NODE_T parsed_id
+#define FINISH_NODE finish_node
+#define FINISH_TOKEN finish_token
+#define RULE_T uint32_t
+#define RULE_LOOKUP rule_lookup
+#define ROOT_RULE(...) %%root-rule-index
+#define FIXITY_ASSOCIATIVITY_PRECEDENCE_LOOKUP(fixity_associativity, precedence, rule, choice, context) \
+ do { \
+     int local; \
+     fixity_associativity_precedence_lookup(&local, &precedence, rule, choice, context); \
+     fixity_associativity = local; \
+ } while (0)
+#define NUMBER_OF_SLOTS_LOOKUP number_of_slots_lookup
+#define LEFT_RIGHT_OPERAND_SLOTS_LOOKUP(rule, left, right, operand, info) \
+ (left_right_operand_slots_lookup(rule, &(left), &(right), &(operand), info))
+#define CONSTRUCT_BODY(...) static const char *construct_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
+#include "x-construct-parse-tree.h"
+
+// Now we can start the #includes as usual.
 #include "6a-generate.h"
 
 #include "6a-generate-output.h"
@@ -499,23 +534,6 @@ void generate(struct generator *gen)
             set_literal_substitution(out, "write-string-token", "write_string_token");
         }
     }
-#define EVALUATE_MACROS_AND_STRINGIFY(...) #__VA_ARGS__
-
-#define TOKEN_T %%token-type
-#define STATE_T %%state-type
-#define READ_KEYWORD_TOKEN read_keyword_token
-#define WRITE_NUMBER_TOKEN %%write-number-token
-#define WRITE_IDENTIFIER_TOKEN %%write-identifier-token
-#define WRITE_STRING_TOKEN %%write-string-token
-#define ALLOW_DASHES_IN_IDENTIFIERS(...) %%allow-dashes-in-identifiers
-#define IDENTIFIER_TOKEN %%identifier-token
-#define NUMBER_TOKEN %%number-token
-#define STRING_TOKEN %%string-token
-#define BRACKET_TRANSITION_TOKEN %%bracket-transition-token
-
-    const char *tokenizer_source;
-#define TOKENIZE_BODY(...) tokenizer_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
-#include "x-tokenize.h"
     if (SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(gen->combined))
         set_literal_substitution(out, "allow-dashes-in-identifiers", "true");
     else
@@ -526,26 +544,6 @@ void generate(struct generator *gen)
     output_line(out, "static size_t number_of_slots_lookup(uint32_t rule, void *context);");
     output_line(out, "static void left_right_operand_slots_lookup(uint32_t rule, uint32_t *left, uint32_t *right, uint32_t *operand, void *context);");
 
-#define FINISHED_NODE_T parsed_id
-#define FINISH_NODE finish_node
-#define FINISH_TOKEN finish_token
-
-#define RULE_T uint32_t
-#define RULE_LOOKUP rule_lookup
-#define ROOT_RULE(...) %%root-rule-index
-#define FIXITY_ASSOCIATIVITY_PRECEDENCE_LOOKUP(fixity_associativity, precedence, rule, choice, context) \
- do { \
-     int local; \
-     fixity_associativity_precedence_lookup(&local, &precedence, rule, choice, context); \
-     fixity_associativity = local; \
- } while (0)
-#define NUMBER_OF_SLOTS_LOOKUP number_of_slots_lookup
-#define LEFT_RIGHT_OPERAND_SLOTS_LOOKUP(rule, left, right, operand, info) \
- (left_right_operand_slots_lookup(rule, &(left), &(right), &(operand), info))
-
-    const char *construct_source;
-#define CONSTRUCT_BODY(...) construct_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
-#include "x-construct-parse-tree.h"
     output_formatted_source(out, construct_source);
 
     set_unsigned_number_substitution(out, "start-state",

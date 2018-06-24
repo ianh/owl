@@ -28,7 +28,7 @@
 
 #define CONSTRUCT_IS_END_ACTION(action) (CONSTRUCT_ACTION_GET_TYPE(action) & 8)
 
-static inline const char *action_name(uint16_t action)
+static inline const char *action_name(unsigned action)
 {
     switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
     case ACTION_NONE:

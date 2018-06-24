@@ -189,7 +189,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
          text + offset, tokenizer->info);
         if (token_length > 0) {
             is_token = true;
-            if (token == SYMBOL_EPSILON)
+            if (token == 0xffffffff)
                 comment = true;
         }
         double number = 0;
@@ -246,7 +246,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
                 offset++;
             }
             continue;
-        } else if (!is_token || token == SYMBOL_EPSILON) {
+        } else if (!is_token || token == 0xffffffff) {
             // Error.
             // TODO: Report the error in a better way?
             tokenizer->offset = offset;

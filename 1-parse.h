@@ -951,46 +951,46 @@ struct bluebird_default_tokenizer {
     uint32_t string_token;
     void *info;
 };
-static _Bool char_is_whitespace(char c) {
+static bool char_is_whitespace(char c) {
     switch (c) {
     case ' ':
     case '\t':
     case '\r':
     case '\n':
-        return 1;
+        return true;
     default:
-        return 0;
+        return false;
     }
 }
-static _Bool char_is_numeric(char c) {
+static bool char_is_numeric(char c) {
     return c >= '0' && c <= '9';
 }
-static _Bool char_is_alphabetic(char c) {
+static bool char_is_alphabetic(char c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
-static _Bool char_starts_identifier(char c) {
+static bool char_starts_identifier(char c) {
     return char_is_alphabetic(c) || c == '_';
 }
-static _Bool char_continues_identifier(char c, void *info) {
-    if (true && c == '-') return 1;
+static bool char_continues_identifier(char c, void *info) {
+    if (true && c == '-') return true;
     return char_is_numeric(c) || char_starts_identifier(c);
 }
-static _Bool encode_length(struct bluebird_token_run *run, uint16_t *lengths_size, size_t length) {
+static bool encode_length(struct bluebird_token_run *run, uint16_t *lengths_size, size_t length) {
     uint8_t mark = 0;
     while (*lengths_size < sizeof(run->lengths)) {
         run->lengths[*lengths_size] = mark | (length & 0x7f);
         mark = 0x80;
         length >>= 7;
         (*lengths_size)++;
-        if (length == 0) return 1;
+        if (length == 0) return true;
     }
-    return 0;
+    return false;
 }
-static _Bool encode_token_length(struct bluebird_token_run *run, uint16_t *lengths_size, size_t length, size_t whitespace) {
+static bool encode_token_length(struct bluebird_token_run *run, uint16_t *lengths_size, size_t length, size_t whitespace) {
     uint16_t size = *lengths_size;
-    if (encode_length(run, lengths_size, length) && encode_length(run, lengths_size, whitespace)) return 1;
+    if (encode_length(run, lengths_size, length) && encode_length(run, lengths_size, whitespace)) return true;
     *lengths_size = size;
-    return 0;
+    return false;
 }
 static size_t decode_length(struct bluebird_token_run *run, uint16_t *length_offset) {
     size_t length = 0;
@@ -1009,9 +1009,9 @@ static size_t decode_token_length(struct bluebird_token_run *run, uint16_t *leng
     *string_offset -= whitespace + length;
     return length;
 }
-static _Bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer *tokenizer, struct bluebird_token_run **previous_run) {
+static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer *tokenizer, struct bluebird_token_run **previous_run) {
     struct bluebird_token_run *run = malloc(sizeof(struct bluebird_token_run));
-    if (!run) return 0;
+    if (!run) return false;
     uint16_t number_of_tokens = 0;
     uint16_t lengths_size = 0;
     const char *text = tokenizer->text;
@@ -1026,13 +1026,13 @@ static _Bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenize
             continue;
         }
         uint32_t token;
-        _Bool is_token = 0;
-        _Bool end_token = 0;
-        _Bool comment = 0;
+        bool is_token = false;
+        bool end_token = false;
+        bool comment = false;
         size_t token_length = read_keyword_token(&token, &end_token, text + offset, tokenizer->info);
         if (token_length > 0) {
-            is_token = 1;
-            if (token == 0xffffffff) comment = 1;
+            is_token = true;
+            if (token == 0xffffffff) comment = true;
         }
         double number = 0;
         if (char_is_numeric(c) || (c == '.' && char_is_numeric(text[offset + 1]))) {
@@ -1041,9 +1041,9 @@ static _Bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenize
             number = strtod(start, &rest);
             if (rest > start) {
                 token_length = rest - start;
-                is_token = 1;
-                end_token = 0;
-                comment = 0;
+                is_token = true;
+                end_token = false;
+                comment = false;
                 token = 21;
             }
         }
@@ -1052,9 +1052,9 @@ static _Bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenize
             while (text[string_offset] != '\0') {
                 if (text[string_offset] == c) {
                     token_length = string_offset + 1 - offset;
-                    is_token = 1;
-                    end_token = 0;
-                    comment = 0;
+                    is_token = true;
+                    end_token = false;
+                    comment = false;
                     token = 22;
                     break;
                 }
@@ -1070,9 +1070,9 @@ static _Bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenize
             while (char_continues_identifier(text[identifier_offset], tokenizer->info)) identifier_offset++;
             if (identifier_offset - offset > token_length) {
                 token_length = identifier_offset - offset;
-                is_token = 1;
-                end_token = 0;
-                comment = 0;
+                is_token = true;
+                end_token = false;
+                comment = false;
                 token = 20;
             }
         }
@@ -1087,7 +1087,7 @@ static _Bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenize
             tokenizer->offset = offset;
             tokenizer->whitespace = whitespace;
             free(run);
-            return 0;
+            return false;
         }
         if (!encode_token_length(run, &lengths_size, token_length, whitespace)) break;
         if (token == 20) {
@@ -1113,7 +1113,7 @@ static _Bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenize
         tokenizer->offset = offset;
         tokenizer->whitespace = whitespace;
         free(run);
-        return 0;
+        return false;
     }
     tokenizer->offset = offset;
     tokenizer->whitespace = whitespace;
@@ -1121,7 +1121,7 @@ static _Bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenize
     run->number_of_tokens = number_of_tokens;
     run->lengths_size = lengths_size;
     *previous_run = run;
-    return 1;
+    return true;
 }
 static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context);
 static void fixity_associativity_precedence_lookup(int *fixity_associativity, int *precedence, uint32_t rule, uint32_t choice, void *context);
@@ -1172,8 +1172,8 @@ static struct construct_node *construct_node_alloc(struct construct_state *s, ui
             slots = realloc(slots, number_of_slots * sizeof(parsed_id));
             if (!slots) abort();
         }
-        __builtin___memset_chk (node, 0, sizeof(struct construct_node), __builtin_object_size (node, 0));
-        __builtin___memset_chk (slots, 0, number_of_slots * sizeof(parsed_id), __builtin_object_size (slots, 0));
+        memset(node, 0, sizeof(struct construct_node));
+        memset(slots, 0, number_of_slots * sizeof(parsed_id));
         node->slots = slots;
     }
     else {
@@ -1191,7 +1191,7 @@ static struct construct_expression *construct_expression_alloc(struct construct_
     if (s->expression_freelist) {
         expr = s->expression_freelist;
         s->expression_freelist = expr->parent;
-        __builtin___memset_chk (expr, 0, sizeof(struct construct_expression), __builtin_object_size (expr, 0));
+        memset(expr, 0, sizeof(struct construct_expression));
     }
     else {
         expr = calloc(1, sizeof(struct construct_expression));
@@ -1209,10 +1209,10 @@ static void construct_expression_free(struct construct_state *state, struct cons
     expr->parent = state->expression_freelist;
     state->expression_freelist = expr;
 }
-static _Bool construct_expression_should_reduce(struct construct_state *s, struct construct_expression *expr, struct construct_node *node) {
-    if (node->fixity_associativity == CONSTRUCT_POSTFIX) return 0;
+static bool construct_expression_should_reduce(struct construct_state *s, struct construct_expression *expr, struct construct_node *node) {
+    if (node->fixity_associativity == CONSTRUCT_POSTFIX) return false;
     struct construct_node *top = expr->first_operator;
-    if (!top) return 0;
+    if (!top) return false;
     return node->precedence < top->precedence || (node->precedence == top->precedence && node->fixity_associativity == CONSTRUCT_INFIX_RIGHT);
 }
 static void construct_expression_reduce(struct construct_state *s, struct construct_expression *expr) {
