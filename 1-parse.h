@@ -1482,6 +1482,31 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
     if (c.stack.depth > 0) {
         // TODO: Return error instead of printing it
         fprintf(stderr, "error: parsing failed because the stack was still full\n");
+        exit(-1);
+    }
+    switch (c.state) {
+    case 0:
+    case 4:
+    case 5:
+    case 6:
+    case 7:
+    case 9:
+    case 10:
+    case 11:
+    case 13:
+    case 15:
+    case 16:
+    case 45:
+    case 59:
+    case 76:
+    case 89:
+    case 94:
+        break;
+    default:
+        // TODO: Return error instead of printing it
+        fprintf(stderr, "error: more input needed\n");
+        exit(-1);
+        break;
     }
     free(c.stack.states);
     tree->root_id = build_parse_tree(&tokenizer, token_run, tree);

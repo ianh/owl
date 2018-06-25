@@ -569,6 +569,21 @@ void generate(struct generator *gen)
     output_line(out, "    if (c.stack.depth > 0) {");
     output_line(out, "        // TODO: Return error instead of printing it");
     output_line(out, "        fprintf(stderr, \"error: parsing failed because the stack was still full\\n\");");
+    output_line(out, "        exit(-1);");
+    output_line(out, "    }");
+    output_line(out, "    switch (c.state) {");
+    for (state_id i = 0; i < gen->deterministic->automaton.number_of_states; ++i) {
+        if (!gen->deterministic->automaton.states[i].accepting)
+            continue;
+        set_unsigned_number_substitution(out, "state-id", i);
+        output_line(out, "    case %%state-id:");
+    }
+    output_line(out, "        break;");
+    output_line(out, "    default:");
+    output_line(out, "        // TODO: Return error instead of printing it");
+    output_line(out, "        fprintf(stderr, \"error: more input needed\\n\");");
+    output_line(out, "        exit(-1);");
+    output_line(out, "        break;");
     output_line(out, "    }");
     output_line(out, "    free(c.stack.states);");
     /*
