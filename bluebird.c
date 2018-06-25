@@ -204,6 +204,16 @@ int main(int argc, char *argv[])
     // This is the part where things actually happen.
     struct bluebird_tree *tree;
     tree = bluebird_tree_create_from_string(grammar_string);
+    switch (bluebird_tree_get_error(tree, &error.ranges[0])) {
+    case ERROR_INVALID_TOKEN:
+        exit_with_errorf("'%.*s' isn't a valid operator",
+         (int)(error.ranges[0].end - error.ranges[0].start),
+         grammar_string + error.ranges[0].start);
+    case ERROR_MORE_INPUT_NEEDED:
+        exit_with_errorf("expected more text at the end of the grammar");
+    default:
+        break;
+    }
 #if DEBUG_OUTPUT
     bluebird_tree_print(tree);
 #endif
