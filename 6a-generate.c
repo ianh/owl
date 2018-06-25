@@ -161,7 +161,10 @@ void generate(struct generator *gen)
                 continue;
             set_substitution(out, "choice-name", choices[i]->name, len,
              UPPERCASE_WITH_UNDERSCORES);
-            output_line(out, "    PARSED_%%choice-name,");
+            if (i == 0)
+                output_line(out, "    PARSED_%%choice-name = 1,");
+            else
+                output_line(out, "    PARSED_%%choice-name,");
         }
         output_line(out, "};");
     }

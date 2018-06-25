@@ -51,7 +51,7 @@ struct source_range {
     size_t end;
 };
 enum parsed_type {
-    PARSED_IDENT,
+    PARSED_IDENT = 1,
     PARSED_CHOICE,
     PARSED_PARENS,
     PARSED_FLAT_OP,
