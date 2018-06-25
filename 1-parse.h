@@ -52,10 +52,23 @@ struct source_range {
 };
 
 enum bluebird_error {
+    // No error -- everything's fine!
     ERROR_NONE,
+
+    // The file passed to bluebird_tree_create_from_file wasn't valid because
+    // - it was NULL,
+    // - it doesn't support fseek/ftell, or
+    // - there was an error while reading it.
     ERROR_INVALID_FILE,
+
+    // A piece of text couldn't be matched as a token.
     ERROR_INVALID_TOKEN,
+
+    // The parser encountered an out-of-place token that doesn't fit the grammar.
     ERROR_UNEXPECTED_TOKEN,
+
+    // The input is valid so far, but incomplete; more tokens could be added to
+    // complete it.
     ERROR_MORE_INPUT_NEEDED,
 };
 // Returns an error code, or ERROR_NONE if there wasn't an error.
@@ -5755,10 +5768,8 @@ static const struct action_table_entry *action_table_lookup(uint32_t nfa_state, 
         if (entry->target_nfa_state == nfa_state && entry->dfa_state == dfa_state && entry->dfa_symbol == token)
             break;
     }
-    if (j >= 2) {
-        printf("Internal error!\n");
+    if (j >= 2)
         return 0;
-    }
     return entry;
 }
 static void apply_actions(struct construct_state *state, uint32_t index, size_t start, size_t end) {
@@ -5783,10 +5794,8 @@ static parsed_id build_parse_tree(struct bluebird_default_tokenizer *tokenizer, 
             size_t end = offset;
             size_t len = 0;
             const struct action_table_entry *entry = action_table_lookup(nfa_state, run->states[i], run->tokens[i]);
-            if (!entry) {
-                printf("Internal error!\n");
-                return 0;
-            }
+            if (!entry)
+                abort();
             if (entry->dfa_symbol < 23)
                 len = decode_token_length(run, &length_offset, &offset);
             else {
@@ -5797,7 +5806,7 @@ static parsed_id build_parse_tree(struct bluebird_default_tokenizer *tokenizer, 
             apply_actions(&construct_state, entry->actions, end, end + whitespace);
             if (entry->dfa_state == 95) {
                 if (stack.depth == 0)
-                    break;
+                    abort();
                 nfa_state = stack.states[--stack.depth];
             } else
                 nfa_state = entry->nfa_state;
@@ -5808,10 +5817,8 @@ static parsed_id build_parse_tree(struct bluebird_default_tokenizer *tokenizer, 
         free(old);
     }
     const struct action_table_entry *entry = action_table_lookup(nfa_state, UINT32_MAX, UINT32_MAX);
-    if (!entry) {
-        printf("Internal error!\n");
-        return 0;
-    }
+    if (!entry)
+        abort();
     apply_actions(&construct_state, entry->actions, offset, offset + whitespace);
     free(stack.states);
     return construct_finish(&construct_state, offset);

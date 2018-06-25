@@ -138,10 +138,23 @@ void generate(struct generator *gen)
     output_line(out, "};");
     output_line(out, "");
     output_line(out, "enum bluebird_error {");
+    output_line(out, "    // No error -- everything's fine!");
     output_line(out, "    ERROR_NONE,");
+    output_line(out, "");
+    output_line(out, "    // The file passed to bluebird_tree_create_from_file wasn't valid because");
+    output_line(out, "    // - it was NULL,");
+    output_line(out, "    // - it doesn't support fseek/ftell, or");
+    output_line(out, "    // - there was an error while reading it.");
     output_line(out, "    ERROR_INVALID_FILE,");
+    output_line(out, "");
+    output_line(out, "    // A piece of text couldn't be matched as a token.");
     output_line(out, "    ERROR_INVALID_TOKEN,");
+    output_line(out, "");
+    output_line(out, "    // The parser encountered an out-of-place token that doesn't fit the grammar.");
     output_line(out, "    ERROR_UNEXPECTED_TOKEN,");
+    output_line(out, "");
+    output_line(out, "    // The input is valid so far, but incomplete; more tokens could be added to");
+    output_line(out, "    // complete it.");
     output_line(out, "    ERROR_MORE_INPUT_NEEDED,");
     output_line(out, "};");
     output_line(out, "// Returns an error code, or ERROR_NONE if there wasn't an error.");
@@ -1279,11 +1292,8 @@ retry:
     output_line(out, "            break;");
     output_line(out, "    }");
 //    output_line(out, "    printf(\"Found: %u,%u\\n\", entry->nfa_state, entry->actions);");
-    output_line(out, "    if (j >= %%bucket-limit) {");
-    // TODO: Handle error properly
-    output_line(out, "        printf(\"Internal error!\\n\");");
+    output_line(out, "    if (j >= %%bucket-limit)");
     output_line(out, "        return 0;");
-    output_line(out, "    }");
     output_line(out, "    return entry;");
     output_line(out, "}");
     output_line(out, "static void apply_actions(struct construct_state *state, uint32_t index, size_t start, size_t end) {");
@@ -1314,11 +1324,8 @@ retry:
     output_line(out, "            size_t end = offset;");
     output_line(out, "            size_t len = 0;");
     output_line(out, "            const struct action_table_entry *entry = action_table_lookup(nfa_state, run->states[i], run->tokens[i]);");
-    output_line(out, "            if (!entry) {");
-    // TODO: Handle error properly
-    output_line(out, "                printf(\"Internal error!\\n\");");
-    output_line(out, "                return 0;");
-    output_line(out, "            }");
+    output_line(out, "            if (!entry)");
+    output_line(out, "                abort();");
     set_unsigned_number_substitution(out, "number-of-tokens",
      gen->combined->number_of_tokens);
     output_line(out, "            if (entry->dfa_symbol < %%number-of-tokens)");
@@ -1334,7 +1341,7 @@ retry:
      gen->deterministic->automaton.number_of_states);
     output_line(out, "            if (entry->dfa_state == %%bracket-start-state) {");
     output_line(out, "                if (stack.depth == 0)");
-    output_line(out, "                    break;"); // TODO: Error handling?
+    output_line(out, "                    abort();");
     output_line(out, "                nfa_state = stack.states[--stack.depth];");
     output_line(out, "            } else");
     output_line(out, "                nfa_state = entry->nfa_state;");
@@ -1345,11 +1352,8 @@ retry:
     output_line(out, "        free(old);");
     output_line(out, "    }");
     output_line(out, "    const struct action_table_entry *entry = action_table_lookup(nfa_state, UINT32_MAX, UINT32_MAX);");
-    output_line(out, "    if (!entry) {");
-    // TODO: Handle error properly
-    output_line(out, "        printf(\"Internal error!\\n\");");
-    output_line(out, "        return 0;");
-    output_line(out, "    }");
+    output_line(out, "    if (!entry)");
+    output_line(out, "        abort();");
     output_line(out, "    apply_actions(&construct_state, entry->actions, offset, offset + whitespace);");
     // TODO: Free all remaining token runs here (or in the caller?).
     output_line(out, "    free(stack.states);");
