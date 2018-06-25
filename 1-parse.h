@@ -1046,7 +1046,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
             const char *start = (const char *)text + offset;
             char *rest = 0;
             number = strtod(start, &rest);
-            if (rest > start) {
+            if (rest > start && rest - start > token_length) {
                 token_length = rest - start;
                 is_token = true;
                 end_token = false;
