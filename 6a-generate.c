@@ -136,7 +136,17 @@ void generate(struct generator *gen)
     output_line(out, "    size_t start;");
     output_line(out, "    size_t end;");
     output_line(out, "};");
-
+    output_line(out, "");
+    output_line(out, "enum bluebird_error {");
+    output_line(out, "    ERROR_NONE,");
+    output_line(out, "    ERROR_INVALID_FILE,");
+    output_line(out, "    ERROR_INVALID_TOKEN,");
+    output_line(out, "    ERROR_MORE_INPUT_NEEDED,");
+    output_line(out, "};");
+    output_line(out, "// Returns an error code, or ERROR_NONE if there wasn't an error.");
+    output_line(out, "// The error_range parameter can be null.");
+    output_line(out, "enum bluebird_error bluebird_tree_get_error(struct bluebird_tree *tree, struct source_range *error_range);");
+    output_line(out, "");
     uint32_t n = gen->grammar->number_of_rules;
     struct choice **choices = 0;
     uint32_t choices_allocated_bytes = 0;
@@ -223,6 +233,8 @@ void generate(struct generator *gen)
     output_line(out, "    bool owns_string;");
     output_line(out, "    uint8_t *parse_tree;");
     output_line(out, "    size_t parse_tree_size;");
+    output_line(out, "    enum bluebird_error error;");
+    output_line(out, "    struct source_range error_range;");
     output_line(out, "    parsed_id next_id;");
     output_line(out, "    parsed_id root_id;");
     for (uint32_t i = 0; i < n; ++i) {
@@ -418,6 +430,25 @@ void generate(struct generator *gen)
     output_line(out, "    }");
     output_line(out, "    return id;");
     output_line(out, "}");
+    output_line(out, "static void check_for_error(struct bluebird_tree *tree) {");
+    output_line(out, "    if (tree->error == ERROR_NONE)");
+    output_line(out, "        return;");
+    output_line(out, "    fprintf(stderr, \"parse error: \");");
+    output_line(out, "    switch (tree->error) {");
+    output_line(out, "    case ERROR_INVALID_FILE:");
+    output_line(out, "        fprintf(stderr, \"invalid file\\n\");");
+    output_line(out, "        break;");
+    output_line(out, "    case ERROR_INVALID_TOKEN:");
+    output_line(out, "        fprintf(stderr, \"invalid token\\n\");");
+    output_line(out, "        break;");
+    output_line(out, "    case ERROR_MORE_INPUT_NEEDED:");
+    output_line(out, "        fprintf(stderr, \"more input needed\\n\");");
+    output_line(out, "        break;");
+    output_line(out, "    default:");
+    output_line(out, "        break;");
+    output_line(out, "    }");
+    output_line(out, "    exit(-1);");
+    output_line(out, "}");
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
@@ -471,11 +502,18 @@ void generate(struct generator *gen)
         output_line(out, "}");
     }
     output_line(out, "void bluebird_tree_print(struct bluebird_tree *tree) {");
+    output_line(out, "    check_for_error(tree);");
     output_line(out, "    parsed_%%root-rule_print(tree, tree->root_id, \"%%root-rule\", 0);");
     output_line(out, "}");
 
     output_line(out, "parsed_id bluebird_tree_root_id(struct bluebird_tree *tree) {");
+    output_line(out, "    check_for_error(tree);");
     output_line(out, "    return tree->root_id;");
+    output_line(out, "}");
+
+    output_line(out, "struct parsed_%%root-rule bluebird_tree_get_parsed_%%root-rule(struct bluebird_tree *tree) {");
+    output_line(out, "    check_for_error(tree);");
+    output_line(out, "    return parsed_%%root-rule_get(tree, tree->root_id);");
     output_line(out, "}");
 
     set_unsigned_number_substitution(out, "identifier-token", 0xffffffff);
@@ -547,8 +585,12 @@ void generate(struct generator *gen)
     output_line(out, "static void fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);");
     output_line(out, "static parsed_id build_parse_tree(struct bluebird_default_tokenizer *, struct bluebird_token_run *, struct bluebird_tree *);");
     output_line(out, "");
+    output_line(out, "static struct bluebird_tree *bluebird_tree_create_empty(void) {");
+    output_line(out, "    return calloc(1, sizeof(struct bluebird_tree));");
+    output_line(out, "}");
+    output_line(out, "");
     output_line(out, "struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {");
-    output_line(out, "    struct bluebird_tree *tree = calloc(1, sizeof(struct bluebird_tree));");
+    output_line(out, "    struct bluebird_tree *tree = bluebird_tree_create_empty();");
     output_line(out, "    tree->string = string;");
     output_line(out, "    tree->next_id = 1;");
     output_line(out, "    struct bluebird_default_tokenizer tokenizer = {");
@@ -561,15 +603,16 @@ void generate(struct generator *gen)
     output_line(out, "    };");
     output_line(out, "    while (bluebird_default_tokenizer_advance(&tokenizer, &token_run))");
     output_line(out, "        fill_run_states(token_run, &c);");
+    output_line(out, "    free(c.stack.states);");
     output_line(out, "    if (string[tokenizer.offset] != '\\0') {");
-    output_line(out, "        // TODO: Return error instead of printing it");
-    output_line(out, "        fprintf(stderr, \"error: tokenizing failed. next char was %u\\n\", string[tokenizer.offset]);");
-    output_line(out, "        exit(-1);");
-    output_line(out, "    }");
-    output_line(out, "    if (c.stack.depth > 0) {");
-    output_line(out, "        // TODO: Return error instead of printing it");
-    output_line(out, "        fprintf(stderr, \"error: parsing failed because the stack was still full\\n\");");
-    output_line(out, "        exit(-1);");
+    output_line(out, "        tree->error = ERROR_INVALID_TOKEN;");
+    output_line(out, "        tree->error_range.start = tokenizer.offset;");
+    output_line(out, "        tree->error_range.end = tokenizer.offset + 1;");
+    output_line(out, "        while (string[tree->error_range.end] != '\\0' &&");
+    output_line(out, "         !char_is_whitespace(string[tree->error_range.end]) &&");
+    output_line(out, "         !char_continues_identifier(string[tree->error_range.end], tree))");
+    output_line(out, "            tree->error_range.end++;");
+    output_line(out, "        return tree;");
     output_line(out, "    }");
     output_line(out, "    switch (c.state) {");
     for (state_id i = 0; i < gen->deterministic->automaton.number_of_states; ++i) {
@@ -580,12 +623,15 @@ void generate(struct generator *gen)
     }
     output_line(out, "        break;");
     output_line(out, "    default:");
-    output_line(out, "        // TODO: Return error instead of printing it");
-    output_line(out, "        fprintf(stderr, \"error: more input needed\\n\");");
-    output_line(out, "        exit(-1);");
-    output_line(out, "        break;");
+    output_line(out, "        tree->error = ERROR_MORE_INPUT_NEEDED;");
+    output_line(out, "        tree->error_range.start = tokenizer.offset - tokenizer.whitespace - 1;");
+    output_line(out, "        tree->error_range.end = tokenizer.offset - tokenizer.whitespace;");
+    output_line(out, "        if (tree->error_range.start > tree->error_range.end) {");
+    output_line(out, "            tree->error_range.start = tree->error_range.end;");
+    output_line(out, "            tree->error_range.end++;");
+    output_line(out, "        }");
+    output_line(out, "        return tree;");
     output_line(out, "    }");
-    output_line(out, "    free(c.stack.states);");
     /*
     output_line(out, "    struct bluebird_token_run *run_to_print = token_run;");
     output_line(out, "    while (run_to_print) {");
@@ -599,21 +645,25 @@ void generate(struct generator *gen)
     output_line(out, "    tree->root_id = build_parse_tree(&tokenizer, token_run, tree);");
     output_line(out, "    return tree;");
     output_line(out, "}");
+    output_line(out, "static struct bluebird_tree *bluebird_tree_create_with_error(enum bluebird_error e) {");
+    output_line(out, "    struct bluebird_tree *tree = bluebird_tree_create_empty();");
+    output_line(out, "    tree->error = e;");
+    output_line(out, "    return tree;");
+    output_line(out, "}");
     output_line(out, "struct bluebird_tree *bluebird_tree_create_from_file(FILE *file) {");
-    output_line(out, "    // TODO: Error codes?");
-    output_line(out, "    if (fseek(file, 0, SEEK_END))");
-    output_line(out, "        return 0;");
+    output_line(out, "    if (!file || fseek(file, 0, SEEK_END))");
+    output_line(out, "        return bluebird_tree_create_with_error(ERROR_INVALID_FILE);");
     output_line(out, "    long len = ftell(file);");
     output_line(out, "    if (len < 0)");
-    output_line(out, "        return 0;");
+    output_line(out, "        return bluebird_tree_create_with_error(ERROR_INVALID_FILE);");
     output_line(out, "    char *str = malloc(len + 1);");
     output_line(out, "    if (!str)");
-    output_line(out, "        return 0;");
+    output_line(out, "        return bluebird_tree_create_with_error(ERROR_INVALID_FILE);");
     output_line(out, "    fseek(file, 0, SEEK_SET);");
     output_line(out, "    size_t n = fread(str, 1, len, file);");
     output_line(out, "    if (n < len) {");
     output_line(out, "        free(str);");
-    output_line(out, "        return 0;");
+    output_line(out, "        return bluebird_tree_create_with_error(ERROR_INVALID_FILE);");
     output_line(out, "    }");
     output_line(out, "    str[len] = '\\0';");
     output_line(out, "    struct bluebird_tree *tree = bluebird_tree_create_from_string(str);");
@@ -623,6 +673,11 @@ void generate(struct generator *gen)
     output_line(out, "    }");
     output_line(out, "    tree->owns_string = true;");
     output_line(out, "    return tree;");
+    output_line(out, "}");
+    output_line(out, "enum bluebird_error bluebird_tree_get_error(struct bluebird_tree *tree, struct source_range *error_range) {");
+    output_line(out, "    if (error_range)");
+    output_line(out, "        *error_range = tree->error_range;");
+    output_line(out, "    return tree->error;");
     output_line(out, "}");
     output_line(out, "void bluebird_tree_destroy(struct bluebird_tree *tree) {");
     output_line(out, "    if (tree->owns_string)");

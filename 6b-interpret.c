@@ -549,6 +549,10 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
      !deterministic->automaton.states[context.stack[0].state].accepting) {
         error.ranges[0].start = tokenizer.offset - tokenizer.whitespace - 1;
         error.ranges[0].end = tokenizer.offset - tokenizer.whitespace;
+        if (error.ranges[0].start > error.ranges[0].end) {
+            error.ranges[0].start = error.ranges[0].end;
+            error.ranges[0].end++;
+        }
         exit_with_errorf("expected more text after the last token");
     }
     push_action_offsets(&context, 0, 0);

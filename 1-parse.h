@@ -50,6 +50,17 @@ struct source_range {
     size_t start;
     size_t end;
 };
+
+enum bluebird_error {
+    ERROR_NONE,
+    ERROR_INVALID_FILE,
+    ERROR_INVALID_TOKEN,
+    ERROR_MORE_INPUT_NEEDED,
+};
+// Returns an error code, or ERROR_NONE if there wasn't an error.
+// The error_range parameter can be null.
+enum bluebird_error bluebird_tree_get_error(struct bluebird_tree *tree, struct source_range *error_range);
+
 enum parsed_type {
     PARSED_IDENT = 1,
     PARSED_CHOICE,
@@ -257,6 +268,8 @@ struct bluebird_tree {
     bool owns_string;
     uint8_t *parse_tree;
     size_t parse_tree_size;
+    enum bluebird_error error;
+    struct source_range error_range;
     parsed_id next_id;
     parsed_id root_id;
     struct {
@@ -695,6 +708,25 @@ static parsed_id finish_token(uint32_t rule, parsed_id next_sibling, void *info)
     }
     return id;
 }
+static void check_for_error(struct bluebird_tree *tree) {
+    if (tree->error == ERROR_NONE)
+        return;
+    fprintf(stderr, "parse error: ");
+    switch (tree->error) {
+    case ERROR_INVALID_FILE:
+        fprintf(stderr, "invalid file\n");
+        break;
+    case ERROR_INVALID_TOKEN:
+        fprintf(stderr, "invalid token\n");
+        break;
+    case ERROR_MORE_INPUT_NEEDED:
+        fprintf(stderr, "more input needed\n");
+        break;
+    default:
+        break;
+    }
+    exit(-1);
+}
 static void parsed_grammar_print(struct bluebird_tree *tree, parsed_id id, const char *slot_name, int indent);
 static void parsed_comment_token_print(struct bluebird_tree *tree, parsed_id id, const char *slot_name, int indent);
 static void parsed_rule_print(struct bluebird_tree *tree, parsed_id id, const char *slot_name, int indent);
@@ -923,10 +955,16 @@ static void parsed_string_print(struct bluebird_tree *tree, parsed_id id, const 
     }
 }
 void bluebird_tree_print(struct bluebird_tree *tree) {
+    check_for_error(tree);
     parsed_grammar_print(tree, tree->root_id, "grammar", 0);
 }
 parsed_id bluebird_tree_root_id(struct bluebird_tree *tree) {
+    check_for_error(tree);
     return tree->root_id;
+}
+struct parsed_grammar bluebird_tree_get_parsed_grammar(struct bluebird_tree *tree) {
+    check_for_error(tree);
+    return parsed_grammar_get(tree, tree->root_id);
 }
 #define IGNORE_TOKEN_WRITE(...)
 static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *text, void *info);
@@ -1460,8 +1498,12 @@ struct fill_run_continuation {
 static void fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);
 static parsed_id build_parse_tree(struct bluebird_default_tokenizer *, struct bluebird_token_run *, struct bluebird_tree *);
 
+static struct bluebird_tree *bluebird_tree_create_empty(void) {
+    return calloc(1, sizeof(struct bluebird_tree));
+}
+
 struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
-    struct bluebird_tree *tree = calloc(1, sizeof(struct bluebird_tree));
+    struct bluebird_tree *tree = bluebird_tree_create_empty();
     tree->string = string;
     tree->next_id = 1;
     struct bluebird_default_tokenizer tokenizer = {
@@ -1474,15 +1516,16 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
     };
     while (bluebird_default_tokenizer_advance(&tokenizer, &token_run))
         fill_run_states(token_run, &c);
+    free(c.stack.states);
     if (string[tokenizer.offset] != '\0') {
-        // TODO: Return error instead of printing it
-        fprintf(stderr, "error: tokenizing failed. next char was %u\n", string[tokenizer.offset]);
-        exit(-1);
-    }
-    if (c.stack.depth > 0) {
-        // TODO: Return error instead of printing it
-        fprintf(stderr, "error: parsing failed because the stack was still full\n");
-        exit(-1);
+        tree->error = ERROR_INVALID_TOKEN;
+        tree->error_range.start = tokenizer.offset;
+        tree->error_range.end = tokenizer.offset + 1;
+        while (string[tree->error_range.end] != '\0' &&
+         !char_is_whitespace(string[tree->error_range.end]) &&
+         !char_continues_identifier(string[tree->error_range.end], tree))
+            tree->error_range.end++;
+        return tree;
     }
     switch (c.state) {
     case 0:
@@ -1503,30 +1546,37 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
     case 94:
         break;
     default:
-        // TODO: Return error instead of printing it
-        fprintf(stderr, "error: more input needed\n");
-        exit(-1);
-        break;
+        tree->error = ERROR_MORE_INPUT_NEEDED;
+        tree->error_range.start = tokenizer.offset - tokenizer.whitespace - 1;
+        tree->error_range.end = tokenizer.offset - tokenizer.whitespace;
+        if (tree->error_range.start > tree->error_range.end) {
+            tree->error_range.start = tree->error_range.end;
+            tree->error_range.end++;
+        }
+        return tree;
     }
-    free(c.stack.states);
     tree->root_id = build_parse_tree(&tokenizer, token_run, tree);
     return tree;
 }
+static struct bluebird_tree *bluebird_tree_create_with_error(enum bluebird_error e) {
+    struct bluebird_tree *tree = bluebird_tree_create_empty();
+    tree->error = e;
+    return tree;
+}
 struct bluebird_tree *bluebird_tree_create_from_file(FILE *file) {
-    // TODO: Error codes?
-    if (fseek(file, 0, SEEK_END))
-        return 0;
+    if (!file || fseek(file, 0, SEEK_END))
+        return bluebird_tree_create_with_error(ERROR_INVALID_FILE);
     long len = ftell(file);
     if (len < 0)
-        return 0;
+        return bluebird_tree_create_with_error(ERROR_INVALID_FILE);
     char *str = malloc(len + 1);
     if (!str)
-        return 0;
+        return bluebird_tree_create_with_error(ERROR_INVALID_FILE);
     fseek(file, 0, SEEK_SET);
     size_t n = fread(str, 1, len, file);
     if (n < len) {
         free(str);
-        return 0;
+        return bluebird_tree_create_with_error(ERROR_INVALID_FILE);
     }
     str[len] = '\0';
     struct bluebird_tree *tree = bluebird_tree_create_from_string(str);
@@ -1536,6 +1586,11 @@ struct bluebird_tree *bluebird_tree_create_from_file(FILE *file) {
     }
     tree->owns_string = true;
     return tree;
+}
+enum bluebird_error bluebird_tree_get_error(struct bluebird_tree *tree, struct source_range *error_range) {
+    if (error_range)
+        *error_range = tree->error_range;
+    return tree->error;
 }
 void bluebird_tree_destroy(struct bluebird_tree *tree) {
     if (tree->owns_string)
