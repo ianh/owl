@@ -267,19 +267,24 @@ void generate(struct generator *gen)
 
     // Code for reading and writing packed parse trees.
     // TODO: Delta encoding instead of absolute numbers.
+    output_line(out, "// Reserve 10 bytes for each entry (the maximum encoded size of a 64-bit value).");
+    output_line(out, "#define RESERVATION_AMOUNT 10");
     output_line(out, "static inline parsed_id read_tree(parsed_id *id, struct bluebird_tree *tree) {");
     output_line(out, "    uint8_t *parse_tree = tree->parse_tree;");
     output_line(out, "    size_t parse_tree_size = tree->parse_tree_size;");
-    output_line(out, "    if (*id >= parse_tree_size)");
+    output_line(out, "    parsed_id i = *id;");
+    output_line(out, "    if (i + RESERVATION_AMOUNT >= parse_tree_size)");
     output_line(out, "        return 0;");
-    output_line(out, "    parsed_id result = parse_tree[*id] & 0x7f;");
-    output_line(out, "    (*id)++;");
-    output_line(out, "    int shift_amount = 7;");
-    output_line(out, "    while (*id < parse_tree_size && (parse_tree[*id] & 0x80) != 0) {");
-    output_line(out, "        result |= (parse_tree[*id] & 0x7f) << shift_amount;");
+    output_line(out, "    parsed_id result = 0;");
+    output_line(out, "    int shift_amount = 0;");
+    output_line(out, "    while ((parse_tree[i] & 0x80) != 0 && shift_amount < 64) {");
+    output_line(out, "        result |= (parse_tree[i] & 0x7f) << shift_amount;");
     output_line(out, "        shift_amount += 7;");
-    output_line(out, "        (*id)++;");
+    output_line(out, "        i++;");
     output_line(out, "    }");
+    output_line(out, "    result |= (parse_tree[i] & 0x7f) << shift_amount;");
+    output_line(out, "    i++;");
+    output_line(out, "    *id = i;");
     output_line(out, "    return result;");
     output_line(out, "}");
     output_line(out, "static bool grow_tree(struct bluebird_tree *tree, size_t size)");
@@ -296,16 +301,14 @@ void generate(struct generator *gen)
     output_line(out, "}");
     output_line(out, "static void write_tree(struct bluebird_tree *tree, parsed_id value)");
     output_line(out, "{");
-    output_line(out, "    // Reserve 10 bytes (the maximum encoded size of a 64-bit value).");
-    output_line(out, "    size_t reserved_size = tree->next_id + 10;");
+    output_line(out, "    size_t reserved_size = tree->next_id + RESERVATION_AMOUNT;");
     output_line(out, "    if (tree->parse_tree_size <= reserved_size && !grow_tree(tree, reserved_size))");
     output_line(out, "        abort();");
-    output_line(out, "    tree->parse_tree[tree->next_id++] = value & 0x7f;");
-    output_line(out, "    value >>= 7;");
-    output_line(out, "    while (value > 0) {");
+    output_line(out, "    while (value >> 7 != 0) {");
     output_line(out, "        tree->parse_tree[tree->next_id++] = 0x80 | (value & 0x7f);");
     output_line(out, "        value >>= 7;");
     output_line(out, "    }");
+    output_line(out, "    tree->parse_tree[tree->next_id++] = value & 0x7f;");
     output_line(out, "}");
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = &gen->grammar->rules[i];

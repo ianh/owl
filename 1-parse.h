@@ -327,19 +327,24 @@ static void add_string_token(struct bluebird_tree *tree, size_t start, size_t en
     tree->string_tokens[index].string = string_param;
     tree->string_tokens[index].length = length_param;
 }
+// Reserve 10 bytes for each entry (the maximum encoded size of a 64-bit value).
+#define RESERVATION_AMOUNT 10
 static inline parsed_id read_tree(parsed_id *id, struct bluebird_tree *tree) {
     uint8_t *parse_tree = tree->parse_tree;
     size_t parse_tree_size = tree->parse_tree_size;
-    if (*id >= parse_tree_size)
+    parsed_id i = *id;
+    if (i + RESERVATION_AMOUNT >= parse_tree_size)
         return 0;
-    parsed_id result = parse_tree[*id] & 0x7f;
-    (*id)++;
-    int shift_amount = 7;
-    while (*id < parse_tree_size && (parse_tree[*id] & 0x80) != 0) {
-        result |= (parse_tree[*id] & 0x7f) << shift_amount;
+    parsed_id result = 0;
+    int shift_amount = 0;
+    while ((parse_tree[i] & 0x80) != 0 && shift_amount < 64) {
+        result |= (parse_tree[i] & 0x7f) << shift_amount;
         shift_amount += 7;
-        (*id)++;
+        i++;
     }
+    result |= (parse_tree[i] & 0x7f) << shift_amount;
+    i++;
+    *id = i;
     return result;
 }
 static bool grow_tree(struct bluebird_tree *tree, size_t size)
@@ -356,16 +361,14 @@ static bool grow_tree(struct bluebird_tree *tree, size_t size)
 }
 static void write_tree(struct bluebird_tree *tree, parsed_id value)
 {
-    // Reserve 10 bytes (the maximum encoded size of a 64-bit value).
-    size_t reserved_size = tree->next_id + 10;
+    size_t reserved_size = tree->next_id + RESERVATION_AMOUNT;
     if (tree->parse_tree_size <= reserved_size && !grow_tree(tree, reserved_size))
         abort();
-    tree->parse_tree[tree->next_id++] = value & 0x7f;
-    value >>= 7;
-    while (value > 0) {
+    while (value >> 7 != 0) {
         tree->parse_tree[tree->next_id++] = 0x80 | (value & 0x7f);
         value >>= 7;
     }
+    tree->parse_tree[tree->next_id++] = value & 0x7f;
 }
 struct parsed_grammar parsed_grammar_get(struct bluebird_tree *tree, parsed_id id) {
     if (id == 0)
