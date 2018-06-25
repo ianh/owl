@@ -535,6 +535,7 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
     while (bluebird_default_tokenizer_advance(&tokenizer, &token_run))
         fill_run_states(&context, token_run);
     if (text[tokenizer.offset] != '\0') {
+        // TODO: move this error range stuff into x-tokenize.h
         error.ranges[0].start = tokenizer.offset;
         size_t i = tokenizer.offset + 1;
         while (text[i] != '\0' && !char_is_whitespace(text[i]) &&
@@ -717,6 +718,7 @@ static void fill_run_states(struct interpret_context *ctx,
             continue;
 unexpected_token:
         {
+            // TODO: move this to x-tokenize so we can share it
             size_t offset = ctx->tokenizer->offset - ctx->tokenizer->whitespace;
             size_t last_offset = offset;
             size_t len = 0;

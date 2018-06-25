@@ -55,6 +55,7 @@ enum bluebird_error {
     ERROR_NONE,
     ERROR_INVALID_FILE,
     ERROR_INVALID_TOKEN,
+    ERROR_UNEXPECTED_TOKEN,
     ERROR_MORE_INPUT_NEEDED,
 };
 // Returns an error code, or ERROR_NONE if there wasn't an error.
@@ -718,6 +719,9 @@ static void check_for_error(struct bluebird_tree *tree) {
         break;
     case ERROR_INVALID_TOKEN:
         fprintf(stderr, "invalid token\n");
+        break;
+    case ERROR_UNEXPECTED_TOKEN:
+        fprintf(stderr, "unexpected token\n");
         break;
     case ERROR_MORE_INPUT_NEEDED:
         fprintf(stderr, "more input needed\n");
@@ -1495,7 +1499,7 @@ struct fill_run_continuation {
     uint32_t state;
     struct state_stack stack;
 };
-static void fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);
+static bool fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);
 static parsed_id build_parse_tree(struct bluebird_default_tokenizer *, struct bluebird_token_run *, struct bluebird_tree *);
 
 static struct bluebird_tree *bluebird_tree_create_empty(void) {
@@ -1514,8 +1518,13 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
     struct fill_run_continuation c = {
         .state = 0,
     };
-    while (bluebird_default_tokenizer_advance(&tokenizer, &token_run))
-        fill_run_states(token_run, &c);
+    while (bluebird_default_tokenizer_advance(&tokenizer, &token_run)) {
+        if (!fill_run_states(token_run, &c)) {
+            free(c.stack.states);
+            tree->error = ERROR_UNEXPECTED_TOKEN;
+            return tree;
+        }
+    }
     free(c.stack.states);
     if (string[tokenizer.offset] != '\0') {
         tree->error = ERROR_INVALID_TOKEN;
@@ -1601,18 +1610,17 @@ void bluebird_tree_destroy(struct bluebird_tree *tree) {
     free(tree->string_tokens);
     free(tree);
 }
-static bool grow_state_stack(struct state_stack *stack) {
+static void grow_state_stack(struct state_stack *stack) {
     size_t new_capacity = (stack->capacity + 2) * 3 / 2;
     if (new_capacity <= stack->capacity)
-        return false;
+        abort();
     uint32_t *new_states = realloc(stack->states, new_capacity * sizeof(uint32_t));
     if (!new_states)
-        return false;
+        abort();
     stack->states = new_states;
     stack->capacity = new_capacity;
-    return true;
 }
-static void fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont) {
+static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont) {
     uint16_t token_index = 0;
     uint16_t number_of_tokens = run->number_of_tokens;
     uint32_t start_state = cont->state;
@@ -1626,7 +1634,7 @@ start:
 state_0: {
         if (token_index >= number_of_tokens) {
             cont->state = 0;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 0;
@@ -1642,7 +1650,7 @@ state_0: {
 state_1: {
         if (token_index >= number_of_tokens) {
             cont->state = 1;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 1;
@@ -1657,7 +1665,7 @@ state_1: {
 state_2: {
         if (token_index >= number_of_tokens) {
             cont->state = 2;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 2;
@@ -1672,7 +1680,7 @@ state_2: {
 state_3: {
         if (token_index >= number_of_tokens) {
             cont->state = 3;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 3;
@@ -1683,10 +1691,8 @@ state_3: {
         case 23: goto state_6;
         case 24: goto state_7;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 3;
             token_index--;
             goto state_95;
@@ -1697,7 +1703,7 @@ state_3: {
 state_4: {
         if (token_index >= number_of_tokens) {
             cont->state = 4;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 4;
@@ -1715,10 +1721,8 @@ state_4: {
         case 23: goto state_6;
         case 24: goto state_7;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 4;
             token_index--;
             goto state_95;
@@ -1729,7 +1733,7 @@ state_4: {
 state_5: {
         if (token_index >= number_of_tokens) {
             cont->state = 5;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 5;
@@ -1746,10 +1750,8 @@ state_5: {
         case 23: goto state_6;
         case 24: goto state_7;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 5;
             token_index--;
             goto state_95;
@@ -1760,7 +1762,7 @@ state_5: {
 state_6: {
         if (token_index >= number_of_tokens) {
             cont->state = 6;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 6;
@@ -1777,10 +1779,8 @@ state_6: {
         case 23: goto state_6;
         case 24: goto state_7;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 6;
             token_index--;
             goto state_95;
@@ -1791,7 +1791,7 @@ state_6: {
 state_7: {
         if (token_index >= number_of_tokens) {
             cont->state = 7;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 7;
@@ -1808,10 +1808,8 @@ state_7: {
         case 23: goto state_6;
         case 24: goto state_7;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 7;
             token_index--;
             goto state_95;
@@ -1822,7 +1820,7 @@ state_7: {
 state_8: {
         if (token_index >= number_of_tokens) {
             cont->state = 8;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 8;
@@ -1837,7 +1835,7 @@ state_8: {
 state_9: {
         if (token_index >= number_of_tokens) {
             cont->state = 9;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 9;
@@ -1854,10 +1852,8 @@ state_9: {
         case 23: goto state_6;
         case 24: goto state_7;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 9;
             token_index--;
             goto state_95;
@@ -1868,7 +1864,7 @@ state_9: {
 state_10: {
         if (token_index >= number_of_tokens) {
             cont->state = 10;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 10;
@@ -1885,10 +1881,8 @@ state_10: {
         case 23: goto state_6;
         case 24: goto state_7;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 10;
             token_index--;
             goto state_95;
@@ -1899,7 +1893,7 @@ state_10: {
 state_11: {
         if (token_index >= number_of_tokens) {
             cont->state = 11;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 11;
@@ -1916,10 +1910,8 @@ state_11: {
         case 23: goto state_6;
         case 24: goto state_7;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 11;
             token_index--;
             goto state_95;
@@ -1930,7 +1922,7 @@ state_11: {
 state_12: {
         if (token_index >= number_of_tokens) {
             cont->state = 12;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 12;
@@ -1941,10 +1933,8 @@ state_12: {
         case 23: goto state_6;
         case 24: goto state_7;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 12;
             token_index--;
             goto state_95;
@@ -1955,7 +1945,7 @@ state_12: {
 state_13: {
         if (token_index >= number_of_tokens) {
             cont->state = 13;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 13;
@@ -1974,10 +1964,8 @@ state_13: {
         case 23: goto state_6;
         case 24: goto state_7;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 13;
             token_index--;
             goto state_95;
@@ -1988,7 +1976,7 @@ state_13: {
 state_14: {
         if (token_index >= number_of_tokens) {
             cont->state = 14;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 14;
@@ -2003,7 +1991,7 @@ state_14: {
 state_15: {
         if (token_index >= number_of_tokens) {
             cont->state = 15;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 15;
@@ -2020,10 +2008,8 @@ state_15: {
         case 23: goto state_6;
         case 24: goto state_7;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 15;
             token_index--;
             goto state_95;
@@ -2034,7 +2020,7 @@ state_15: {
 state_16: {
         if (token_index >= number_of_tokens) {
             cont->state = 16;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 16;
@@ -2047,10 +2033,8 @@ state_16: {
         case 23: goto state_20;
         case 24: goto state_21;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 16;
             token_index--;
             goto state_95;
@@ -2061,7 +2045,7 @@ state_16: {
 state_17: {
         if (token_index >= number_of_tokens) {
             cont->state = 17;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 17;
@@ -2078,7 +2062,7 @@ state_17: {
 state_18: {
         if (token_index >= number_of_tokens) {
             cont->state = 18;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 18;
@@ -2096,10 +2080,8 @@ state_18: {
         case 23: goto state_20;
         case 24: goto state_21;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 18;
             token_index--;
             goto state_95;
@@ -2110,7 +2092,7 @@ state_18: {
 state_19: {
         if (token_index >= number_of_tokens) {
             cont->state = 19;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 19;
@@ -2126,10 +2108,8 @@ state_19: {
         case 23: goto state_20;
         case 24: goto state_21;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 19;
             token_index--;
             goto state_95;
@@ -2140,7 +2120,7 @@ state_19: {
 state_20: {
         if (token_index >= number_of_tokens) {
             cont->state = 20;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 20;
@@ -2156,10 +2136,8 @@ state_20: {
         case 23: goto state_20;
         case 24: goto state_21;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 20;
             token_index--;
             goto state_95;
@@ -2170,7 +2148,7 @@ state_20: {
 state_21: {
         if (token_index >= number_of_tokens) {
             cont->state = 21;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 21;
@@ -2186,10 +2164,8 @@ state_21: {
         case 23: goto state_20;
         case 24: goto state_21;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 21;
             token_index--;
             goto state_95;
@@ -2200,7 +2176,7 @@ state_21: {
 state_22: {
         if (token_index >= number_of_tokens) {
             cont->state = 22;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 22;
@@ -2216,10 +2192,8 @@ state_22: {
         case 23: goto state_20;
         case 24: goto state_21;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 22;
             token_index--;
             goto state_95;
@@ -2230,7 +2204,7 @@ state_22: {
 state_23: {
         if (token_index >= number_of_tokens) {
             cont->state = 23;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 23;
@@ -2246,10 +2220,8 @@ state_23: {
         case 23: goto state_20;
         case 24: goto state_21;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 23;
             token_index--;
             goto state_95;
@@ -2260,7 +2232,7 @@ state_23: {
 state_24: {
         if (token_index >= number_of_tokens) {
             cont->state = 24;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 24;
@@ -2276,10 +2248,8 @@ state_24: {
         case 23: goto state_20;
         case 24: goto state_21;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 24;
             token_index--;
             goto state_95;
@@ -2290,7 +2260,7 @@ state_24: {
 state_25: {
         if (token_index >= number_of_tokens) {
             cont->state = 25;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 25;
@@ -2301,10 +2271,8 @@ state_25: {
         case 23: goto state_20;
         case 24: goto state_21;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 25;
             token_index--;
             goto state_95;
@@ -2315,7 +2283,7 @@ state_25: {
 state_26: {
         if (token_index >= number_of_tokens) {
             cont->state = 26;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 26;
@@ -2332,10 +2300,8 @@ state_26: {
         case 23: goto state_20;
         case 24: goto state_21;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 26;
             token_index--;
             goto state_95;
@@ -2346,7 +2312,7 @@ state_26: {
 state_27: {
         if (token_index >= number_of_tokens) {
             cont->state = 27;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 27;
@@ -2361,7 +2327,7 @@ state_27: {
 state_28: {
         if (token_index >= number_of_tokens) {
             cont->state = 28;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 28;
@@ -2377,10 +2343,8 @@ state_28: {
         case 23: goto state_20;
         case 24: goto state_21;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 28;
             token_index--;
             goto state_95;
@@ -2391,7 +2355,7 @@ state_28: {
 state_29: {
         if (token_index >= number_of_tokens) {
             cont->state = 29;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 29;
@@ -2402,10 +2366,8 @@ state_29: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 29;
             token_index--;
             goto state_95;
@@ -2416,7 +2378,7 @@ state_29: {
 state_30: {
         if (token_index >= number_of_tokens) {
             cont->state = 30;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 30;
@@ -2427,10 +2389,8 @@ state_30: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 30;
             token_index--;
             goto state_95;
@@ -2441,7 +2401,7 @@ state_30: {
 state_31: {
         if (token_index >= number_of_tokens) {
             cont->state = 31;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 31;
@@ -2459,7 +2419,7 @@ state_31: {
 state_32: {
         if (token_index >= number_of_tokens) {
             cont->state = 32;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 32;
@@ -2470,10 +2430,8 @@ state_32: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 32;
             token_index--;
             goto state_95;
@@ -2484,7 +2442,7 @@ state_32: {
 state_33: {
         if (token_index >= number_of_tokens) {
             cont->state = 33;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 33;
@@ -2495,10 +2453,8 @@ state_33: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 33;
             token_index--;
             goto state_95;
@@ -2509,7 +2465,7 @@ state_33: {
 state_34: {
         if (token_index >= number_of_tokens) {
             cont->state = 34;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 34;
@@ -2520,10 +2476,8 @@ state_34: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 34;
             token_index--;
             goto state_95;
@@ -2534,7 +2488,7 @@ state_34: {
 state_35: {
         if (token_index >= number_of_tokens) {
             cont->state = 35;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 35;
@@ -2545,10 +2499,8 @@ state_35: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 35;
             token_index--;
             goto state_95;
@@ -2559,7 +2511,7 @@ state_35: {
 state_36: {
         if (token_index >= number_of_tokens) {
             cont->state = 36;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 36;
@@ -2576,10 +2528,8 @@ state_36: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 36;
             token_index--;
             goto state_95;
@@ -2590,7 +2540,7 @@ state_36: {
 state_37: {
         if (token_index >= number_of_tokens) {
             cont->state = 37;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 37;
@@ -2606,10 +2556,8 @@ state_37: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 37;
             token_index--;
             goto state_95;
@@ -2620,7 +2568,7 @@ state_37: {
 state_38: {
         if (token_index >= number_of_tokens) {
             cont->state = 38;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 38;
@@ -2636,10 +2584,8 @@ state_38: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 38;
             token_index--;
             goto state_95;
@@ -2650,7 +2596,7 @@ state_38: {
 state_39: {
         if (token_index >= number_of_tokens) {
             cont->state = 39;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 39;
@@ -2666,10 +2612,8 @@ state_39: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 39;
             token_index--;
             goto state_95;
@@ -2680,7 +2624,7 @@ state_39: {
 state_40: {
         if (token_index >= number_of_tokens) {
             cont->state = 40;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 40;
@@ -2695,7 +2639,7 @@ state_40: {
 state_41: {
         if (token_index >= number_of_tokens) {
             cont->state = 41;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 41;
@@ -2711,10 +2655,8 @@ state_41: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 41;
             token_index--;
             goto state_95;
@@ -2725,7 +2667,7 @@ state_41: {
 state_42: {
         if (token_index >= number_of_tokens) {
             cont->state = 42;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 42;
@@ -2741,10 +2683,8 @@ state_42: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 42;
             token_index--;
             goto state_95;
@@ -2755,7 +2695,7 @@ state_42: {
 state_43: {
         if (token_index >= number_of_tokens) {
             cont->state = 43;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 43;
@@ -2771,10 +2711,8 @@ state_43: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 43;
             token_index--;
             goto state_95;
@@ -2785,7 +2723,7 @@ state_43: {
 state_44: {
         if (token_index >= number_of_tokens) {
             cont->state = 44;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 44;
@@ -2796,10 +2734,8 @@ state_44: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 44;
             token_index--;
             goto state_95;
@@ -2810,7 +2746,7 @@ state_44: {
 state_45: {
         if (token_index >= number_of_tokens) {
             cont->state = 45;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 45;
@@ -2823,10 +2759,8 @@ state_45: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 45;
             token_index--;
             goto state_95;
@@ -2837,7 +2771,7 @@ state_45: {
 state_46: {
         if (token_index >= number_of_tokens) {
             cont->state = 46;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 46;
@@ -2854,7 +2788,7 @@ state_46: {
 state_47: {
         if (token_index >= number_of_tokens) {
             cont->state = 47;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 47;
@@ -2872,10 +2806,8 @@ state_47: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 47;
             token_index--;
             goto state_95;
@@ -2886,7 +2818,7 @@ state_47: {
 state_48: {
         if (token_index >= number_of_tokens) {
             cont->state = 48;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 48;
@@ -2902,10 +2834,8 @@ state_48: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 48;
             token_index--;
             goto state_95;
@@ -2916,7 +2846,7 @@ state_48: {
 state_49: {
         if (token_index >= number_of_tokens) {
             cont->state = 49;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 49;
@@ -2932,10 +2862,8 @@ state_49: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 49;
             token_index--;
             goto state_95;
@@ -2946,7 +2874,7 @@ state_49: {
 state_50: {
         if (token_index >= number_of_tokens) {
             cont->state = 50;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 50;
@@ -2962,10 +2890,8 @@ state_50: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 50;
             token_index--;
             goto state_95;
@@ -2976,7 +2902,7 @@ state_50: {
 state_51: {
         if (token_index >= number_of_tokens) {
             cont->state = 51;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 51;
@@ -2991,7 +2917,7 @@ state_51: {
 state_52: {
         if (token_index >= number_of_tokens) {
             cont->state = 52;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 52;
@@ -3007,10 +2933,8 @@ state_52: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 52;
             token_index--;
             goto state_95;
@@ -3021,7 +2945,7 @@ state_52: {
 state_53: {
         if (token_index >= number_of_tokens) {
             cont->state = 53;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 53;
@@ -3037,10 +2961,8 @@ state_53: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 53;
             token_index--;
             goto state_95;
@@ -3051,7 +2973,7 @@ state_53: {
 state_54: {
         if (token_index >= number_of_tokens) {
             cont->state = 54;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 54;
@@ -3067,10 +2989,8 @@ state_54: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 54;
             token_index--;
             goto state_95;
@@ -3081,7 +3001,7 @@ state_54: {
 state_55: {
         if (token_index >= number_of_tokens) {
             cont->state = 55;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 55;
@@ -3092,10 +3012,8 @@ state_55: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 55;
             token_index--;
             goto state_95;
@@ -3106,7 +3024,7 @@ state_55: {
 state_56: {
         if (token_index >= number_of_tokens) {
             cont->state = 56;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 56;
@@ -3123,10 +3041,8 @@ state_56: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 56;
             token_index--;
             goto state_95;
@@ -3137,7 +3053,7 @@ state_56: {
 state_57: {
         if (token_index >= number_of_tokens) {
             cont->state = 57;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 57;
@@ -3152,7 +3068,7 @@ state_57: {
 state_58: {
         if (token_index >= number_of_tokens) {
             cont->state = 58;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 58;
@@ -3168,10 +3084,8 @@ state_58: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 58;
             token_index--;
             goto state_95;
@@ -3182,7 +3096,7 @@ state_58: {
 state_59: {
         if (token_index >= number_of_tokens) {
             cont->state = 59;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 59;
@@ -3195,10 +3109,8 @@ state_59: {
         case 23: goto state_49;
         case 24: goto state_50;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 59;
             token_index--;
             goto state_95;
@@ -3209,7 +3121,7 @@ state_59: {
 state_60: {
         if (token_index >= number_of_tokens) {
             cont->state = 60;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 60;
@@ -3220,10 +3132,8 @@ state_60: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 60;
             token_index--;
             goto state_95;
@@ -3234,7 +3144,7 @@ state_60: {
 state_61: {
         if (token_index >= number_of_tokens) {
             cont->state = 61;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 61;
@@ -3245,10 +3155,8 @@ state_61: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 61;
             token_index--;
             goto state_95;
@@ -3259,7 +3167,7 @@ state_61: {
 state_62: {
         if (token_index >= number_of_tokens) {
             cont->state = 62;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 62;
@@ -3277,7 +3185,7 @@ state_62: {
 state_63: {
         if (token_index >= number_of_tokens) {
             cont->state = 63;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 63;
@@ -3288,10 +3196,8 @@ state_63: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 63;
             token_index--;
             goto state_95;
@@ -3302,7 +3208,7 @@ state_63: {
 state_64: {
         if (token_index >= number_of_tokens) {
             cont->state = 64;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 64;
@@ -3313,10 +3219,8 @@ state_64: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 64;
             token_index--;
             goto state_95;
@@ -3327,7 +3231,7 @@ state_64: {
 state_65: {
         if (token_index >= number_of_tokens) {
             cont->state = 65;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 65;
@@ -3338,10 +3242,8 @@ state_65: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 65;
             token_index--;
             goto state_95;
@@ -3352,7 +3254,7 @@ state_65: {
 state_66: {
         if (token_index >= number_of_tokens) {
             cont->state = 66;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 66;
@@ -3363,10 +3265,8 @@ state_66: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 66;
             token_index--;
             goto state_95;
@@ -3377,7 +3277,7 @@ state_66: {
 state_67: {
         if (token_index >= number_of_tokens) {
             cont->state = 67;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 67;
@@ -3394,10 +3294,8 @@ state_67: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 67;
             token_index--;
             goto state_95;
@@ -3408,7 +3306,7 @@ state_67: {
 state_68: {
         if (token_index >= number_of_tokens) {
             cont->state = 68;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 68;
@@ -3424,10 +3322,8 @@ state_68: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 68;
             token_index--;
             goto state_95;
@@ -3438,7 +3334,7 @@ state_68: {
 state_69: {
         if (token_index >= number_of_tokens) {
             cont->state = 69;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 69;
@@ -3454,10 +3350,8 @@ state_69: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 69;
             token_index--;
             goto state_95;
@@ -3468,7 +3362,7 @@ state_69: {
 state_70: {
         if (token_index >= number_of_tokens) {
             cont->state = 70;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 70;
@@ -3484,10 +3378,8 @@ state_70: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 70;
             token_index--;
             goto state_95;
@@ -3498,7 +3390,7 @@ state_70: {
 state_71: {
         if (token_index >= number_of_tokens) {
             cont->state = 71;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 71;
@@ -3513,7 +3405,7 @@ state_71: {
 state_72: {
         if (token_index >= number_of_tokens) {
             cont->state = 72;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 72;
@@ -3529,10 +3421,8 @@ state_72: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 72;
             token_index--;
             goto state_95;
@@ -3543,7 +3433,7 @@ state_72: {
 state_73: {
         if (token_index >= number_of_tokens) {
             cont->state = 73;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 73;
@@ -3559,10 +3449,8 @@ state_73: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 73;
             token_index--;
             goto state_95;
@@ -3573,7 +3461,7 @@ state_73: {
 state_74: {
         if (token_index >= number_of_tokens) {
             cont->state = 74;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 74;
@@ -3589,10 +3477,8 @@ state_74: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 74;
             token_index--;
             goto state_95;
@@ -3603,7 +3489,7 @@ state_74: {
 state_75: {
         if (token_index >= number_of_tokens) {
             cont->state = 75;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 75;
@@ -3614,10 +3500,8 @@ state_75: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 75;
             token_index--;
             goto state_95;
@@ -3628,7 +3512,7 @@ state_75: {
 state_76: {
         if (token_index >= number_of_tokens) {
             cont->state = 76;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 76;
@@ -3641,10 +3525,8 @@ state_76: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 76;
             token_index--;
             goto state_95;
@@ -3655,7 +3537,7 @@ state_76: {
 state_77: {
         if (token_index >= number_of_tokens) {
             cont->state = 77;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 77;
@@ -3673,10 +3555,8 @@ state_77: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 77;
             token_index--;
             goto state_95;
@@ -3687,7 +3567,7 @@ state_77: {
 state_78: {
         if (token_index >= number_of_tokens) {
             cont->state = 78;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 78;
@@ -3703,10 +3583,8 @@ state_78: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 78;
             token_index--;
             goto state_95;
@@ -3717,7 +3595,7 @@ state_78: {
 state_79: {
         if (token_index >= number_of_tokens) {
             cont->state = 79;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 79;
@@ -3733,10 +3611,8 @@ state_79: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 79;
             token_index--;
             goto state_95;
@@ -3747,7 +3623,7 @@ state_79: {
 state_80: {
         if (token_index >= number_of_tokens) {
             cont->state = 80;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 80;
@@ -3763,10 +3639,8 @@ state_80: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 80;
             token_index--;
             goto state_95;
@@ -3777,7 +3651,7 @@ state_80: {
 state_81: {
         if (token_index >= number_of_tokens) {
             cont->state = 81;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 81;
@@ -3792,7 +3666,7 @@ state_81: {
 state_82: {
         if (token_index >= number_of_tokens) {
             cont->state = 82;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 82;
@@ -3808,10 +3682,8 @@ state_82: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 82;
             token_index--;
             goto state_95;
@@ -3822,7 +3694,7 @@ state_82: {
 state_83: {
         if (token_index >= number_of_tokens) {
             cont->state = 83;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 83;
@@ -3838,10 +3710,8 @@ state_83: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 83;
             token_index--;
             goto state_95;
@@ -3852,7 +3722,7 @@ state_83: {
 state_84: {
         if (token_index >= number_of_tokens) {
             cont->state = 84;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 84;
@@ -3868,10 +3738,8 @@ state_84: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 84;
             token_index--;
             goto state_95;
@@ -3882,7 +3750,7 @@ state_84: {
 state_85: {
         if (token_index >= number_of_tokens) {
             cont->state = 85;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 85;
@@ -3893,10 +3761,8 @@ state_85: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 85;
             token_index--;
             goto state_95;
@@ -3907,7 +3773,7 @@ state_85: {
 state_86: {
         if (token_index >= number_of_tokens) {
             cont->state = 86;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 86;
@@ -3924,10 +3790,8 @@ state_86: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 86;
             token_index--;
             goto state_95;
@@ -3938,7 +3802,7 @@ state_86: {
 state_87: {
         if (token_index >= number_of_tokens) {
             cont->state = 87;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 87;
@@ -3953,7 +3817,7 @@ state_87: {
 state_88: {
         if (token_index >= number_of_tokens) {
             cont->state = 88;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 88;
@@ -3969,10 +3833,8 @@ state_88: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 88;
             token_index--;
             goto state_95;
@@ -3983,7 +3845,7 @@ state_88: {
 state_89: {
         if (token_index >= number_of_tokens) {
             cont->state = 89;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 89;
@@ -3996,10 +3858,8 @@ state_89: {
         case 23: goto state_79;
         case 24: goto state_80;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 89;
             token_index--;
             goto state_95;
@@ -4010,7 +3870,7 @@ state_89: {
 state_90: {
         if (token_index >= number_of_tokens) {
             cont->state = 90;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 90;
@@ -4025,7 +3885,7 @@ state_90: {
 state_91: {
         if (token_index >= number_of_tokens) {
             cont->state = 91;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 91;
@@ -4041,10 +3901,8 @@ state_91: {
         case 23: goto state_69;
         case 24: goto state_70;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 91;
             token_index--;
             goto state_95;
@@ -4055,7 +3913,7 @@ state_91: {
 state_92: {
         if (token_index >= number_of_tokens) {
             cont->state = 92;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 92;
@@ -4070,7 +3928,7 @@ state_92: {
 state_93: {
         if (token_index >= number_of_tokens) {
             cont->state = 93;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 93;
@@ -4086,10 +3944,8 @@ state_93: {
         case 23: goto state_38;
         case 24: goto state_39;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 93;
             token_index--;
             goto state_95;
@@ -4100,7 +3956,7 @@ state_93: {
 state_94: {
         if (token_index >= number_of_tokens) {
             cont->state = 94;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 94;
@@ -4116,7 +3972,7 @@ state_94: {
 state_95: {
         if (token_index >= number_of_tokens) {
             cont->state = 95;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 95;
@@ -4132,7 +3988,7 @@ state_95: {
 state_96: {
         if (token_index >= number_of_tokens) {
             cont->state = 96;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 96;
@@ -4143,10 +3999,8 @@ state_96: {
         case 23: goto state_114;
         case 24: goto state_115;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 96;
             token_index--;
             goto state_95;
@@ -4157,7 +4011,7 @@ state_96: {
 state_97: {
         if (token_index >= number_of_tokens) {
             cont->state = 97;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 97;
@@ -4172,7 +4026,7 @@ state_97: {
 state_98: {
         if (token_index >= number_of_tokens) {
             cont->state = 98;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 98;
@@ -4183,10 +4037,8 @@ state_98: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 98;
             token_index--;
             goto state_95;
@@ -4197,7 +4049,7 @@ state_98: {
 state_99: {
         if (token_index >= number_of_tokens) {
             cont->state = 99;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 99;
@@ -4213,10 +4065,8 @@ state_99: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 99;
             token_index--;
             goto state_95;
@@ -4227,7 +4077,7 @@ state_99: {
 state_100: {
         if (token_index >= number_of_tokens) {
             cont->state = 100;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 100;
@@ -4243,10 +4093,8 @@ state_100: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 100;
             token_index--;
             goto state_95;
@@ -4257,7 +4105,7 @@ state_100: {
 state_101: {
         if (token_index >= number_of_tokens) {
             cont->state = 101;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 101;
@@ -4272,10 +4120,8 @@ state_101: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 101;
             token_index--;
             goto state_95;
@@ -4286,7 +4132,7 @@ state_101: {
 state_102: {
         if (token_index >= number_of_tokens) {
             cont->state = 102;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 102;
@@ -4301,10 +4147,8 @@ state_102: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 102;
             token_index--;
             goto state_95;
@@ -4315,7 +4159,7 @@ state_102: {
 state_103: {
         if (token_index >= number_of_tokens) {
             cont->state = 103;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 103;
@@ -4330,10 +4174,8 @@ state_103: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 103;
             token_index--;
             goto state_95;
@@ -4344,7 +4186,7 @@ state_103: {
 state_104: {
         if (token_index >= number_of_tokens) {
             cont->state = 104;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 104;
@@ -4359,10 +4201,8 @@ state_104: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 104;
             token_index--;
             goto state_95;
@@ -4373,7 +4213,7 @@ state_104: {
 state_105: {
         if (token_index >= number_of_tokens) {
             cont->state = 105;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 105;
@@ -4388,10 +4228,8 @@ state_105: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 105;
             token_index--;
             goto state_95;
@@ -4402,7 +4240,7 @@ state_105: {
 state_106: {
         if (token_index >= number_of_tokens) {
             cont->state = 106;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 106;
@@ -4413,10 +4251,8 @@ state_106: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 106;
             token_index--;
             goto state_95;
@@ -4427,7 +4263,7 @@ state_106: {
 state_107: {
         if (token_index >= number_of_tokens) {
             cont->state = 107;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 107;
@@ -4443,10 +4279,8 @@ state_107: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 107;
             token_index--;
             goto state_95;
@@ -4465,7 +4299,7 @@ state_108: {
 state_109: {
         if (token_index >= number_of_tokens) {
             cont->state = 109;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 109;
@@ -4480,10 +4314,8 @@ state_109: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 109;
             token_index--;
             goto state_95;
@@ -4494,7 +4326,7 @@ state_109: {
 state_110: {
         if (token_index >= number_of_tokens) {
             cont->state = 110;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 110;
@@ -4509,7 +4341,7 @@ state_110: {
 state_111: {
         if (token_index >= number_of_tokens) {
             cont->state = 111;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 111;
@@ -4524,10 +4356,8 @@ state_111: {
         case 23: goto state_101;
         case 24: goto state_102;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 111;
             token_index--;
             goto state_95;
@@ -4538,7 +4368,7 @@ state_111: {
 state_112: {
         if (token_index >= number_of_tokens) {
             cont->state = 112;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 112;
@@ -4555,10 +4385,8 @@ state_112: {
         case 23: goto state_114;
         case 24: goto state_115;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 112;
             token_index--;
             goto state_95;
@@ -4569,7 +4397,7 @@ state_112: {
 state_113: {
         if (token_index >= number_of_tokens) {
             cont->state = 113;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 113;
@@ -4585,10 +4413,8 @@ state_113: {
         case 23: goto state_114;
         case 24: goto state_115;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 113;
             token_index--;
             goto state_95;
@@ -4599,7 +4425,7 @@ state_113: {
 state_114: {
         if (token_index >= number_of_tokens) {
             cont->state = 114;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 114;
@@ -4615,10 +4441,8 @@ state_114: {
         case 23: goto state_114;
         case 24: goto state_115;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 114;
             token_index--;
             goto state_95;
@@ -4629,7 +4453,7 @@ state_114: {
 state_115: {
         if (token_index >= number_of_tokens) {
             cont->state = 115;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 115;
@@ -4645,10 +4469,8 @@ state_115: {
         case 23: goto state_114;
         case 24: goto state_115;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 115;
             token_index--;
             goto state_95;
@@ -4667,7 +4489,7 @@ state_116: {
 state_117: {
         if (token_index >= number_of_tokens) {
             cont->state = 117;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 117;
@@ -4683,10 +4505,8 @@ state_117: {
         case 23: goto state_114;
         case 24: goto state_115;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 117;
             token_index--;
             goto state_95;
@@ -4697,7 +4517,7 @@ state_117: {
 state_118: {
         if (token_index >= number_of_tokens) {
             cont->state = 118;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 118;
@@ -4713,10 +4533,8 @@ state_118: {
         case 23: goto state_114;
         case 24: goto state_115;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 118;
             token_index--;
             goto state_95;
@@ -4727,7 +4545,7 @@ state_118: {
 state_119: {
         if (token_index >= number_of_tokens) {
             cont->state = 119;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 119;
@@ -4743,10 +4561,8 @@ state_119: {
         case 23: goto state_114;
         case 24: goto state_115;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 119;
             token_index--;
             goto state_95;
@@ -4757,7 +4573,7 @@ state_119: {
 state_120: {
         if (token_index >= number_of_tokens) {
             cont->state = 120;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 120;
@@ -4768,10 +4584,8 @@ state_120: {
         case 23: goto state_114;
         case 24: goto state_115;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 120;
             token_index--;
             goto state_95;
@@ -4782,7 +4596,7 @@ state_120: {
 state_121: {
         if (token_index >= number_of_tokens) {
             cont->state = 121;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 121;
@@ -4797,7 +4611,7 @@ state_121: {
 state_122: {
         if (token_index >= number_of_tokens) {
             cont->state = 122;
-            return;
+            return true;
         }
         uint32_t token = run->tokens[token_index];
         run->states[token_index] = 122;
@@ -4813,10 +4627,8 @@ state_122: {
         case 23: goto state_114;
         case 24: goto state_115;
         default:
-            if (cont->stack.depth >= cont->stack.capacity) {
-                if (!grow_state_stack(&cont->stack))
-                    break;
-            }
+            if (cont->stack.depth >= cont->stack.capacity)
+                grow_state_stack(&cont->stack);
             cont->stack.states[cont->stack.depth++] = 122;
             token_index--;
             goto state_95;
@@ -4824,6 +4636,7 @@ state_122: {
         break;
     }
     }
+    return false;
 }
 static const uint16_t actions[] = {
 0,0,4096,0,4096,32768,16384,0,4096,32769,32769,16385,0,4096,32769,32769,32770,32769,16385,0,4096,32769,32769,36864,40960,16384,0,4096,32769,32769,
@@ -5977,10 +5790,8 @@ static parsed_id build_parse_tree(struct bluebird_default_tokenizer *tokenizer, 
             if (entry->dfa_symbol < 23)
                 len = decode_token_length(run, &length_offset, &offset);
             else {
-                if (stack.depth >= stack.capacity) {
-                    if (!grow_state_stack(&stack))
-                        break;
-                }
+                if (stack.depth >= stack.capacity)
+                    grow_state_stack(&stack);
                 stack.states[stack.depth++] = entry->push_nfa_state;
             }
             apply_actions(&construct_state, entry->actions, end, end + whitespace);

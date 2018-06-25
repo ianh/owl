@@ -141,6 +141,7 @@ void generate(struct generator *gen)
     output_line(out, "    ERROR_NONE,");
     output_line(out, "    ERROR_INVALID_FILE,");
     output_line(out, "    ERROR_INVALID_TOKEN,");
+    output_line(out, "    ERROR_UNEXPECTED_TOKEN,");
     output_line(out, "    ERROR_MORE_INPUT_NEEDED,");
     output_line(out, "};");
     output_line(out, "// Returns an error code, or ERROR_NONE if there wasn't an error.");
@@ -441,6 +442,9 @@ void generate(struct generator *gen)
     output_line(out, "    case ERROR_INVALID_TOKEN:");
     output_line(out, "        fprintf(stderr, \"invalid token\\n\");");
     output_line(out, "        break;");
+    output_line(out, "    case ERROR_UNEXPECTED_TOKEN:");
+    output_line(out, "        fprintf(stderr, \"unexpected token\\n\");");
+    output_line(out, "        break;");
     output_line(out, "    case ERROR_MORE_INPUT_NEEDED:");
     output_line(out, "        fprintf(stderr, \"more input needed\\n\");");
     output_line(out, "        break;");
@@ -582,7 +586,7 @@ void generate(struct generator *gen)
     output_line(out, "    %%state-type state;");
     output_line(out, "    struct state_stack stack;");
     output_line(out, "};");
-    output_line(out, "static void fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);");
+    output_line(out, "static bool fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);");
     output_line(out, "static parsed_id build_parse_tree(struct bluebird_default_tokenizer *, struct bluebird_token_run *, struct bluebird_tree *);");
     output_line(out, "");
     output_line(out, "static struct bluebird_tree *bluebird_tree_create_empty(void) {");
@@ -601,8 +605,15 @@ void generate(struct generator *gen)
     output_line(out, "    struct fill_run_continuation c = {");
     output_line(out, "        .state = %%start-state,");
     output_line(out, "    };");
-    output_line(out, "    while (bluebird_default_tokenizer_advance(&tokenizer, &token_run))");
-    output_line(out, "        fill_run_states(token_run, &c);");
+    output_line(out, "    while (bluebird_default_tokenizer_advance(&tokenizer, &token_run)) {");
+    output_line(out, "        if (!fill_run_states(token_run, &c)) {");
+    // TODO: test leaks in error cases
+    // TODO: free the rest of the runs
+    output_line(out, "            free(c.stack.states);");
+    output_line(out, "            tree->error = ERROR_UNEXPECTED_TOKEN;");
+    output_line(out, "            return tree;");
+    output_line(out, "        }");
+    output_line(out, "    }");
     output_line(out, "    free(c.stack.states);");
     output_line(out, "    if (string[tokenizer.offset] != '\\0') {");
     output_line(out, "        tree->error = ERROR_INVALID_TOKEN;");
@@ -702,7 +713,7 @@ void generate(struct generator *gen)
     struct automaton *b = &gen->deterministic->bracket_automaton;
     set_unsigned_number_substitution(out, "first-bracket-state-id",
      a->number_of_states);
-    output_line(out, "static void fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont) {");
+    output_line(out, "static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont) {");
     output_line(out, "    uint16_t token_index = 0;");
     output_line(out, "    uint16_t number_of_tokens = run->number_of_tokens;");
     output_line(out, "    %%state-type start_state = cont->state;");
@@ -715,6 +726,7 @@ void generate(struct generator *gen)
     generate_automaton(gen, out, a, 0, NORMAL_AUTOMATON);
     generate_automaton(gen, out, b, a->number_of_states, BRACKET_AUTOMATON);
     output_line(out, "    }");
+    output_line(out, "    return false;");
     output_line(out, "}");
     generate_action_table(gen, out);
     generate_keyword_reader(gen, out);
@@ -983,7 +995,7 @@ static void generate_automaton(struct generator *gen,
             set_unsigned_number_substitution(out, "state-transition-symbol",
              s.transition_symbol);
             output_line(out, "        if (cont->stack.depth == 0)");
-            output_line(out, "            break;"); // TODO: Error handling.
+            output_line(out, "            break;");
             output_line(out, "        start_state = cont->stack.states[--cont->stack.depth];");
             output_line(out, "        run->tokens[token_index] = %%state-transition-symbol;");
             output_line(out, "        goto start;");
@@ -992,7 +1004,7 @@ static void generate_automaton(struct generator *gen,
         }
         output_line(out, "        if (token_index >= number_of_tokens) {");
         output_line(out, "            cont->state = %%state-id;");
-        output_line(out, "            return;");
+        output_line(out, "            return true;");
         output_line(out, "        }");
         output_line(out, "        %%token-type token = run->tokens[token_index];");
         output_line(out, "        run->states[token_index] = %%state-id;");
@@ -1019,7 +1031,7 @@ static void generate_automaton(struct generator *gen,
             output_line(out, "            token_index--;");
             output_line(out, "            goto state_%%first-bracket-state-id;");
         } else
-            output_line(out, " break;"); // TODO: Error handling.
+            output_line(out, " break;");
         output_line(out, "        }");
         output_line(out, "        break;");
         output_line(out, "    }");
