@@ -28,9 +28,9 @@ enum epsilon_state {
     DISALLOW_EPSILON_SUCCESSORS,
 };
 struct state_pair {
-    state_id a;
     state_id b;
-    enum epsilon_state epsilon_state;
+    state_id a:31;
+    unsigned epsilon_state:1;
 };
 
 // Normalize state pairs so a is always less than or equal to b.

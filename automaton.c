@@ -33,6 +33,10 @@ static void grow_states(struct automaton *a, uint32_t state)
 {
     if (state < a->number_of_states)
         return;
+    if (state >= 1UL << 31) {
+        fprintf(stderr, "error: automaton has too many states\n");
+        exit(-1);
+    }
     a->number_of_states = (uint32_t)state + 1;
     a->states = grow_array(a->states, &a->states_allocated_bytes,
      a->number_of_states * sizeof(struct state));

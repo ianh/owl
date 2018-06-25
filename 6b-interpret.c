@@ -503,11 +503,6 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
     struct combined_grammar *combined = interpreter->combined;
     struct deterministic_grammar *deterministic = interpreter->deterministic;
 
-    if (deterministic->automaton.number_of_states > (1UL << 31) ||
-     deterministic->bracket_automaton.number_of_states > (1UL << 31)) {
-        fprintf(stderr, "error: automaton has too many states.\n");
-        exit(-1);
-    }
     struct bluebird_token_run *token_run = 0;
     struct tokenizer_info info = {
         .identifier_symbol = token_symbol(combined, "identifier"),
