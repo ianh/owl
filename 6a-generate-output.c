@@ -246,7 +246,7 @@ static struct substitution *find_substitution(struct generator_output *output,
                 longest_match = j;
                 longest_match_substitution = s;
             }
-            if (s->variable[j] != variable[j])
+            if (!s->variable[j] || s->variable[j] != variable[j])
                 break;
         }
     }
