@@ -688,16 +688,15 @@ void generate(struct generator *gen)
     output_line(out, "    free(tree->string_tokens);");
     output_line(out, "    free(tree);");
     output_line(out, "}");
-    output_line(out, "static bool grow_state_stack(struct state_stack *stack) {");
+    output_line(out, "static void grow_state_stack(struct state_stack *stack) {");
     output_line(out, "    size_t new_capacity = (stack->capacity + 2) * 3 / 2;");
     output_line(out, "    if (new_capacity <= stack->capacity)");
-    output_line(out, "        return false;");
+    output_line(out, "        abort();");
     output_line(out, "    %%state-type *new_states = realloc(stack->states, new_capacity * sizeof(%%state-type));");
     output_line(out, "    if (!new_states)");
-    output_line(out, "        return false;");
+    output_line(out, "        abort();");
     output_line(out, "    stack->states = new_states;");
     output_line(out, "    stack->capacity = new_capacity;");
-    output_line(out, "    return true;");
     output_line(out, "}");
     struct automaton *a = &gen->deterministic->automaton;
     struct automaton *b = &gen->deterministic->bracket_automaton;
@@ -1014,10 +1013,8 @@ static void generate_automaton(struct generator *gen,
         output_string(out, "        default:");
         if (has_bracket_symbols) {
             output_line(out, "");
-            output_line(out, "            if (cont->stack.depth >= cont->stack.capacity) {");
-            output_line(out, "                if (!grow_state_stack(&cont->stack))");
-            output_line(out, "                    break;"); // TODO: Error handling.
-            output_line(out, "            }");
+            output_line(out, "            if (cont->stack.depth >= cont->stack.capacity)");
+            output_line(out, "                grow_state_stack(&cont->stack);");
             output_line(out, "            cont->stack.states[cont->stack.depth++] = %%state-id;");
             output_line(out, "            token_index--;");
             output_line(out, "            goto state_%%first-bracket-state-id;");
@@ -1315,10 +1312,8 @@ retry:
     output_line(out, "            if (entry->dfa_symbol < %%number-of-tokens)");
     output_line(out, "                len = decode_token_length(run, &length_offset, &offset);");
     output_line(out, "            else {");
-    output_line(out, "                if (stack.depth >= stack.capacity) {");
-    output_line(out, "                    if (!grow_state_stack(&stack))");
-    output_line(out, "                        break;"); // TODO: Error handling?
-    output_line(out, "                }");
+    output_line(out, "                if (stack.depth >= stack.capacity)");
+    output_line(out, "                    grow_state_stack(&stack);");
     output_line(out, "                stack.states[stack.depth++] = entry->push_nfa_state;");
     output_line(out, "            }");
     output_line(out, "            apply_actions(&construct_state, entry->actions, end, end + whitespace);");
