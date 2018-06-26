@@ -92,21 +92,21 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     // visiting each rule in reverse order.
     for (uint32_t i = n - 1; i < n; --i) {
         struct rule *rule = &grammar->rules[i];
-        struct automaton *automaton = &automaton_for_rule[i];
         if (rule->is_token)
             continue;
+        struct automaton automaton = {0};
         if (rule->number_of_choices == 0) {
             // If the rule is a simple rule without choices, we already built a
             // combined automaton -- just copy it into place.
-            automaton_copy(&rule->automaton, automaton);
+            automaton_copy(&rule->automaton, &automaton);
         } else {
             // Otherwise, we have to combine all the choices and operators
             // together, using actions to track which choices and operators are
             // matched.
-            state_id start = automaton_create_state(automaton);
-            state_id end = automaton_create_state(automaton);
-            automaton_set_start_state(automaton, start);
-            automaton_mark_accepting_state(automaton, end);
+            state_id start = automaton_create_state(&automaton);
+            state_id end = automaton_create_state(&automaton);
+            automaton_set_start_state(&automaton, start);
+            automaton_mark_accepting_state(&automaton, end);
             uint32_t j = 0;
             for (; j < rule->first_operator_choice; ++j) {
                 // Embed each choice into the automaton, tracking it as an
@@ -119,9 +119,9 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                     end_action = CONSTRUCT_ACTION(ACTION_END_OPERAND, j);
                 } else
                     end_action = CONSTRUCT_ACTION(ACTION_SET_SLOT_CHOICE, j);
-                state_id choice_start = embed(automaton, &choice->automaton,
+                state_id choice_start = embed(&automaton, &choice->automaton,
                  end, SYMBOL_EPSILON, end_action);
-                automaton_add_transition_with_action(automaton, start,
+                automaton_add_transition_with_action(&automaton, start,
                  choice_start, SYMBOL_EPSILON, start_action);
             }
             while (j < rule->number_of_choices) {
@@ -147,19 +147,19 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                     // operands (if the operator is present) or exactly one
                     // operand (if it isn't): that means we have to duplicate
                     // all the states here by embedding the automaton in itself.
-                    state_id rhs_end = automaton_create_state(automaton);
-                    state_id rhs_start = embed(automaton, automaton, rhs_end,
+                    state_id rhs_end = automaton_create_state(&automaton);
+                    state_id rhs_start = embed(&automaton, &automaton, rhs_end,
                      SYMBOL_EPSILON, 0);
                     // Clear out the old accepting state--it's about to be
                     // replaced by the new one we just added.
-                    automaton->states[end].accepting = false;
+                    automaton.states[end].accepting = false;
                     // Allow the automaton to skip past the nonassoc operator.
-                    automaton_add_transition(automaton, end, rhs_end,
+                    automaton_add_transition(&automaton, end, rhs_end,
                      SYMBOL_EPSILON);
                     from_state = end;
                     to_state = rhs_start;
                     end = rhs_end;
-                    automaton_mark_accepting_state(automaton, end);
+                    automaton_mark_accepting_state(&automaton, end);
                 } else {
                     // Infix operators are a transition from the end state back
                     // to the start state.
@@ -173,10 +173,10 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                         break;
                     // Embed each operator automaton and hook it up according
                     // to the rules above.
-                    state_id op_start = embed(automaton, &op->automaton,
+                    state_id op_start = embed(&automaton, &op->automaton,
                      to_state, SYMBOL_EPSILON,
                      CONSTRUCT_ACTION(ACTION_END_OPERATOR, j));
-                    automaton_add_transition_with_action(automaton, from_state,
+                    automaton_add_transition_with_action(&automaton, from_state,
                      op_start, SYMBOL_EPSILON,
                      CONSTRUCT_ACTION(ACTION_BEGIN_OPERATOR, 0));
                 }
@@ -199,9 +199,11 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
         // that refer to other rules' automata.  Rules can only refer to later
         // rules, so since we're building the rule automata from last to first,
         // these automata are guaranteed to already have been built.
-        substitute_slots(grammar, rule, i + 1, automaton, automaton_for_rule,
+        substitute_slots(grammar, rule, i + 1, &automaton, automaton_for_rule,
          renames_for_rule[i], rule->number_of_keyword_tokens +
          rule->number_of_brackets);
+        disambiguate_minimize(&automaton, &automaton_for_rule[i]);
+        automaton_destroy(&automaton);
     }
 
     // Fourth pass: build and substitute the bracket automata from each rule.

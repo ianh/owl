@@ -643,20 +643,32 @@ struct action_map_entry *action_map_find(struct action_map *map,
 }
 
 // This is Brzozowski's algorithm.
-void determinize_minimize(struct automaton *input, struct automaton *result)
+static void determinize_minimize_with_options(struct automaton *input,
+ struct automaton *result, enum options options)
 {
     struct automaton reversed = {0};
     struct automaton dfa = {0};
     automaton_reverse(input, &reversed);
     determinize_automaton((struct context){ .input = &reversed, .result = &dfa,
-     .first_transition_symbol = UINT32_MAX, .options = IGNORE_START_STATE });
+     .first_transition_symbol = UINT32_MAX, .options = IGNORE_START_STATE |
+     options });
     automaton_clear(&reversed);
     automaton_reverse(&dfa, &reversed);
     determinize_automaton((struct context){ .input = &reversed,
      .result = result, .first_transition_symbol = UINT32_MAX,
-     .options = IGNORE_START_STATE });
+     .options = IGNORE_START_STATE | options });
     automaton_destroy(&reversed);
     automaton_destroy(&dfa);
+}
+
+void determinize_minimize(struct automaton *input, struct automaton *result)
+{
+    determinize_minimize_with_options(input, result, 0);
+}
+
+void disambiguate_minimize(struct automaton *input, struct automaton *result)
+{
+    determinize_minimize_with_options(input, result, DISAMBIGUATE);
 }
 
 static uint32_t subset_table_adopt_subset(struct subset_table *table,

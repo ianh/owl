@@ -75,4 +75,6 @@ void disambiguate(struct automaton *input, struct automaton *input_bracket,
  struct automaton *result, struct automaton *result_bracket,
  symbol_id first_bracket_transition_symbol);
 
+void disambiguate_minimize(struct automaton *input, struct automaton *result);
+
 #endif
