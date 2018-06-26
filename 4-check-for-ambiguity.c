@@ -107,17 +107,20 @@ struct state_pair_table {
     // include the same node pair twice -- if there are epsilon-cycles, for
     // example).
     struct path_node *ain_paths;
+    uint32_t *in_weights;
     uint8_t *status;
 
     // A state pair along an ambiguous path, if one has been found.
     bool has_ambiguity;
     struct state_pair ambiguity;
+    uint32_t ambiguity_weight;
 
     uint32_t available_size;
     uint32_t used_size;
 };
 
 struct work_item {
+    struct path_node node;
     struct state_pair pair;
     uint32_t weight;
 };
@@ -233,15 +236,9 @@ void check_for_ambiguity(struct combined_grammar *combined,
     automaton_reverse(bracket_automaton, &bracket_reversed);
     struct state_pair_table table = {0};
     while (true) {
-        // First, look for ambiguity in the root automaton.
-        search_state_pairs(&context, &table, &combined->automaton, FORWARD);
-        search_state_pairs(&context, &table, &reversed, BACKWARD);
-        if (table.has_ambiguity)
-            break;
-
-        // If we can't find any, look for any new ambiguities in the bracket
-        // automaton (potentially propagating ambiguities outward as we discover
-        // new ambiguous transitions).
+        // Look for ambiguities in the bracket automaton (potentially
+        // propagating ambiguities outward as we discover new ambiguous
+        // transitions).
         state_pair_table_clear(&table);
         search_state_pairs(&context, &table, bracket_automaton, FORWARD);
         search_state_pairs(&context, &table, &bracket_reversed,
@@ -273,8 +270,11 @@ void check_for_ambiguity(struct combined_grammar *combined,
                 .join = { in, out },
              };
         } else {
-            // No more progress can be made toward finding an ambiguous path.
-            // That means we're done here.
+            // No more bracket paths exist.  Now we can look for the final path
+            // in the main automaton.
+            state_pair_table_clear(&table);
+            search_state_pairs(&context, &table, &combined->automaton, FORWARD);
+            search_state_pairs(&context, &table, &reversed, BACKWARD);
             break;
         }
 
@@ -434,8 +434,9 @@ static void search_state_pairs(struct context *context,
         // both.
         direction = BACKWARD;
     }
-    while (worklist.number_of_items > 0 && !table->has_ambiguity) {
+    while (worklist.number_of_items > 0) {
         struct work_item item = worklist.items[0];
+        struct state_pair s = item.pair;
 
         // Rebalance the heap.
         struct work_item last = worklist.items[--worklist.number_of_items];
@@ -453,7 +454,45 @@ static void search_state_pairs(struct context *context,
         }
         worklist.items[i] = last;
 
-        struct state_pair s = item.pair;
+        uint32_t hash = fnv(&s, sizeof(s));
+        uint32_t index = state_pair_table_add(table, s, hash);
+        if (table->status[index] == LOCKED)
+            continue;
+        if (direction == FORWARD) {
+            bool set_in_path = false;
+            if (table->in_paths[index].type == INVALID_NODE) {
+                table->in_paths[index] = item.node;
+                table->in_weights[index] = item.weight;
+                set_in_path = true;
+            }
+            if ((item.node.flags & AMBIGUOUS_NODE) &&
+             table->ain_paths[index].type == INVALID_NODE) {
+                table->ain_paths[index] = item.node;
+                table->in_weights[index] = item.weight;
+            }
+            if (!set_in_path)
+                continue;
+        }
+        if (direction == BACKWARD) {
+            if (table->out_paths[index].type == INVALID_NODE) {
+                table->out_paths[index] = item.node;
+                if (((s.a != s.b && table->in_paths[index].type != INVALID_NODE)
+                 || table->ain_paths[index].type != INVALID_NODE) &&
+                 (!table->has_ambiguity || item.weight +
+                 table->in_weights[index] < table->ambiguity_weight)) {
+                    // We found a complete path which satisfies our
+                    // requirements: i.e.,
+                    // - it contains two distinct states, or
+                    // - it contains an intrinsically ambiguous edge.
+                    table->has_ambiguity = true;
+                    table->ambiguity = s;
+                    table->ambiguity_weight = item.weight +
+                     table->in_weights[index];
+                }
+            } else
+                continue;
+        }
+
         uint32_t w = item.weight;
         struct state a = automaton->states[s.a];
         struct state b = automaton->states[s.b];
@@ -520,7 +559,7 @@ static void search_state_pairs(struct context *context,
                             .type = SYMBOL_NODE,
                             .next_pair = s,
                             .symbol = at.symbol,
-                        }, at.target, bt.target, w, direction, table,
+                        }, at.target, bt.target, w + 1, direction, table,
                          &worklist);
                         continue;
                     }
@@ -545,8 +584,9 @@ static void search_state_pairs(struct context *context,
                             .flags = (at.symbol == bt.symbol ? 0 :
                              AMBIGUOUS_NODE) | (sa == p.a ? 0 :
                              SWAPPED_BRACKET_PATH),
-                        }, at.target, bt.target, w, direction, table,
-                         &worklist);
+                        }, at.target, bt.target, w +
+                         context->bracket_paths.in_paths[k].offset.symbols,
+                         direction, table, &worklist);
                     }
                     if (at.symbol == bt.symbol) {
                         struct path_node n = *ambiguous_bracket_path(context,
@@ -554,7 +594,9 @@ static void search_state_pairs(struct context *context,
                         if (n.type != INVALID_NODE) {
                             n.next_pair = s;
                             follow_state_pair_transition(n, at.target,
-                             bt.target, w, direction, table, &worklist);
+                             bt.target, w + n.join[0]->offset.symbols +
+                             n.join[1]->offset.symbols, direction, table,
+                             &worklist);
                         }
                     }
                 }
@@ -578,51 +620,17 @@ static void follow_state_pair_transition(struct path_node node, state_id a,
     }
     if (a != pair.a)
         node.flags |= SWAPPED_PATH;
-
-    uint32_t hash = fnv(&pair, sizeof(pair));
-    uint32_t index = state_pair_table_add(table, pair, hash);
-    if (table->status[index] == LOCKED)
-        return;
-
-    bool continue_following = false;
-    if (direction == FORWARD && table->in_paths[index].type == INVALID_NODE) {
-        table->in_paths[index] = node;
-        continue_following = true;
-    }
-    if (direction == BACKWARD && table->out_paths[index].type == INVALID_NODE) {
-        table->out_paths[index] = node;
-        if ((pair.a != pair.b && table->in_paths[index].type != INVALID_NODE) ||
-         table->ain_paths[index].type != INVALID_NODE) {
-            // We found a complete path which satisfies our requirements: i.e.,
-            // - it contains two distinct states, or
-            // - it contains an intrinsically ambiguous edge.
-            // TODO: find minimum path, not just the first one we come across.
-            table->has_ambiguity = true;
-            table->ambiguity = pair;
-            return;
-        }
-        continue_following = true;
-    }
-    if (direction == FORWARD && (node.flags & AMBIGUOUS_NODE) &&
-     table->ain_paths[index].type == INVALID_NODE)
-        table->ain_paths[index] = node;
-    if (!continue_following)
-        return;
     uint32_t i = worklist->number_of_items++;
     worklist->items = grow_array(worklist->items,
      &worklist->items_allocated_bytes,
      worklist->number_of_items * sizeof(struct work_item));
-    uint32_t next_weight = weight + 1;
-    if (node.type == BRACKET_TRANSITION_NODE || node.type == JOIN_NODE) {
-        // Just approximate here to avoid an inconvenient lookup.
-        next_weight = weight + 8;
-    }
     // Setting i = (i-1)/2 moves up the binary min-heap.
-    for(; i > 0 && next_weight < worklist->items[(i-1)/2].weight; i = (i-1)/2)
+    for(; i > 0 && weight < worklist->items[(i-1)/2].weight; i = (i-1)/2)
         worklist->items[i] = worklist->items[(i-1)/2];
     worklist->items[i] = (struct work_item){
+        .node = node,
         .pair = pair,
-        .weight = next_weight,
+        .weight = weight,
     };
 }
 
@@ -753,6 +761,7 @@ static void state_pair_table_destroy(struct state_pair_table *table)
     free(table->in_paths);
     free(table->out_paths);
     free(table->ain_paths);
+    free(table->in_weights);
     free(table->status);
     memset(table, 0, sizeof(*table));
 }
@@ -765,6 +774,7 @@ static void state_pair_table_rehash(struct state_pair_table *table,
     table->in_paths = calloc(new_size, sizeof(struct path_node));
     table->out_paths = calloc(new_size, sizeof(struct path_node));
     table->ain_paths = calloc(new_size, sizeof(struct path_node));
+    table->in_weights = calloc(new_size, sizeof(uint32_t));
     table->status = calloc(new_size, sizeof(uint8_t));
     table->available_size = new_size;
     table->used_size = 0;
@@ -776,11 +786,13 @@ static void state_pair_table_rehash(struct state_pair_table *table,
         table->in_paths[index] = old.in_paths[i];
         table->out_paths[index] = old.out_paths[i];
         table->ain_paths[index] = old.ain_paths[i];
+        table->in_weights[index] = old.in_weights[i];
         table->status[index] = old.status[i];
     }
     free(old.pairs);
     free(old.in_paths);
     free(old.out_paths);
     free(old.ain_paths);
+    free(old.in_weights);
     free(old.status);
 }
