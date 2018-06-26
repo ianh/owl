@@ -115,7 +115,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                 uint16_t start_action = 0;
                 uint16_t end_action = 0;
                 if (rule->first_operator_choice < rule->number_of_choices) {
-                    start_action = CONSTRUCT_ACTION(ACTION_BEGIN_OPERAND, j);
+                    start_action = CONSTRUCT_ACTION(ACTION_BEGIN_OPERAND, 0);
                     end_action = CONSTRUCT_ACTION(ACTION_END_OPERAND, j);
                 } else
                     end_action = CONSTRUCT_ACTION(ACTION_SET_SLOT_CHOICE, j);
@@ -178,7 +178,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                      CONSTRUCT_ACTION(ACTION_END_OPERATOR, j));
                     automaton_add_transition_with_action(automaton, from_state,
                      op_start, SYMBOL_EPSILON,
-                     CONSTRUCT_ACTION(ACTION_BEGIN_OPERATOR, j));
+                     CONSTRUCT_ACTION(ACTION_BEGIN_OPERATOR, 0));
                 }
             }
         }
@@ -347,11 +347,11 @@ static void substitute_slots(struct grammar *grammar, struct rule *rule,
                 else if (slot_rule->first_operator_choice <
                  slot_rule->number_of_choices) {
                     begin_action =
-                     CONSTRUCT_ACTION(ACTION_BEGIN_EXPRESSION_SLOT, k);
+                     CONSTRUCT_ACTION(ACTION_BEGIN_EXPRESSION_SLOT, 0);
                     end_action =
                      CONSTRUCT_ACTION(ACTION_END_EXPRESSION_SLOT, k);
                 } else {
-                    begin_action = CONSTRUCT_ACTION(ACTION_BEGIN_SLOT, k);
+                    begin_action = CONSTRUCT_ACTION(ACTION_BEGIN_SLOT, 0);
                     end_action = CONSTRUCT_ACTION(ACTION_END_SLOT, k);
                 }
                 state_id start = embed(a, &automaton_for_rule[slot->rule_index],
