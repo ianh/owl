@@ -387,8 +387,8 @@ static void build_ambiguity_path(struct context *context,
             int j = direction == 1 ? 0 : 1;
             offset.symbols += node->join[j]->offset.symbols * direction;
             for (int i = 0; i < 2; ++i) {
-                offset.actions[i] += node->join[j]->offset.actions[i] *
-                 direction;
+                offset.actions[i] += direction *
+                 node->join[j]->offset.actions[swapped ? 1 - i : i];
             }
             build_ambiguity_path(context, ambiguity, offset, node->join[1], 1,
              swapped);
@@ -396,8 +396,8 @@ static void build_ambiguity_path(struct context *context,
              swapped);
             offset.symbols += node->join[1 - j]->offset.symbols * direction;
             for (int i = 0; i < 2; ++i) {
-                offset.actions[i] += node->join[1 - j]->offset.actions[i] *
-                 direction;
+                offset.actions[i] += direction *
+                 node->join[1 - j]->offset.actions[swapped ? 1 - i : i];
             }
             break;
         }
