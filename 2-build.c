@@ -252,12 +252,12 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
      parsed_comment_token_get(tree, g.comment_token); !parsed_comment.empty;
      parsed_comment = parsed_comment_token_next(parsed_comment)) {
         struct parsed_string s = parsed_string_get(tree, parsed_comment.string);
-        if (s.length <= 2) {
+        if (s.length == 0) {
             error.ranges[0] = s.range;
             exit_with_errorf("comment tokens can't be empty");
         }
         uint32_t token_index = find_token(grammar->comment_tokens,
-         grammar->number_of_comment_tokens, s.string + 1, s.length - 2,
+         grammar->number_of_comment_tokens, s.string, s.length,
          TOKEN_START_LINE_COMMENT, &s.range);
         if (token_index >= grammar->number_of_comment_tokens) {
             grammar->number_of_comment_tokens = token_index + 1;
@@ -265,8 +265,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
              &grammar->comment_tokens_allocated_bytes,
              sizeof(struct token) * grammar->number_of_comment_tokens);
             grammar->comment_tokens[token_index] = (struct token){
-                .string = s.string + 1,
-                .length = s.length - 2,
+                .string = s.string,
+                .length = s.length,
                 .type = TOKEN_START_LINE_COMMENT,
                 .symbol = SYMBOL_EPSILON,
                 .range = s.range
@@ -551,20 +551,20 @@ static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
  parsed_id id, enum token_type type)
 {
     struct parsed_string keyword = parsed_string_get(ctx->tree, id);
-    if (keyword.length <= 2) {
+    if (keyword.length == 0) {
         // Zero-length keywords are treated as epsilons.
         return SYMBOL_EPSILON;
     }
     uint32_t token_index = find_token(rule->keyword_tokens,
-     rule->number_of_keyword_tokens, keyword.string + 1, keyword.length - 2,
-     type, &keyword.range);
+     rule->number_of_keyword_tokens, keyword.string, keyword.length, type,
+     &keyword.range);
     if (token_index >= rule->number_of_keyword_tokens) {
         rule->number_of_keyword_tokens = token_index + 1;
         rule->keyword_tokens = grow_array(rule->keyword_tokens,
          &rule->keyword_tokens_allocated_bytes,
          sizeof(struct token) * rule->number_of_keyword_tokens);
-        rule->keyword_tokens[token_index].string = keyword.string + 1;
-        rule->keyword_tokens[token_index].length = keyword.length - 2;
+        rule->keyword_tokens[token_index].string = keyword.string;
+        rule->keyword_tokens[token_index].length = keyword.length;
         rule->keyword_tokens[token_index].type = type;
         rule->keyword_tokens[token_index].symbol = ctx->next_symbol++;
         rule->keyword_tokens[token_index].range = keyword.range;

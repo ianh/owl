@@ -995,7 +995,22 @@ static void write_number_token(size_t offset, size_t length, double number, void
 }
 static void write_string_token(size_t offset, size_t length, size_t content_offset, size_t content_length, void *info) {
     struct bluebird_tree *tree = info;
-    add_string_token(tree, offset, offset + length, tree->string + offset, length);
+    // Apply escape sequences.
+    size_t escaped_length = content_length;
+    for (size_t i = 0; i < content_length; ++i) {
+        if (tree->string[content_offset + i] == '\\') {
+            escaped_length--;
+            i++;
+        }
+    }
+    char *escaped = malloc(escaped_length);
+    size_t j = 0;
+    for (size_t i = 0; i < content_length; ++i) {
+        if (tree->string[content_offset + i] == '\\')
+            i++;
+        escaped[j++] = tree->string[content_offset + i];
+    }
+    add_string_token(tree, offset, offset + length, escaped, escaped_length);
 }
 struct bluebird_token_run {
     struct bluebird_token_run *prev;
