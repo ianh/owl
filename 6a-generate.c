@@ -728,6 +728,8 @@ void generate(struct generator *gen)
     output_line(out, "    free(tree->parse_tree);");
     output_line(out, "    free(tree->identifier_tokens);");
     output_line(out, "    free(tree->number_tokens);");
+    output_line(out, "    for (uint32_t i = 0; i < tree->number_of_string_tokens; ++i)");
+    output_line(out, "        free((void *)tree->string_tokens[i].string);");
     output_line(out, "    free(tree->string_tokens);");
     output_line(out, "    free(tree);");
     output_line(out, "}");

@@ -1636,6 +1636,8 @@ void bluebird_tree_destroy(struct bluebird_tree *tree) {
     free(tree->parse_tree);
     free(tree->identifier_tokens);
     free(tree->number_tokens);
+    for (uint32_t i = 0; i < tree->number_of_string_tokens; ++i)
+        free((void *)tree->string_tokens[i].string);
     free(tree->string_tokens);
     free(tree);
 }
