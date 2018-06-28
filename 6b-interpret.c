@@ -24,7 +24,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token,
  const char *text, void *info);
 static void write_identifier_token(size_t offset, size_t length, void *info);
 static void write_string_token(size_t offset, size_t length,
- size_t content_offset, size_t content_length, void *info);
+ const char *string, size_t string_length, bool has_escapes, void *info);
 static void write_number_token(size_t offset, size_t length, double number,
  void *info);
 
@@ -161,6 +161,7 @@ struct interpret_node {
         struct {
             const char *string;
             size_t length;
+            bool has_escapes;
         } string;
     };
 };
@@ -924,15 +925,15 @@ static void write_identifier_token(size_t offset, size_t length, void *info)
 }
 
 static void write_string_token(size_t offset, size_t length,
- size_t content_offset, size_t content_length, void *info)
+ const char *string, size_t string_length, bool has_escapes, void *info)
 {
     struct interpret_context *ctx = ((struct tokenizer_info *)info)->context;
     struct interpret_node *node = calloc(1, sizeof(struct interpret_node));
     node->next_sibling = ctx->tokens;
     node->type = NODE_STRING_TOKEN;
-    // TODO: String escape sequences.
-    node->string.string = ctx->tokenizer->text + offset;
-    node->string.length = length;
+    node->string.string = string;
+    node->string.length = string_length;
+    node->string.has_escapes = has_escapes;
     ctx->tokens = node;
 }
 

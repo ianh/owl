@@ -205,6 +205,7 @@ struct parsed_string {
     bool empty;
     const char *string;
     size_t length;
+    bool has_escapes;
 };
 
 struct parsed_grammar parsed_grammar_get(struct bluebird_tree *, parsed_id);
@@ -305,6 +306,7 @@ struct bluebird_tree {
     struct {
         const char *string;
         size_t length;
+        bool has_escapes;
         struct source_range range;
     } *string_tokens;
     size_t number_of_string_tokens;
@@ -340,7 +342,7 @@ static void add_number_token(struct bluebird_tree *tree, size_t start, size_t en
     tree->number_tokens[index].range.end = end;
     tree->number_tokens[index].number = number_param;
 }
-static void add_string_token(struct bluebird_tree *tree, size_t start, size_t end, const char *string_param, size_t length_param) {
+static void add_string_token(struct bluebird_tree *tree, size_t start, size_t end, const char *string_param, size_t length_param, bool has_escapes_param) {
     size_t index = tree->number_of_string_tokens++;
     if (tree->number_of_string_tokens > tree->string_tokens_capacity) {
         size_t capacity = (tree->string_tokens_capacity + 1) * 3 / 2;
@@ -354,6 +356,7 @@ static void add_string_token(struct bluebird_tree *tree, size_t start, size_t en
     tree->string_tokens[index].range.end = end;
     tree->string_tokens[index].string = string_param;
     tree->string_tokens[index].length = length_param;
+    tree->string_tokens[index].has_escapes = has_escapes_param;
 }
 // Reserve 10 bytes for each entry (the maximum encoded size of a 64-bit value).
 #define RESERVATION_AMOUNT 10
@@ -574,6 +577,7 @@ struct parsed_string parsed_string_get(struct bluebird_tree *tree, parsed_id id)
         ._next = next,
         .string = tree->string_tokens[token_index].string,
         .length = tree->string_tokens[token_index].length,
+        .has_escapes = tree->string_tokens[token_index].has_escapes,
         .range = tree->string_tokens[token_index].range,
     };
 }
@@ -997,24 +1001,9 @@ static void write_number_token(size_t offset, size_t length, double number, void
     struct bluebird_tree *tree = info;
     add_number_token(tree, offset, offset + length, number);
 }
-static void write_string_token(size_t offset, size_t length, size_t content_offset, size_t content_length, void *info) {
+static void write_string_token(size_t offset, size_t length, const char *string, size_t string_length, bool has_escapes, void *info) {
     struct bluebird_tree *tree = info;
-    // Apply escape sequences.
-    size_t escaped_length = content_length;
-    for (size_t i = 0; i < content_length; ++i) {
-        if (tree->string[content_offset + i] == '\\') {
-            escaped_length--;
-            i++;
-        }
-    }
-    char *escaped = malloc(escaped_length);
-    size_t j = 0;
-    for (size_t i = 0; i < content_length; ++i) {
-        if (tree->string[content_offset + i] == '\\')
-            i++;
-        escaped[j++] = tree->string[content_offset + i];
-    }
-    add_string_token(tree, offset, offset + length, escaped, escaped_length);
+    add_string_token(tree, offset, offset + length, string, string_length, has_escapes);
 }
 struct bluebird_token_run {
     struct bluebird_token_run *prev;
@@ -1110,6 +1099,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
         bool is_token = false;
         bool end_token = false;
         bool comment = false;
+        bool has_escapes = false;
         size_t token_length = read_keyword_token(&token, &end_token, text + offset, tokenizer->info);
         if (token_length > 0) {
             is_token = true;
@@ -1140,6 +1130,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
                     break;
                 }
                 if (text[string_offset] == '\\') {
+                    has_escapes = true;
                     string_offset++;
                     if (text[string_offset] == '\0') break;
                 }
@@ -1179,7 +1170,30 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
             write_number_token(offset, token_length, number, tokenizer->info);
         }
         else if (token == 23) {
-            write_string_token(offset, token_length, offset + 1, token_length - 2, tokenizer->info);
+            size_t content_offset = offset + 1;
+            size_t content_length = token_length - 2;
+            const char *string = text + content_offset;
+            size_t string_length = content_length;
+            if (has_escapes) {
+                for (size_t i = 0;
+                i < content_length;
+                ++i) {
+                    if (text[content_offset + i] == '\\') {
+                        string_length--;
+                        i++;
+                    }
+                }
+                char *unescaped = malloc(string_length);
+                size_t j = 0;
+                for (size_t i = 0;
+                i < content_length;
+                ++i) {
+                    if (text[content_offset + i] == '\\') i++;
+                    unescaped[j++] = text[content_offset + i];
+                }
+                string = unescaped;
+            }
+            write_string_token(offset, token_length, string, string_length, has_escapes, tokenizer->info);
         }
         run->tokens[number_of_tokens] = token;
         whitespace = 0;
@@ -1641,8 +1655,10 @@ void bluebird_tree_destroy(struct bluebird_tree *tree) {
     free(tree->parse_tree);
     free(tree->identifier_tokens);
     free(tree->number_tokens);
-    for (uint32_t i = 0; i < tree->number_of_string_tokens; ++i)
-        free((void *)tree->string_tokens[i].string);
+    for (uint32_t i = 0; i < tree->number_of_string_tokens; ++i) {
+        if (tree->string_tokens[i].has_escapes)
+            free((void *)tree->string_tokens[i].string);
+    }
     free(tree->string_tokens);
     free(tree);
 }

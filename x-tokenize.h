@@ -183,6 +183,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
         bool is_token = false;
         bool end_token = false;
         bool comment = false;
+        bool has_escapes = false;
         size_t token_length = READ_KEYWORD_TOKEN(&token, &end_token,
          text + offset, tokenizer->info);
         if (token_length > 0) {
@@ -217,7 +218,7 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
                     break;
                 }
                 if (text[string_offset] == '\\') {
-                    // TODO: Escapes.
+                    has_escapes = true;
                     string_offset++;
                     if (text[string_offset] == '\0')
                         break;
@@ -261,8 +262,29 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
         } else if (token == NUMBER_TOKEN) {
             WRITE_NUMBER_TOKEN(offset, token_length, number, tokenizer->info);
         } else if (token == STRING_TOKEN) {
-            WRITE_STRING_TOKEN(offset, token_length, offset + 1,
-             token_length - 2, tokenizer->info);
+            size_t content_offset = offset + 1;
+            size_t content_length = token_length - 2;
+            const char *string = text + content_offset;
+            size_t string_length = content_length;
+            if (has_escapes) {
+                // Apply escape sequences.
+                for (size_t i = 0; i < content_length; ++i) {
+                    if (text[content_offset + i] == '\\') {
+                        string_length--;
+                        i++;
+                    }
+                }
+                char *unescaped = malloc(string_length);
+                size_t j = 0;
+                for (size_t i = 0; i < content_length; ++i) {
+                    if (text[content_offset + i] == '\\')
+                        i++;
+                    unescaped[j++] = text[content_offset + i];
+                }
+                string = unescaped;
+            }
+            WRITE_STRING_TOKEN(offset, token_length, string, string_length,
+             has_escapes, tokenizer->info);
         }
         run->tokens[number_of_tokens] = token;
         whitespace = 0;

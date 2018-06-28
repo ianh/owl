@@ -728,8 +728,10 @@ void generate(struct generator *gen)
     output_line(out, "    free(tree->parse_tree);");
     output_line(out, "    free(tree->identifier_tokens);");
     output_line(out, "    free(tree->number_tokens);");
-    output_line(out, "    for (uint32_t i = 0; i < tree->number_of_string_tokens; ++i)");
-    output_line(out, "        free((void *)tree->string_tokens[i].string);");
+    output_line(out, "    for (uint32_t i = 0; i < tree->number_of_string_tokens; ++i) {");
+    output_line(out, "        if (tree->string_tokens[i].has_escapes)");
+    output_line(out, "            free((void *)tree->string_tokens[i].string);");
+    output_line(out, "    }");
     output_line(out, "    free(tree->string_tokens);");
     output_line(out, "    free(tree);");
     output_line(out, "}");
@@ -877,6 +879,9 @@ static void generate_fields_for_token_rule(struct generator_output *out,
         output_string(out, string);
         set_literal_substitution(out, "type", "size_t ");
         set_literal_substitution(out, "field", "length");
+        output_string(out, string);
+        set_literal_substitution(out, "type", "bool ");
+        set_literal_substitution(out, "field", "has_escapes");
         output_string(out, string);
     } else
         abort();
