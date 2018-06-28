@@ -32,10 +32,13 @@ static inline void bitset_add(struct bitset *set, uint32_t element)
 struct bitset bitset_create_empty(uint32_t number_of_elements);
 void bitset_clear(struct bitset *set);
 void bitset_destroy(struct bitset *set);
+void bitset_complement(struct bitset *set);
 void bitset_union(struct bitset *set, struct bitset *other);
 bool bitset_intersects(struct bitset *set, struct bitset *other);
 // Like `union`, but returns true if any new elements were added.
 bool bitset_union_added(struct bitset *set, struct bitset *other);
+bool bitset_is_empty(struct bitset *set);
+bool bitset_is_full(struct bitset *set);
 int bitset_compare(struct bitset *a, struct bitset *b);
 
 #endif

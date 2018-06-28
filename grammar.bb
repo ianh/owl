@@ -17,7 +17,7 @@ assoc =
   'right' : right-op
   'nonassoc' : nonassoc-op
 expr =
-  identifier ('@' identifier@rename)? : ident
+  identifier ('\\' ':' identifier@exception)* ('@' identifier@rename)? : ident
   string : literal
   [ '(' expr ')' ] : parens
   [ '[' string@begin-token expr? string@end-token ']' ] : bracketed

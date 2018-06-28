@@ -97,30 +97,18 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
     add_token_rule(&context, "number", strlen("number"));
     add_token_rule(&context, "string", strlen("string"));
 
-    // Now fill in the rules according to the contents of each parsed rule.
+    // Now we fill in the choices for each rule.  We need to do this in a
+    // separate pass in case there are "exception" specifiers which exclude
+    // certain choices.
+    uint32_t rule_index = 0;
     for (parsed_rule = parsed_rule_get(tree, g.rule); !parsed_rule.empty;
-     parsed_rule = parsed_rule_next(parsed_rule)) {
-        struct parsed_identifier name =
-         parsed_identifier_get(tree, parsed_rule.identifier);
-
-        // Look up rules by name (instead of just counting up by index) because
-        // it's less likely to break in a confusing way.
-        uint32_t rule_index = find_rule(&context, name.identifier, name.length);
-        if (rule_index == UINT32_MAX)
-            abort();
+     parsed_rule = parsed_rule_next(parsed_rule), rule_index++) {
+        assert(rule_index < grammar->number_of_rules);
         struct rule *rule = &grammar->rules[rule_index];
-
-        // Store the rule index in our context object so we don't have to pass
-        // it around everywhere while we're building the rule's automata.
-        context.rule_index = rule_index;
-        context.next_symbol = 0;
-
         struct parsed_body body = parsed_body_get(tree, parsed_rule.body);
         if (!body.identifier) {
-            // This is a simple rule with no choices.  Create the automaton
-            // directly.
-            struct parsed_expr expr = parsed_expr_get(tree, body.expr);
-            build_body_automaton(&context, &rule->automaton, &expr);
+            // This is a simple rule with no choices -- there's nothing we need
+            // to do here.
             continue;
         }
 
@@ -146,7 +134,6 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             choice->name_length = choice_identifier.length;
             choice->name_range = choice_identifier.range;
             choice->expr_range = expr.range;
-            build_body_automaton(&context, &choice->automaton, &expr);
             expr = parsed_expr_next(expr);
             choice_identifier = parsed_identifier_next(choice_identifier);
         }
@@ -211,13 +198,60 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 operator->fixity = rule_fixity;
                 operator->associativity = rule_associativity;
                 operator->precedence = precedence;
-                build_body_automaton(&context, &operator->automaton,
-                 &op_expr);
                 op = parsed_operator_next(op);
             }
             // Each new 'operators' section has a lower precedence than the
             // previous one.
             precedence--;
+            ops = parsed_operators_next(ops);
+        }
+    }
+
+    // Now fill in the automata according to the contents of each parsed rule.
+    rule_index = 0;
+    for (parsed_rule = parsed_rule_get(tree, g.rule); !parsed_rule.empty;
+     parsed_rule = parsed_rule_next(parsed_rule), rule_index++) {
+        struct rule *rule = &grammar->rules[rule_index];
+
+        // Store the rule index in our context object so we don't have to pass
+        // it around everywhere while we're building the rule's automata.
+        context.rule_index = rule_index;
+        context.next_symbol = 0;
+
+        struct parsed_body body = parsed_body_get(tree, parsed_rule.body);
+        if (!body.identifier) {
+            // This is a simple rule with no choices.  Create the automaton
+            // directly.
+            struct parsed_expr expr = parsed_expr_get(tree, body.expr);
+            build_body_automaton(&context, &rule->automaton, &expr);
+            continue;
+        }
+
+        // This rule has multiple choices.  Add them to the rule as choice
+        // structs.
+        struct parsed_expr expr = parsed_expr_get(tree, body.expr);
+        struct parsed_identifier choice_identifier;
+        choice_identifier = parsed_identifier_get(tree, body.identifier);
+        uint32_t choice_index = 0;
+        while (!expr.empty) {
+            struct choice *choice = &rule->choices[choice_index++];
+            build_body_automaton(&context, &choice->automaton, &expr);
+            expr = parsed_expr_next(expr);
+            choice_identifier = parsed_identifier_next(choice_identifier);
+        }
+
+        // Create operator structs from each operator.
+        struct parsed_operators ops
+         = parsed_operators_get(tree, body.operators);
+        while (!ops.empty) {
+            struct parsed_operator op = parsed_operator_get(tree, ops.operator);
+            while (!op.empty) {
+                struct parsed_expr op_expr = parsed_expr_get(tree, op.expr);
+                struct choice *operator = &rule->choices[choice_index++];
+                build_body_automaton(&context, &operator->automaton,
+                 &op_expr);
+                op = parsed_operator_next(op);
+            }
             ops = parsed_operators_next(ops);
         }
 
@@ -353,6 +387,7 @@ static void build_body_expression(struct context *ctx,
             error.ranges[0] = ident.range;
             exit_with_error();
         }
+        struct rule *referent = &ctx->grammar->rules[rule_index];
         if (ctx->bracket_nesting == 0 && rule_index <= ctx->rule_index) {
             if (rule_index == ctx->rule_index) {
                 errorf("outside of guard brackets [ ], the rule '%.*s' cannot "
@@ -362,14 +397,54 @@ static void build_body_expression(struct context *ctx,
                  "refer to the earlier rule '%.*s'", (int)rule->name_length,
                  rule->name, (int)rule_name_length, rule_name);
             }
-            error.ranges[0] = ctx->grammar->rules[rule_index].name_range;
+            error.ranges[0] = referent->name_range;
             error.ranges[1] = ident.range;
             exit_with_error();
         }
         uint32_t slot_index = add_slot(ctx, rule, slot_name, slot_name_length,
          rule_index, expr->range, "could refer to two different rules");
+
+        // Collect exceptions (if applicable) and find the proper choice set.
+        struct bitset choices =
+         bitset_create_empty(referent->number_of_choices);
+        struct parsed_identifier exception =
+         parsed_identifier_get(tree, expr->exception);
+        while (!exception.empty) {
+            bool found = false;
+            for (uint32_t i = 0; i < referent->number_of_choices; ++i) {
+                if (exception.length == referent->choices[i].name_length &&
+                 !memcmp(exception.identifier, referent->choices[i].name,
+                 exception.length)) {
+                     bitset_add(&choices, i);
+                     found = true;
+                     break;
+                }
+            }
+            if (!found) {
+                error.ranges[0] = exception.range;
+                exit_with_errorf("'%.*s' is not the name of a choice clause "
+                 "for '%.*s'", (int)exception.length, exception.identifier,
+                 (int)referent->name_length, referent->name);
+            }
+            exception = parsed_identifier_next(exception);
+        }
+        bitset_complement(&choices);
+        struct slot *slot = &rule->slots[slot_index];
+        uint32_t i = 0;
+        for (; i < slot->number_of_choice_sets; ++i) {
+            if (bitset_compare(&choices, &slot->choice_sets[i].choices) == 0)
+                break;
+        }
+        if (i >= slot->number_of_choice_sets) {
+            slot->number_of_choice_sets = i + 1;
+            slot->choice_sets = grow_array(slot->choice_sets,
+             &slot->choice_sets_allocated_bytes,
+             slot->number_of_choice_sets * sizeof(struct slot_choice_set));
+            slot->choice_sets[i].choices = bitset_move(&choices);
+            slot->choice_sets[i].symbol = ctx->next_symbol++;
+        }
         automaton_add_transition(automaton, b.entry, b.exit,
-         rule->slots[slot_index].symbol);
+         rule->slots[slot_index].choice_sets[i].symbol);
         break;
     }
     case PARSED_LITERAL: {
@@ -497,11 +572,18 @@ static uint32_t add_slot(struct context *ctx, struct rule *rule,
         rule->slots = grow_array(rule->slots, &rule->slots_allocated_bytes,
          rule->number_of_slots * sizeof(struct slot));
         struct slot *slot = &rule->slots[slot_index];
-        slot->symbol = symbol;
         slot->name = slot_name;
         slot->name_length = slot_name_length;
         slot->rule_index = referenced_rule_index;
         slot->range = range;
+        slot->number_of_choice_sets = 1;
+        slot->choice_sets = grow_array(slot->choice_sets,
+         &slot->choice_sets_allocated_bytes,
+         slot->number_of_choice_sets * sizeof(struct slot_choice_set));
+        slot->choice_sets[0].symbol = symbol;
+        slot->choice_sets[0].choices = bitset_create_empty(ctx->grammar->
+         rules[referenced_rule_index].number_of_choices);
+        bitset_complement(&slot->choice_sets[0].choices);
     }
     return slot_index;
 }

@@ -22,6 +22,7 @@ static void equalize_number_of_symbols(struct automaton *a,
 // Returns the start state of the embedded automaton.
 static state_id embed(struct automaton *into, struct automaton *from,
  state_id out_state, symbol_id out_symbol, uint16_t out_action);
+static void remove_choice_actions(struct automaton *a, struct bitset *choices);
 
 void combine(struct combined_grammar *result, struct grammar *grammar)
 {
@@ -337,32 +338,43 @@ static void substitute_slots(struct grammar *grammar, struct rule *rule,
                 continue;
             for (uint32_t k = 0; k < rule->number_of_slots; ++k) {
                 struct slot *slot = &rule->slots[k];
-                if (slot->symbol != symbol)
-                    continue;
-                if (slot->rule_index < min_rule_index)
-                    abort();
-                struct rule *slot_rule = &grammar->rules[slot->rule_index];
-                uint16_t begin_action = 0;
-                uint16_t end_action = 0;
-                if (slot_rule->is_token)
-                    end_action = CONSTRUCT_ACTION(ACTION_TOKEN_SLOT, k);
-                else if (slot_rule->first_operator_choice <
-                 slot_rule->number_of_choices) {
-                    begin_action =
-                     CONSTRUCT_ACTION(ACTION_BEGIN_EXPRESSION_SLOT, 0);
-                    end_action =
-                     CONSTRUCT_ACTION(ACTION_END_EXPRESSION_SLOT, k);
-                } else {
-                    begin_action = CONSTRUCT_ACTION(ACTION_BEGIN_SLOT, 0);
-                    end_action = CONSTRUCT_ACTION(ACTION_END_SLOT, k);
+                for (uint32_t l = 0; l < slot->number_of_choice_sets; ++l) {
+                    if (slot->choice_sets[l].symbol != symbol)
+                        continue;
+                    if (slot->rule_index < min_rule_index)
+                        abort();
+                    struct rule *slot_rule = &grammar->rules[slot->rule_index];
+                    uint16_t begin_action = 0;
+                    uint16_t end_action = 0;
+                    if (slot_rule->is_token)
+                        end_action = CONSTRUCT_ACTION(ACTION_TOKEN_SLOT, k);
+                    else if (slot_rule->first_operator_choice <
+                     slot_rule->number_of_choices) {
+                        begin_action =
+                         CONSTRUCT_ACTION(ACTION_BEGIN_EXPRESSION_SLOT, 0);
+                        end_action =
+                         CONSTRUCT_ACTION(ACTION_END_EXPRESSION_SLOT, k);
+                    } else {
+                        begin_action = CONSTRUCT_ACTION(ACTION_BEGIN_SLOT, 0);
+                        end_action = CONSTRUCT_ACTION(ACTION_END_SLOT, k);
+                    }
+                    struct automaton *r = &automaton_for_rule[slot->rule_index];
+                    struct automaton choice_removed = {0};
+                    if (!bitset_is_full(&slot->choice_sets[l].choices)) {
+                        automaton_copy(r, &choice_removed);
+                        remove_choice_actions(&choice_removed,
+                         &slot->choice_sets[l].choices);
+                        r = &choice_removed;
+                    }
+                    state_id start = embed(a, r,
+                     a->states[i].transitions[j].target, SYMBOL_EPSILON,
+                     end_action);
+                    a->states[i].transitions[j].symbol = SYMBOL_EPSILON;
+                    a->states[i].transitions[j].action = begin_action;
+                    a->states[i].transitions[j].target = start;
+                    automaton_destroy(&choice_removed);
+                    break;
                 }
-                state_id start = embed(a, &automaton_for_rule[slot->rule_index],
-                 a->states[i].transitions[j].target, SYMBOL_EPSILON,
-                 end_action);
-                a->states[i].transitions[j].symbol = SYMBOL_EPSILON;
-                a->states[i].transitions[j].action = begin_action;
-                a->states[i].transitions[j].target = start;
-                break;
             }
         }
     }
@@ -431,4 +443,28 @@ static state_id embed(struct automaton *into, struct automaton *from,
         }
     }
     return from->start_state + n;
+}
+
+static void remove_choice_actions(struct automaton *a, struct bitset *choices)
+{
+    for (state_id i = 0; i < a->number_of_states; ++i) {
+        struct state s = a->states[i];
+        for (uint32_t j = 0; j < s.number_of_transitions; ++j) {
+            // These are the actions which embody a choice.
+            switch (CONSTRUCT_ACTION_GET_TYPE(s.transitions[j].action)) {
+            case ACTION_SET_SLOT_CHOICE:
+            case ACTION_END_OPERAND:
+            case ACTION_END_OPERATOR:
+                break;
+            default:
+                continue;
+            }
+            if (!bitset_contains(choices,
+             CONSTRUCT_ACTION_GET_CHOICE(s.transitions[j].action))) {
+                // Remove this transition by making it a self-transition.
+                s.transitions[j].action = 0;
+                s.transitions[j].target = i;
+            }
+        }
+    }
 }

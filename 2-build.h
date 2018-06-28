@@ -3,6 +3,7 @@
 
 #include "1-parse.h"
 #include "automaton.h"
+#include "bitset.h"
 #include "error.h"
 
 // STEP 2 - BUILD
@@ -147,6 +148,14 @@ struct choice {
     struct source_range expr_range;
 };
 
+struct slot_choice_set {
+    // The symbol representing this choice set.  It can appear in any automaton
+    // in the containing rule -- we'll substitute out these symbols in step 3.
+    symbol_id symbol;
+
+    // The choices allowed in this set.
+    struct bitset choices;
+};
 struct slot {
     // Unless you use the '@' operator to rename it, a slot will have the same
     // name as the rule it refers to. The string itself is a reference to the
@@ -154,9 +163,11 @@ struct slot {
     const char *name;
     size_t name_length;
 
-    // The symbol representing this slot.  It can appear in any automaton in the
-    // containing rule -- we'll substitute out these symbols in step 3.
-    symbol_id symbol;
+    // Excluding choices with the '\' operator creates different choice sets.
+    // Each one is substituted separately using its own symbol.
+    struct slot_choice_set *choice_sets;
+    uint32_t choice_sets_allocated_bytes;
+    uint32_t number_of_choice_sets;
 
     // The rule this slot refers to.
     uint32_t rule_index;
