@@ -1219,6 +1219,21 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
     *previous_run = run;
     return true;
 }
+static void find_token_range(struct bluebird_default_tokenizer *tokenizer, struct bluebird_token_run *run, uint16_t index, size_t *start, size_t *end) {
+    size_t offset = tokenizer->offset - tokenizer->whitespace;
+    size_t last_offset = offset;
+    size_t len = 0;
+    uint16_t length_offset = run->lengths_size - 1;
+    for (uint16_t j = index;
+    j < run->number_of_tokens;
+    ++j) {
+        if (run->tokens[j] == 4294967295U) continue;
+        last_offset = offset;
+        len = decode_token_length(run, &length_offset, &offset);
+    }
+    *start = last_offset - len;
+    *end = last_offset;
+}
 static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context);
 static void fixity_associativity_precedence_lookup(int *fixity_associativity, int *precedence, uint32_t rule, uint32_t choice, void *context);
 static size_t number_of_slots_lookup(uint32_t rule, void *context);
@@ -1545,7 +1560,7 @@ struct fill_run_continuation {
     uint32_t depth;
     uint32_t capacity;
 };
-static bool fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);
+static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t *failing_index);
 static parsed_id build_parse_tree(struct bluebird_default_tokenizer *, struct bluebird_token_run *, struct bluebird_tree *);
 
 static struct bluebird_tree *bluebird_tree_create_empty(void) {
@@ -1567,11 +1582,12 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
     };
     c.stack = calloc(c.capacity, sizeof(struct fill_run_state));
     c.stack[0].state = 0;
+    uint16_t failing_index = 0;
     while (bluebird_default_tokenizer_advance(&tokenizer, &token_run)) {
-        if (!fill_run_states(token_run, &c)) {
+        if (!fill_run_states(token_run, &c, &failing_index)) {
             free(c.stack);
             tree->error = ERROR_UNEXPECTED_TOKEN;
-            // TODO: range information
+            find_token_range(&tokenizer, token_run, failing_index, &tree->error_range.start, &tree->error_range.end);
             return tree;
         }
     }
@@ -1677,7 +1693,7 @@ static void grow_cont_stack(struct fill_run_continuation *cont) {
     cont->stack = new_states;
     cont->capacity = new_capacity;
 }
-static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont) {
+static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t *failing_index) {
     uint16_t token_index = 0;
     uint16_t number_of_tokens = run->number_of_tokens;
     struct fill_run_state top = cont->stack[cont->depth - 1];
@@ -1700,7 +1716,7 @@ state_0: {
         switch (token) {
         case 0: goto state_1;
         case 21: goto state_2;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -1716,7 +1732,7 @@ state_1: {
         token_index++;
         switch (token) {
         case 23: goto state_58;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -1732,7 +1748,7 @@ state_2: {
         token_index++;
         switch (token) {
         case 1: goto state_3;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -1909,7 +1925,7 @@ state_8: {
         token_index++;
         switch (token) {
         case 21: goto state_19;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -2087,7 +2103,7 @@ state_14: {
         token_index++;
         switch (token) {
         case 2: goto state_17;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -2103,7 +2119,7 @@ state_15: {
         token_index++;
         switch (token) {
         case 21: goto state_16;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -2152,7 +2168,7 @@ state_17: {
         token_index++;
         switch (token) {
         case 21: goto state_18;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -2234,7 +2250,7 @@ state_20: {
         case 4: goto state_35;
         case 5: goto state_36;
         case 6: goto state_37;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -2538,7 +2554,7 @@ state_30: {
         token_index++;
         switch (token) {
         case 2: goto state_33;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -2554,7 +2570,7 @@ state_31: {
         token_index++;
         switch (token) {
         case 21: goto state_32;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -2602,7 +2618,7 @@ state_33: {
         token_index++;
         switch (token) {
         case 21: goto state_34;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -2709,7 +2725,7 @@ state_37: {
         case 8: goto state_39;
         case 9: goto state_40;
         case 10: goto state_41;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -2963,7 +2979,7 @@ state_46: {
         token_index++;
         switch (token) {
         case 21: goto state_51;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -3166,7 +3182,7 @@ state_53: {
         token_index++;
         switch (token) {
         case 2: goto state_56;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -3182,7 +3198,7 @@ state_54: {
         token_index++;
         switch (token) {
         case 21: goto state_55;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -3230,7 +3246,7 @@ state_56: {
         token_index++;
         switch (token) {
         case 21: goto state_57;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -3281,7 +3297,7 @@ state_58: {
         switch (token) {
         case 0: goto state_1;
         case 21: goto state_2;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -3300,7 +3316,7 @@ state_59: {
         switch (token) {
         case 13: goto state_60;
         case 15: goto state_61;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -3347,7 +3363,7 @@ state_61: {
         token_index++;
         switch (token) {
         case 23: goto state_62;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -3735,7 +3751,7 @@ state_74: {
         token_index++;
         switch (token) {
         case 2: goto state_77;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -3753,7 +3769,7 @@ state_75: {
         token_index++;
         switch (token) {
         case 21: goto state_76;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -3804,7 +3820,7 @@ state_77: {
         token_index++;
         switch (token) {
         case 21: goto state_78;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -4137,7 +4153,7 @@ state_88: {
         token_index++;
         switch (token) {
         case 2: goto state_91;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -4155,7 +4171,7 @@ state_89: {
         token_index++;
         switch (token) {
         case 21: goto state_90;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -4207,7 +4223,7 @@ state_91: {
         token_index++;
         switch (token) {
         case 21: goto state_92;
-        default: break;
+        default: token_index--; break;
         }
         break;
     }
@@ -4248,6 +4264,7 @@ state_92: {
         break;
     }
     }
+    *failing_index = token_index;
     return false;
 }
 static const uint16_t actions[] = {
