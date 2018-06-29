@@ -564,24 +564,9 @@ void generate(struct generator *gen)
             output_line(out, "}");
             set_literal_substitution(out, "write-number-token", "write_number_token");
         } else if (rule_is_named(rule, "string")) {
-            output_line(out, "static void write_string_token(size_t offset, size_t length, size_t content_offset, size_t content_length, void *info) {");
+            output_line(out, "static void write_string_token(size_t offset, size_t length, const char *string, size_t string_length, bool has_escapes, void *info) {");
             output_line(out, "    struct bluebird_tree *tree = info;");
-            output_line(out, "    // Apply escape sequences.");
-            output_line(out, "    size_t escaped_length = content_length;");
-            output_line(out, "    for (size_t i = 0; i < content_length; ++i) {");
-            output_line(out, "        if (tree->string[content_offset + i] == '\\\\') {");
-            output_line(out, "            escaped_length--;");
-            output_line(out, "            i++;");
-            output_line(out, "        }");
-            output_line(out, "    }");
-            output_line(out, "    char *escaped = malloc(escaped_length);");
-            output_line(out, "    size_t j = 0;");
-            output_line(out, "    for (size_t i = 0; i < content_length; ++i) {");
-            output_line(out, "        if (tree->string[content_offset + i] == '\\\\')");
-            output_line(out, "            i++;");
-            output_line(out, "        escaped[j++] = tree->string[content_offset + i];");
-            output_line(out, "    }");
-            output_line(out, "    add_string_token(tree, offset, offset + length, escaped, escaped_length);");
+            output_line(out, "    add_string_token(tree, offset, offset + length, string, string_length, has_escapes);");
             output_line(out, "}");
             set_literal_substitution(out, "write-string-token", "write_string_token");
         }
