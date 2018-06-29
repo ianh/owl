@@ -714,19 +714,8 @@ static void fill_run_states(struct interpret_context *ctx,
             continue;
 unexpected_token:
         {
-            // TODO: move this to x-tokenize so we can share it
-            size_t offset = ctx->tokenizer->offset - ctx->tokenizer->whitespace;
-            size_t last_offset = offset;
-            size_t len = 0;
-            uint16_t length_offset = run->lengths_size - 1;
-            for (uint32_t j = i; j < run->number_of_tokens; ++j) {
-                if (run->tokens[j] >= ctx->combined->number_of_tokens)
-                    continue;
-                last_offset = offset;
-                len = decode_token_length(run, &length_offset, &offset);
-            }
-            error.ranges[0].start = last_offset - len;
-            error.ranges[0].end = last_offset;
+            find_token_range(ctx->tokenizer, run, i, &error.ranges[0].start,
+             &error.ranges[0].end);
             for (uint32_t j = 0; j < ctx->combined->number_of_tokens; ++j) {
                 struct token token = ctx->combined->tokens[j];
                 if (token.symbol != symbol)

@@ -604,7 +604,7 @@ void generate(struct generator *gen)
     output_line(out, "    uint32_t depth;");
     output_line(out, "    uint32_t capacity;");
     output_line(out, "};");
-    output_line(out, "static bool fill_run_states(struct bluebird_token_run *, struct fill_run_continuation *);");
+    output_line(out, "static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t *failing_index);");
     output_line(out, "static parsed_id build_parse_tree(struct bluebird_default_tokenizer *, struct bluebird_token_run *, struct bluebird_tree *);");
     output_line(out, "");
     output_line(out, "static struct bluebird_tree *bluebird_tree_create_empty(void) {");
@@ -626,12 +626,14 @@ void generate(struct generator *gen)
     output_line(out, "    };");
     output_line(out, "    c.stack = calloc(c.capacity, sizeof(struct fill_run_state));");
     output_line(out, "    c.stack[0].state = %%start-state;");
+    output_line(out, "    uint16_t failing_index = 0;");
     output_line(out, "    while (bluebird_default_tokenizer_advance(&tokenizer, &token_run)) {");
-    output_line(out, "        if (!fill_run_states(token_run, &c)) {");
+    output_line(out, "        if (!fill_run_states(token_run, &c, &failing_index)) {");
     // TODO: test leaks in error cases
     // TODO: free the rest of the runs
     output_line(out, "            free(c.stack);");
     output_line(out, "            tree->error = ERROR_UNEXPECTED_TOKEN;");
+    output_line(out, "            find_token_range(&tokenizer, token_run, failing_index, &tree->error_range.start, &tree->error_range.end);");
     output_line(out, "            return tree;");
     output_line(out, "        }");
     output_line(out, "    }");
@@ -743,7 +745,7 @@ void generate(struct generator *gen)
     struct automaton *b = &gen->deterministic->bracket_automaton;
     set_unsigned_number_substitution(out, "first-bracket-state-id",
      a->number_of_states);
-    output_line(out, "static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont) {");
+    output_line(out, "static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t *failing_index) {");
     output_line(out, "    uint16_t token_index = 0;");
     output_line(out, "    uint16_t number_of_tokens = run->number_of_tokens;");
     output_line(out, "    struct fill_run_state top = cont->stack[cont->depth - 1];");
@@ -756,6 +758,7 @@ void generate(struct generator *gen)
     generate_automaton(gen, out, a, 0, NORMAL_AUTOMATON);
     generate_automaton(gen, out, b, a->number_of_states, BRACKET_AUTOMATON);
     output_line(out, "    }");
+    output_line(out, "    *failing_index = token_index;");
     output_line(out, "    return false;");
     output_line(out, "}");
     generate_action_table(gen, out);
@@ -1103,7 +1106,7 @@ static void generate_automaton(struct generator *gen,
             output_line(out, "            token_index--;");
             output_line(out, "            goto state_%%first-bracket-state-id;");
         } else
-            output_line(out, " break;");
+            output_line(out, " token_index--; break;");
         bitset_destroy(&reachability_mask);
         output_line(out, "        }");
         output_line(out, "        break;");

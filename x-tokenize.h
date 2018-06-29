@@ -309,4 +309,22 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
     return true;
 }
 
+// Here, 'run' must be the most recent run produced by the tokenizer.
+static void find_token_range(struct bluebird_default_tokenizer *tokenizer,
+ struct bluebird_token_run *run, uint16_t index, size_t *start, size_t *end)
+{
+    size_t offset = tokenizer->offset - tokenizer->whitespace;
+    size_t last_offset = offset;
+    size_t len = 0;
+    uint16_t length_offset = run->lengths_size - 1;
+    for (uint16_t j = index; j < run->number_of_tokens; ++j) {
+        if (run->tokens[j] == BRACKET_TRANSITION_TOKEN)
+            continue;
+        last_offset = offset;
+        len = decode_token_length(run, &length_offset, &offset);
+    }
+    *start = last_offset - len;
+    *end = last_offset;
+}
+
 )
