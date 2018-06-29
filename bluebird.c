@@ -157,10 +157,13 @@ int main(int argc, char *argv[])
     }
     error_in_string = grammar_string;
 
+    int output_fileno = -1;
     if (output_filename)
         output_file = fopen_or_error(output_filename, "w");
-    else
+    else {
         output_file = stdout;
+        output_fileno = STDOUT_FILENO;
+    }
 
     // This is the part where things actually happen.
     struct bluebird_tree *tree;
@@ -231,7 +234,7 @@ int main(int argc, char *argv[])
             .grammar = &grammar,
             .combined = &combined,
             .deterministic = &deterministic,
-            .terminal_info = get_terminal_info(fileno(output_file),
+            .terminal_info = get_terminal_info(output_fileno,
              color_output),
         };
         error_in_string = input_string;
@@ -381,7 +384,7 @@ static struct terminal_info get_terminal_info(int fileno, bool force_color)
 
 static long terminal_columns(int fileno)
 {
-    if (!isatty(fileno))
+    if (fileno < 0 || !isatty(fileno))
         return -1;
 #ifdef TIOCGWINSZ
     struct winsize winsize = {0};
@@ -400,7 +403,7 @@ static long terminal_columns(int fileno)
 
 static int terminal_colors(int fileno)
 {
-    if (!isatty(fileno))
+    if (fileno < 0 || !isatty(fileno))
         return 1;
     // Try some different names that "ncurses" goes by on various platforms.
     // Each name is annotated with the platform it was added to support.
