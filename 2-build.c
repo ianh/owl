@@ -442,7 +442,8 @@ static void build_body_expression(struct context *ctx,
              slot->number_of_choice_sets * sizeof(struct slot_choice_set));
             slot->choice_sets[i].choices = bitset_move(&choices);
             slot->choice_sets[i].symbol = ctx->next_symbol++;
-        }
+        } else
+            bitset_destroy(&choices);
         automaton_add_transition(automaton, b.entry, b.exit,
          rule->slots[slot_index].choice_sets[i].symbol);
         break;
@@ -706,6 +707,11 @@ void grammar_destroy(struct grammar *grammar)
         for (uint32_t j = 0; j < r.number_of_brackets; ++j)
             automaton_destroy(&r.brackets[j].automaton);
         free(r.brackets);
+        for (uint32_t j = 0; j < r.number_of_slots; ++j) {
+            for (uint32_t k = 0; k < r.slots[j].number_of_choice_sets; ++k)
+                bitset_destroy(&r.slots[j].choice_sets[k].choices);
+            free(r.slots[j].choice_sets);
+        }
         free(r.slots);
         free(r.keyword_tokens);
         automaton_destroy(&r.automaton);
