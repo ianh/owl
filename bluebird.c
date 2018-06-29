@@ -32,6 +32,7 @@
 // - write a blog post or something about how the old parser worked?
 
 static FILE *output_file = 0;
+static struct terminal_info get_terminal_info(int fileno, bool force_color);
 static long terminal_columns(int fileno);
 static int terminal_colors(int fileno);
 static FILE *fopen_or_error(const char *filename, const char *mode);
@@ -159,47 +160,10 @@ int main(int argc, char *argv[])
     }
     error_in_string = grammar_string;
 
-    struct terminal_info terminal_info = { .columns = 80 };
     if (output_filename)
         output_file = fopen_or_error(output_filename, "w");
-    else {
+    else
         output_file = stdout;
-        terminal_info.columns = terminal_columns(STDOUT_FILENO);
-        if (terminal_info.columns <= 0)
-            terminal_info.columns = 80;
-        if (!color_output) {
-            int colors = terminal_colors(STDOUT_FILENO);
-            if (colors >= 256)
-                color_output = true;
-            else if (colors >= 8) {
-                terminal_info.reset = "\033[0m";
-                terminal_info.line_indicator = "\033[90m";
-                terminal_info.row_colors = (const char *[]){
-                    "\033[31m",
-                    "\033[32m",
-                    "\033[33m",
-                    "\033[34m",
-                    "\033[35m",
-                    "\033[36m",
-                };
-                terminal_info.number_of_row_colors = 6;
-            }
-        }
-    }
-    if (color_output) {
-        // Enable 256-color output if the terminal supports it, or if it's been
-        // specified as a parameter.
-        terminal_info.reset = "\033[0m";
-        terminal_info.line_indicator = "\033[90m";
-        terminal_info.row_colors = (const char *[]){
-            "\033[38;5;168m",
-            "\033[38;5;113m",
-            "\033[38;5;68m",
-            "\033[38;5;214m",
-            "\033[38;5;97m",
-        };
-        terminal_info.number_of_row_colors = 5;
-    }
 
     // This is the part where things actually happen.
     struct bluebird_tree *tree;
@@ -239,7 +203,7 @@ int main(int argc, char *argv[])
         struct interpreter interpreter = {
             .grammar = &grammar,
             .combined = &combined,
-            .terminal_info = terminal_info,
+            .terminal_info = get_terminal_info(STDERR_FILENO, color_output),
         };
         output_ambiguity(&interpreter, &ambiguity, stderr);
         return 3;
@@ -266,7 +230,8 @@ int main(int argc, char *argv[])
             .grammar = &grammar,
             .combined = &combined,
             .deterministic = &deterministic,
-            .terminal_info = terminal_info,
+            .terminal_info = get_terminal_info(fileno(output_file),
+             color_output),
         };
         error_in_string = input_string;
         interpret(&interpreter, input_string, output_file);
@@ -375,8 +340,48 @@ static int compare_source_ranges(const void *aa, const void *bb)
     return 0;
 }
 
+static const char *colors_8[] = {
+    "\033[31m",
+    "\033[32m",
+    "\033[33m",
+    "\033[34m",
+    "\033[35m",
+    "\033[36m",
+};
+
+static const char *colors_256[] = {
+    "\033[38;5;168m",
+    "\033[38;5;113m",
+    "\033[38;5;68m",
+    "\033[38;5;214m",
+    "\033[38;5;97m",
+};
+
+static struct terminal_info get_terminal_info(int fileno, bool force_color)
+{
+    struct terminal_info info = {0};
+    info.columns = terminal_columns(fileno);
+    if (info.columns <= 0)
+        info.columns = 80;
+    int colors = terminal_colors(fileno);
+    if (colors >= 256 || force_color) {
+        info.reset = "\033[0m";
+        info.line_indicator = "\033[90m";
+        info.row_colors = colors_256;
+        info.number_of_row_colors = sizeof(colors_256) / sizeof(colors_256[0]);
+    } else if (colors >= 8) {
+        info.reset = "\033[0m";
+        info.line_indicator = "\033[90m";
+        info.row_colors = colors_8;
+        info.number_of_row_colors = sizeof(colors_8) / sizeof(colors_8[0]);
+    }
+    return info;
+}
+
 static long terminal_columns(int fileno)
 {
+    if (!isatty(fileno))
+        return -1;
 #ifdef TIOCGWINSZ
     struct winsize winsize = {0};
     if (!ioctl(fileno, TIOCGWINSZ, (char *)&winsize))
