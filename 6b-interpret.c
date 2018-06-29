@@ -454,7 +454,7 @@ static void fill_rows(struct interpret_context *ctx,
         append_string(&str, &len, &bytes, s->name, s->name_length);
     }
     ctx->document.rows[depth + 1].labels[j] = (struct label){
-        .text = str, // TODO: No leak!
+        .text = str,
         .length = len,
         .start = start,
         .end = location_cursor + *offset - 1,

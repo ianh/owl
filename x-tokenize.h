@@ -246,8 +246,6 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
             }
             continue;
         } else if (!is_token || token == 0xffffffff) {
-            // Error.
-            // TODO: Report the error in a better way?
             tokenizer->offset = offset;
             tokenizer->whitespace = whitespace;
             free(run);

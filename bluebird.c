@@ -15,13 +15,10 @@
 
 // TODO:
 // - error messages that include line/column/visuals
-// - string escape sequences
 // - clean up memory leaks
-// - get rid of RULE_LOOKUP?
 // - check if all the input is properly validated
 // - properly lay out / comment source files
 // - perf optimization?
-// - find a way to get rid of __builtin__memset_chk or whatever
 // - testing!
 //  - add code to generate random words in the grammar together with the
 //    expected parse tree and verify that they match when parsed
