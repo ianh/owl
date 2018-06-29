@@ -327,4 +327,26 @@ static void find_token_range(struct bluebird_default_tokenizer *tokenizer,
     *end = last_offset;
 }
 
+static void estimate_next_token_range(struct bluebird_default_tokenizer
+ *tokenizer, size_t *start, size_t *end)
+{
+    *start = tokenizer->offset;
+    size_t i = tokenizer->offset + 1;
+    while (tokenizer->text[i] != '\0' && !char_is_whitespace(tokenizer->text[i])
+     && !char_continues_identifier(tokenizer->text[i], tokenizer->info))
+        i++;
+    *end = i;
+}
+
+static void find_end_range(struct bluebird_default_tokenizer *tokenizer,
+ size_t *start, size_t *end)
+{
+    *start = tokenizer->offset - tokenizer->whitespace - 1;
+    *end = tokenizer->offset - tokenizer->whitespace;
+    if (*start > *end) {
+        *start = *end;
+        *end += 1;
+    }
+}
+
 )

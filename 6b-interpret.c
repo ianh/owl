@@ -531,25 +531,16 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
     while (bluebird_default_tokenizer_advance(&tokenizer, &token_run))
         fill_run_states(&context, token_run);
     if (text[tokenizer.offset] != '\0') {
-        // TODO: move this error range stuff into x-tokenize.h
-        error.ranges[0].start = tokenizer.offset;
-        size_t i = tokenizer.offset + 1;
-        while (text[i] != '\0' && !char_is_whitespace(text[i]) &&
-         !char_continues_identifier(text[i], &info))
-            i++;
-        error.ranges[0].end = i;
+        estimate_next_token_range(&tokenizer, &error.ranges[0].start,
+         &error.ranges[0].end);
         exit_with_errorf("the text '%.*s' doesn't match any token",
          (int)(error.ranges[0].end - error.ranges[0].start),
          text + error.ranges[0].start);
     }
     if (context.stack_depth != 1 ||
      !deterministic->automaton.states[context.stack[0].state].accepting) {
-        error.ranges[0].start = tokenizer.offset - tokenizer.whitespace - 1;
-        error.ranges[0].end = tokenizer.offset - tokenizer.whitespace;
-        if (error.ranges[0].start > error.ranges[0].end) {
-            error.ranges[0].start = error.ranges[0].end;
-            error.ranges[0].end++;
-        }
+        find_end_range(&tokenizer, &error.ranges[0].start,
+         &error.ranges[0].end);
         exit_with_errorf("expected more text after the last token");
     }
     push_action_offsets(&context, 0, 0);

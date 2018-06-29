@@ -1234,6 +1234,20 @@ static void find_token_range(struct bluebird_default_tokenizer *tokenizer, struc
     *start = last_offset - len;
     *end = last_offset;
 }
+static void estimate_next_token_range(struct bluebird_default_tokenizer *tokenizer, size_t *start, size_t *end) {
+    *start = tokenizer->offset;
+    size_t i = tokenizer->offset + 1;
+    while (tokenizer->text[i] != '\0' && !char_is_whitespace(tokenizer->text[i]) && !char_continues_identifier(tokenizer->text[i], tokenizer->info)) i++;
+    *end = i;
+}
+static void find_end_range(struct bluebird_default_tokenizer *tokenizer, size_t *start, size_t *end) {
+    *start = tokenizer->offset - tokenizer->whitespace - 1;
+    *end = tokenizer->offset - tokenizer->whitespace;
+    if (*start > *end) {
+        *start = *end;
+        *end += 1;
+    }
+}
 static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context);
 static void fixity_associativity_precedence_lookup(int *fixity_associativity, int *precedence, uint32_t rule, uint32_t choice, void *context);
 static size_t number_of_slots_lookup(uint32_t rule, void *context);
@@ -1595,12 +1609,7 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
     free(c.stack);
     if (string[tokenizer.offset] != '\0') {
         tree->error = ERROR_INVALID_TOKEN;
-        tree->error_range.start = tokenizer.offset;
-        tree->error_range.end = tokenizer.offset + 1;
-        while (string[tree->error_range.end] != '\0' &&
-         !char_is_whitespace(string[tree->error_range.end]) &&
-         !char_continues_identifier(string[tree->error_range.end], tree))
-            tree->error_range.end++;
+        estimate_next_token_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);
         return tree;
     }
     switch (final_state) {
@@ -1621,12 +1630,7 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
         break;
     default:
         tree->error = ERROR_MORE_INPUT_NEEDED;
-        tree->error_range.start = tokenizer.offset - tokenizer.whitespace - 1;
-        tree->error_range.end = tokenizer.offset - tokenizer.whitespace;
-        if (tree->error_range.start > tree->error_range.end) {
-            tree->error_range.start = tree->error_range.end;
-            tree->error_range.end++;
-        }
+        find_end_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);
         return tree;
     }
     tree->root_id = build_parse_tree(&tokenizer, token_run, tree);

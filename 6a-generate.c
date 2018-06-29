@@ -641,12 +641,7 @@ void generate(struct generator *gen)
     output_line(out, "    free(c.stack);");
     output_line(out, "    if (string[tokenizer.offset] != '\\0') {");
     output_line(out, "        tree->error = ERROR_INVALID_TOKEN;");
-    output_line(out, "        tree->error_range.start = tokenizer.offset;");
-    output_line(out, "        tree->error_range.end = tokenizer.offset + 1;");
-    output_line(out, "        while (string[tree->error_range.end] != '\\0' &&");
-    output_line(out, "         !char_is_whitespace(string[tree->error_range.end]) &&");
-    output_line(out, "         !char_continues_identifier(string[tree->error_range.end], tree))");
-    output_line(out, "            tree->error_range.end++;");
+    output_line(out, "        estimate_next_token_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);");
     output_line(out, "        return tree;");
     output_line(out, "    }");
     output_line(out, "    switch (final_state) {");
@@ -659,12 +654,7 @@ void generate(struct generator *gen)
     output_line(out, "        break;");
     output_line(out, "    default:");
     output_line(out, "        tree->error = ERROR_MORE_INPUT_NEEDED;");
-    output_line(out, "        tree->error_range.start = tokenizer.offset - tokenizer.whitespace - 1;");
-    output_line(out, "        tree->error_range.end = tokenizer.offset - tokenizer.whitespace;");
-    output_line(out, "        if (tree->error_range.start > tree->error_range.end) {");
-    output_line(out, "            tree->error_range.start = tree->error_range.end;");
-    output_line(out, "            tree->error_range.end++;");
-    output_line(out, "        }");
+    output_line(out, "        find_end_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);");
     output_line(out, "        return tree;");
     output_line(out, "    }");
     /*
