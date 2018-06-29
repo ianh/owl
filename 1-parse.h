@@ -360,13 +360,13 @@ static void add_string_token(struct bluebird_tree *tree, size_t start, size_t en
 }
 // Reserve 10 bytes for each entry (the maximum encoded size of a 64-bit value).
 #define RESERVATION_AMOUNT 10
-static inline parsed_id read_tree(parsed_id *id, struct bluebird_tree *tree) {
+static inline uint64_t read_tree(parsed_id *id, struct bluebird_tree *tree) {
     uint8_t *parse_tree = tree->parse_tree;
     size_t parse_tree_size = tree->parse_tree_size;
     parsed_id i = *id;
     if (i + RESERVATION_AMOUNT >= parse_tree_size)
         return 0;
-    parsed_id result = 0;
+    uint64_t result = 0;
     int shift_amount = 0;
     while ((parse_tree[i] & 0x80) != 0 && shift_amount < 64) {
         result |= (parse_tree[i] & 0x7f) << shift_amount;
@@ -390,7 +390,7 @@ static bool grow_tree(struct bluebird_tree *tree, size_t size)
     tree->parse_tree = parse_tree;
     return true;
 }
-static void write_tree(struct bluebird_tree *tree, parsed_id value)
+static void write_tree(struct bluebird_tree *tree, uint64_t value)
 {
     size_t reserved_size = tree->next_id + RESERVATION_AMOUNT;
     if (tree->parse_tree_size <= reserved_size && !grow_tree(tree, reserved_size))
@@ -585,8 +585,8 @@ static parsed_id finish_node(uint32_t rule, uint32_t choice, parsed_id next_sibl
     struct bluebird_tree *tree = info;
     parsed_id id = tree->next_id;
     write_tree(tree, next_sibling);
-    write_tree(tree, (parsed_id)start_location);
-    write_tree(tree, (parsed_id)end_location);
+    write_tree(tree, start_location);
+    write_tree(tree, end_location);
     switch (rule) {
     case 0: {
         write_tree(tree, slots[0]);
@@ -705,7 +705,7 @@ static parsed_id finish_token(uint32_t rule, parsed_id next_sibling, void *info)
         if (tree->used_identifier_tokens > tree->number_of_identifier_tokens)
             abort();
         size_t token_index = tree->number_of_identifier_tokens - tree->used_identifier_tokens;
-        write_tree(tree, (parsed_id)token_index);
+        write_tree(tree, token_index);
         break;
     }
     case 10: {
@@ -713,7 +713,7 @@ static parsed_id finish_token(uint32_t rule, parsed_id next_sibling, void *info)
         if (tree->used_number_tokens > tree->number_of_number_tokens)
             abort();
         size_t token_index = tree->number_of_number_tokens - tree->used_number_tokens;
-        write_tree(tree, (parsed_id)token_index);
+        write_tree(tree, token_index);
         break;
     }
     case 11: {
@@ -721,7 +721,7 @@ static parsed_id finish_token(uint32_t rule, parsed_id next_sibling, void *info)
         if (tree->used_string_tokens > tree->number_of_string_tokens)
             abort();
         size_t token_index = tree->number_of_string_tokens - tree->used_string_tokens;
-        write_tree(tree, (parsed_id)token_index);
+        write_tree(tree, token_index);
         break;
     }
     default:

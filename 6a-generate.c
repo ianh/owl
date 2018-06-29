@@ -298,13 +298,13 @@ void generate(struct generator *gen)
     // TODO: Delta encoding instead of absolute numbers.
     output_line(out, "// Reserve 10 bytes for each entry (the maximum encoded size of a 64-bit value).");
     output_line(out, "#define RESERVATION_AMOUNT 10");
-    output_line(out, "static inline parsed_id read_tree(parsed_id *id, struct bluebird_tree *tree) {");
+    output_line(out, "static inline uint64_t read_tree(parsed_id *id, struct bluebird_tree *tree) {");
     output_line(out, "    uint8_t *parse_tree = tree->parse_tree;");
     output_line(out, "    size_t parse_tree_size = tree->parse_tree_size;");
     output_line(out, "    parsed_id i = *id;");
     output_line(out, "    if (i + RESERVATION_AMOUNT >= parse_tree_size)");
     output_line(out, "        return 0;");
-    output_line(out, "    parsed_id result = 0;");
+    output_line(out, "    uint64_t result = 0;");
     output_line(out, "    int shift_amount = 0;");
     output_line(out, "    while ((parse_tree[i] & 0x80) != 0 && shift_amount < 64) {");
     output_line(out, "        result |= (parse_tree[i] & 0x7f) << shift_amount;");
@@ -328,7 +328,7 @@ void generate(struct generator *gen)
     output_line(out, "    tree->parse_tree = parse_tree;");
     output_line(out, "    return true;");
     output_line(out, "}");
-    output_line(out, "static void write_tree(struct bluebird_tree *tree, parsed_id value)");
+    output_line(out, "static void write_tree(struct bluebird_tree *tree, uint64_t value)");
     output_line(out, "{");
     output_line(out, "    size_t reserved_size = tree->next_id + RESERVATION_AMOUNT;");
     output_line(out, "    if (tree->parse_tree_size <= reserved_size && !grow_tree(tree, reserved_size))");
@@ -377,12 +377,10 @@ void generate(struct generator *gen)
     output_line(out, "static parsed_id finish_node(uint32_t rule, uint32_t choice, "
      "parsed_id next_sibling, parsed_id *slots, size_t start_location, size_t end_location, void *info) {");
     output_line(out, "    struct bluebird_tree *tree = info;");
-//    output_line(out, "    printf(\"finishing node (%lu): %u / %u\\n\", tree->next_id, rule, choice);");
     output_line(out, "    parsed_id id = tree->next_id;");
     output_line(out, "    write_tree(tree, next_sibling);");
-    // TODO: Remove these casts.
-    output_line(out, "    write_tree(tree, (parsed_id)start_location);");
-    output_line(out, "    write_tree(tree, (parsed_id)end_location);");
+    output_line(out, "    write_tree(tree, start_location);");
+    output_line(out, "    write_tree(tree, end_location);");
     output_line(out, "    switch (rule) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
@@ -390,7 +388,6 @@ void generate(struct generator *gen)
             continue;
         set_unsigned_number_substitution(out, "rule-index", i);
         output_line(out, "    case %%rule-index: {");
-//        output_line(out, "        printf(\"next = %lu\\n\", next_sibling);");
         if (rule->number_of_choices > 0) {
             output_line(out, "        switch (choice) {");
             for (uint32_t i = 0; i < rule->number_of_choices; ++i) {
@@ -434,8 +431,7 @@ void generate(struct generator *gen)
         output_line(out, "        if (tree->used_%%rule_tokens > tree->number_of_%%rule_tokens)");
         output_line(out, "            abort();");
         output_line(out, "        size_t token_index = tree->number_of_%%rule_tokens - tree->used_%%rule_tokens;");
-        // TODO: Remove this cast.
-        output_line(out, "        write_tree(tree, (parsed_id)token_index);");
+        output_line(out, "        write_tree(tree, token_index);");
         output_line(out, "        break;");
         output_line(out, "    }");
     }
