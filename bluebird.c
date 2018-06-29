@@ -170,6 +170,10 @@ int main(int argc, char *argv[])
         exit_with_errorf("'%.*s' isn't a valid operator",
          (int)(error.ranges[0].end - error.ranges[0].start),
          grammar_string + error.ranges[0].start);
+    case ERROR_UNEXPECTED_TOKEN:
+        exit_with_errorf("unexpected token '%.*s' while parsing grammar",
+         (int)(error.ranges[0].end - error.ranges[0].start),
+         grammar_string + error.ranges[0].start);
     case ERROR_MORE_INPUT_NEEDED:
         exit_with_errorf("expected more text at the end of the grammar");
     default:

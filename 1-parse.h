@@ -1571,6 +1571,7 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
         if (!fill_run_states(token_run, &c)) {
             free(c.stack);
             tree->error = ERROR_UNEXPECTED_TOKEN;
+            // TODO: range information
             return tree;
         }
     }
