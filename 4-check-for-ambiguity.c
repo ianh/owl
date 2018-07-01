@@ -10,11 +10,12 @@
 //  - a pair of distinct epsilon-transition paths between two states,
 //  - a pair of distinct bracket transitions whose corresponding accepting
 //    states are simultaneously reachable, or
-//  - a single bracket transition whose accepting state is part of an ambiguity.
-// 2. A pair of distinct states which can both be reached using the same symbols
-//    as input.
+//  - a single bracket transition whose accepting state is part of an ambiguous
+//    path.
+// 2. A pair of distinct states which can be reached along paths following the
+//    same input.
 //
-// We perform a search in the product automaton for one of these two cases.  The
+// We search the product automaton, looking for either of these two cases.  The
 // "disambiguation" procedure we did in the combine step ensures that different
 // paths through the automaton have distinguishable sequences of actions.  If we
 // find a path in the product automaton with a pair of distinct states, we have
