@@ -1,12 +1,10 @@
 # This is the grammar for bluebird itself.
 # Compile with `bluebird -c grammar.bb -o 1-parse.h`.
 
-grammar = (comment-token | rule)*
-comment-token = 'line-comment-token' string
+grammar = (rule | comment-token)*
 rule = identifier '=' body
 body = expr | (expr ':' identifier)+ operators*
 operators = '.operators' fixity operator+
-operator = expr ':' identifier
 fixity =
   'postfix' : postfix-op
   'prefix' : prefix-op
@@ -16,6 +14,7 @@ assoc =
   'left' : left-op
   'right' : right-op
   'nonassoc' : nonassoc-op
+operator = expr ':' identifier
 expr =
   identifier ('\\' ':' identifier@exception)* ('@' identifier@rename)? : ident
   string : literal
@@ -29,5 +28,5 @@ expr =
   '' : concatenation
  .operators infix flat
   '|' : choice
-
+comment-token = 'line-comment-token' string
 line-comment-token '#'
