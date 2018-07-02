@@ -23,19 +23,19 @@ struct context {
 
 struct boundary_states;
 static void build_body_automaton(struct context *ctx,
- struct automaton *automaton, struct parsed_expr *expr);
+ struct automaton *automaton, struct bluebird_node expr_node);
 static void build_body_expression(struct context *ctx,
- struct automaton *automaton, struct parsed_expr *expr,
+ struct automaton *automaton, struct bluebird_node expr_node,
  struct boundary_states boundary);
 static struct boundary_states connect_expression(struct context *ctx,
- struct automaton *a, struct parsed_expr *expr, struct boundary_states outer);
+ struct automaton *a, struct bluebird_node node, struct boundary_states outer);
 
 static uint32_t add_slot(struct context *ctx, struct rule *rule,
  const char *slot_name, size_t slot_name_length, uint32_t referenced_rule_index,
  struct source_range range, const char *error_reason);
 
 static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
- parsed_id id, enum token_type type);
+ struct bluebird_node string_node, enum token_type type);
 
 static uint32_t add_rule(struct context *ctx, const char *name, size_t len);
 static void add_token_rule(struct context *ctx, const char *name, size_t len);
@@ -63,17 +63,17 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         .grammar = grammar,
         .tree = tree,
     };
-    parsed_id root = bluebird_tree_root_id(tree);
-    struct parsed_grammar g = parsed_grammar_get(tree, root);
+    struct parsed_grammar g = bluebird_tree_get_parsed_grammar(tree);
 
     // First, create rule structs for each rule in the grammar.  We have to do
     // this in a separate pass so we can look up names before they appear in the
     // parse tree.
     grammar->root_rule = 0;
-    struct parsed_rule parsed_rule = parsed_rule_get(tree, g.rule);
-    while (!parsed_rule.empty) {
+    struct bluebird_node n;
+    for (n = g.rule; !n.empty; n = bluebird_next(n)) {
+        struct parsed_rule parsed_rule = parsed_rule_get(n);
         struct parsed_identifier name =
-         parsed_identifier_get(tree, parsed_rule.identifier);
+         parsed_identifier_get(parsed_rule.identifier);
         uint32_t index = add_rule(&context, name.identifier, name.length);
         if (index == UINT32_MAX) {
             errorf("there are multiple rules named '%.*s'", (int)name.length,
@@ -84,7 +84,6 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             exit_with_error();
         }
         grammar->rules[index].name_range = name.range;
-        parsed_rule = parsed_rule_next(parsed_rule);
     }
     if (grammar->number_of_rules == 0) {
         errorf("a bluebird grammar needs at least one rule of the form "
@@ -101,12 +100,12 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
     // separate pass in case there are "exception" specifiers which exclude
     // certain choices.
     uint32_t rule_index = 0;
-    for (parsed_rule = parsed_rule_get(tree, g.rule); !parsed_rule.empty;
-     parsed_rule = parsed_rule_next(parsed_rule), rule_index++) {
+    for (n = g.rule; !n.empty; n = bluebird_next(n), rule_index++) {
+        struct parsed_rule parsed_rule = parsed_rule_get(n);
         assert(rule_index < grammar->number_of_rules);
         struct rule *rule = &grammar->rules[rule_index];
-        struct parsed_body body = parsed_body_get(tree, parsed_rule.body);
-        if (!body.identifier) {
+        struct parsed_body body = parsed_body_get(parsed_rule.body);
+        if (body.identifier.empty) {
             // This is a simple rule with no choices -- there's nothing we need
             // to do here.
             continue;
@@ -114,16 +113,16 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
 
         // This rule has multiple choices.  Add them to the rule as choice
         // structs.
-        struct parsed_expr expr = parsed_expr_get(tree, body.expr);
-        struct parsed_identifier choice_identifier;
-        choice_identifier = parsed_identifier_get(tree, body.identifier);
-        while (!expr.empty) {
+        while (!body.expr.empty) {
             if (rule->number_of_choices >= MAX_NUMBER_OF_CHOICES) {
                 errorf("rules with more than %u choice clauses are currently "
                  "unsupported", MAX_NUMBER_OF_CHOICES);
                 error.ranges[0] = rule->name_range;
                 exit_with_error();
             }
+            struct parsed_expr expr = parsed_expr_get(body.expr);
+            struct parsed_identifier choice_identifier
+             = parsed_identifier_get(body.identifier);
             CHECK_FOR_DUPLICATE_CLAUSE(choice, choice_identifier);
             uint32_t choice_index = rule->number_of_choices++;
             rule->choices = grow_array(rule->choices,
@@ -134,18 +133,17 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             choice->name_length = choice_identifier.length;
             choice->name_range = choice_identifier.range;
             choice->expr_range = expr.range;
-            expr = parsed_expr_next(expr);
-            choice_identifier = parsed_identifier_next(choice_identifier);
+            body.expr = bluebird_next(body.expr);
+            body.identifier = bluebird_next(body.identifier);
         }
 
         // Create operator structs from each operator.
-        struct parsed_operators ops;
-        ops = parsed_operators_get(tree, body.operators);
         rule->first_operator_choice = rule->number_of_choices;
         int32_t precedence = -1;
-        while (!ops.empty) {
+        while (!body.operators.empty) {
+            struct parsed_operators ops = parsed_operators_get(body.operators);
             // First, unpack the fixity and associativity from the parse tree.
-            struct parsed_fixity fixity = parsed_fixity_get(tree, ops.fixity);
+            struct parsed_fixity fixity = parsed_fixity_get(ops.fixity);
             enum fixity rule_fixity;
             switch (fixity.type) {
             case PARSED_PREFIX_OP:
@@ -157,10 +155,9 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             default:
                 abort();
             }
-            struct parsed_assoc assoc = parsed_assoc_get(tree, fixity.assoc);
             enum associativity rule_associativity = 0;
-            if (!assoc.empty) {
-                switch (assoc.type) {
+            if (!fixity.assoc.empty) {
+                switch (parsed_assoc_get(fixity.assoc).type) {
                 case PARSED_LEFT_OP:
                     rule_associativity = LEFT; break;
                 case PARSED_RIGHT_OP:
@@ -174,11 +171,10 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 }
             }
             // Then add each operator at this precedence to the rule.
-            struct parsed_operator op = parsed_operator_get(tree, ops.operator);
-            while (!op.empty) {
-                struct parsed_expr op_expr = parsed_expr_get(tree, op.expr);
+            while (!ops.operator.empty) {
+                struct parsed_operator op = parsed_operator_get(ops.operator);
                 struct parsed_identifier op_choice =
-                 parsed_identifier_get(tree, op.identifier);
+                 parsed_identifier_get(op.identifier);
                 if (rule->number_of_choices >= MAX_NUMBER_OF_CHOICES) {
                     errorf("rules with more than %u choice clauses are "
                      "currently unsupported", MAX_NUMBER_OF_CHOICES);
@@ -194,23 +190,23 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 operator->name = op_choice.identifier;
                 operator->name_length = op_choice.length;
                 operator->name_range = op_choice.range;
-                operator->expr_range = op_expr.range;
+                operator->expr_range = parsed_expr_get(op.expr).range;
                 operator->fixity = rule_fixity;
                 operator->associativity = rule_associativity;
                 operator->precedence = precedence;
-                op = parsed_operator_next(op);
+                ops.operator = bluebird_next(ops.operator);
             }
             // Each new 'operators' section has a lower precedence than the
             // previous one.
             precedence--;
-            ops = parsed_operators_next(ops);
+            body.operators = bluebird_next(body.operators);
         }
     }
 
     // Now fill in the automata according to the contents of each parsed rule.
     rule_index = 0;
-    for (parsed_rule = parsed_rule_get(tree, g.rule); !parsed_rule.empty;
-     parsed_rule = parsed_rule_next(parsed_rule), rule_index++) {
+    for (n = g.rule; !n.empty; n = bluebird_next(n), rule_index++) {
+        struct parsed_rule parsed_rule = parsed_rule_get(n);
         struct rule *rule = &grammar->rules[rule_index];
 
         // Store the rule index in our context object so we don't have to pass
@@ -218,41 +214,31 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         context.rule_index = rule_index;
         context.next_symbol = 0;
 
-        struct parsed_body body = parsed_body_get(tree, parsed_rule.body);
-        if (!body.identifier) {
+        struct parsed_body body = parsed_body_get(parsed_rule.body);
+        if (body.identifier.empty) {
             // This is a simple rule with no choices.  Create the automaton
             // directly.
-            struct parsed_expr expr = parsed_expr_get(tree, body.expr);
-            build_body_automaton(&context, &rule->automaton, &expr);
+            build_body_automaton(&context, &rule->automaton, body.expr);
             continue;
         }
 
-        // This rule has multiple choices.  Add them to the rule as choice
-        // structs.
-        struct parsed_expr expr = parsed_expr_get(tree, body.expr);
-        struct parsed_identifier choice_identifier;
-        choice_identifier = parsed_identifier_get(tree, body.identifier);
+        // Fill in the choice automata...
         uint32_t choice_index = 0;
-        while (!expr.empty) {
+        for (; !body.expr.empty; body.expr = bluebird_next(body.expr)) {
             struct choice *choice = &rule->choices[choice_index++];
-            build_body_automaton(&context, &choice->automaton, &expr);
-            expr = parsed_expr_next(expr);
-            choice_identifier = parsed_identifier_next(choice_identifier);
+            build_body_automaton(&context, &choice->automaton, body.expr);
         }
 
-        // Create operator structs from each operator.
-        struct parsed_operators ops
-         = parsed_operators_get(tree, body.operators);
-        while (!ops.empty) {
-            struct parsed_operator op = parsed_operator_get(tree, ops.operator);
-            while (!op.empty) {
-                struct parsed_expr op_expr = parsed_expr_get(tree, op.expr);
+        // ...and the operator automata.
+        while (!body.operators.empty) {
+            struct parsed_operators ops = parsed_operators_get(body.operators);
+            while (!ops.operator.empty) {
+                struct parsed_operator op = parsed_operator_get(ops.operator);
                 struct choice *operator = &rule->choices[choice_index++];
-                build_body_automaton(&context, &operator->automaton,
-                 &op_expr);
-                op = parsed_operator_next(op);
+                build_body_automaton(&context, &operator->automaton, op.expr);
+                ops.operator = bluebird_next(ops.operator);
             }
-            ops = parsed_operators_next(ops);
+            body.operators = bluebird_next(body.operators);
         }
 
         // Add slots for operands -- 'left'/'right' for infix operators, and
@@ -281,11 +267,10 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         }
     }
 
-    // Add any comment tokens to the grammar.
-    for (struct parsed_comment_token parsed_comment =
-     parsed_comment_token_get(tree, g.comment_token); !parsed_comment.empty;
-     parsed_comment = parsed_comment_token_next(parsed_comment)) {
-        struct parsed_string s = parsed_string_get(tree, parsed_comment.string);
+    // Finally, add any comment tokens to the grammar.
+    while (!g.comment_token.empty) {
+        struct parsed_string s =
+         parsed_string_get(parsed_comment_token_get(g.comment_token).string);
         if (s.length == 0) {
             error.ranges[0] = s.range;
             exit_with_errorf("comment tokens can't be empty");
@@ -310,6 +295,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             error.ranges[1] = s.range;
             exit_with_errorf("the same comment token was specified twice");
         }
+        g.comment_token = bluebird_next(g.comment_token);
     }
 }
 
@@ -319,7 +305,7 @@ struct boundary_states {
 };
 
 static void build_body_automaton(struct context *ctx,
- struct automaton *out_automaton, struct parsed_expr *expr)
+ struct automaton *out_automaton, struct bluebird_node expr_node)
 {
     struct automaton automaton = {0};
     struct boundary_states boundary = { .entry = 0, .exit = 1 };
@@ -328,7 +314,7 @@ static void build_body_automaton(struct context *ctx,
 
     struct context saved_context = *ctx;
     ctx->next_state = 2;
-    build_body_expression(ctx, &automaton, expr, boundary);
+    build_body_expression(ctx, &automaton, expr_node, boundary);
     ctx->next_state = saved_context.next_state;
 
     determinize_minimize(&automaton, out_automaton);
@@ -336,48 +322,40 @@ static void build_body_automaton(struct context *ctx,
 }
 
 static void build_body_expression(struct context *ctx,
- struct automaton *automaton, struct parsed_expr *expr,
+ struct automaton *automaton, struct bluebird_node expr_node,
  struct boundary_states b)
 {
+    struct parsed_expr expr = parsed_expr_get(expr_node);
     if (ctx->expression_nesting++ > MAX_EXPRESSION_NESTING) {
-        error.ranges[0] = expr->range;
+        error.ranges[0] = expr.range;
         exit_with_errorf("operators are nested too deeply");
     }
-    struct bluebird_tree *tree = ctx->tree;
     struct rule *rule = &ctx->grammar->rules[ctx->rule_index];
-    switch (expr->type) {
-    case PARSED_CHOICE: {
-        struct parsed_expr choice = parsed_expr_get(tree, expr->operand);
-        while (!choice.empty) {
-            connect_expression(ctx, automaton, &choice, b);
-            choice = parsed_expr_next(choice);
-        }
+    switch (expr.type) {
+    case PARSED_CHOICE:
+        for (; !expr.operand.empty; expr.operand = bluebird_next(expr.operand))
+            connect_expression(ctx, automaton, expr.operand, b);
         break;
-    }
     case PARSED_CONCATENATION: {
-        struct parsed_expr term = parsed_expr_get(tree, expr->operand);
         struct boundary_states inner = { .entry = ctx->next_state++ };
         automaton_add_transition(automaton, b.entry, inner.entry,
          SYMBOL_EPSILON);
-        while (!term.empty) {
+        for (;!expr.operand.empty; expr.operand = bluebird_next(expr.operand)) {
             inner.exit = ctx->next_state++;
-            build_body_expression(ctx, automaton, &term, inner);
+            build_body_expression(ctx, automaton, expr.operand, inner);
             inner.entry = inner.exit;
-            term = parsed_expr_next(term);
         }
         automaton_add_transition(automaton, inner.exit, b.exit, SYMBOL_EPSILON);
         break;
     }
     case PARSED_IDENT: {
-        struct parsed_identifier ident =
-         parsed_identifier_get(tree, expr->identifier);
-        struct parsed_identifier name =
-         parsed_identifier_get(tree, expr->rename);
+        struct parsed_identifier ident = parsed_identifier_get(expr.identifier);
         const char *rule_name = ident.identifier;
         size_t rule_name_length = ident.length;
         const char *slot_name = rule_name;
         size_t slot_name_length = rule_name_length;
-        if (!name.empty) {
+        if (!expr.rename.empty) {
+            struct parsed_identifier name = parsed_identifier_get(expr.rename);
             slot_name = name.identifier;
             slot_name_length = name.length;
         }
@@ -402,14 +380,14 @@ static void build_body_expression(struct context *ctx,
             exit_with_error();
         }
         uint32_t slot_index = add_slot(ctx, rule, slot_name, slot_name_length,
-         rule_index, expr->range, "could refer to two different rules");
+         rule_index, expr.range, "could refer to two different rules");
 
         // Collect exceptions (if applicable) and find the proper choice set.
         struct bitset choices =
          bitset_create_empty(referent->number_of_choices);
-        struct parsed_identifier exception =
-         parsed_identifier_get(tree, expr->exception);
-        while (!exception.empty) {
+        while (!expr.exception.empty) {
+            struct parsed_identifier exception =
+             parsed_identifier_get(expr.exception);
             bool found = false;
             for (uint32_t i = 0; i < referent->number_of_choices; ++i) {
                 if (exception.length == referent->choices[i].name_length &&
@@ -426,7 +404,7 @@ static void build_body_expression(struct context *ctx,
                  "for '%.*s'", (int)exception.length, exception.identifier,
                  (int)referent->name_length, referent->name);
             }
-            exception = parsed_identifier_next(exception);
+            expr.exception = bluebird_next(expr.exception);
         }
         bitset_complement(&choices);
         struct slot *slot = &rule->slots[slot_index];
@@ -448,18 +426,14 @@ static void build_body_expression(struct context *ctx,
          rule->slots[slot_index].choice_sets[i].symbol);
         break;
     }
-    case PARSED_LITERAL: {
+    case PARSED_LITERAL:
         automaton_add_transition(automaton, b.entry, b.exit,
-         add_keyword_token(ctx, rule, expr->string, TOKEN_NORMAL));
+         add_keyword_token(ctx, rule, expr.string, TOKEN_NORMAL));
         break;
-    }
-    case PARSED_PARENS: {
-        struct parsed_expr parens = parsed_expr_get(tree, expr->expr);
-        build_body_expression(ctx, automaton, &parens, b);
+    case PARSED_PARENS:
+        build_body_expression(ctx, automaton, expr.expr, b);
         break;
-    }
     case PARSED_BRACKETED: {
-        struct parsed_expr bracket_expr = parsed_expr_get(tree, expr->expr);
         uint32_t bracket_index = rule->number_of_brackets++;
         rule->brackets = grow_array(rule->brackets,
          &rule->brackets_allocated_bytes,
@@ -469,13 +443,13 @@ static void build_body_expression(struct context *ctx,
         // invalidating the pointer.  Write into a stack value instead, then
         // move its contents into place.
         struct bracket *bracket = &rule->brackets[bracket_index];
-        if (bracket_expr.empty) {
+        if (expr.expr.empty) {
             automaton_set_start_state(&bracket->automaton, 0);
             automaton_mark_accepting_state(&bracket->automaton, 0);
         } else {
             struct automaton bracket_automaton = {0};
             ctx->bracket_nesting++;
-            build_body_automaton(ctx, &bracket_automaton, &bracket_expr);
+            build_body_automaton(ctx, &bracket_automaton, expr.expr);
             ctx->bracket_nesting--;
             // Update the bracket pointer in case it was invalidated.
             bracket = &rule->brackets[bracket_index];
@@ -483,44 +457,40 @@ static void build_body_expression(struct context *ctx,
             automaton_destroy(&bracket_automaton);
         }
         bracket->symbol = ctx->next_symbol++;
-        bracket->start_symbol = add_keyword_token(ctx, rule, expr->begin_token,
+        bracket->start_symbol = add_keyword_token(ctx, rule, expr.begin_token,
          TOKEN_START);
-        bracket->end_symbol = add_keyword_token(ctx, rule, expr->end_token,
+        bracket->end_symbol = add_keyword_token(ctx, rule, expr.end_token,
          TOKEN_END);
         if (bracket->start_symbol == SYMBOL_EPSILON) {
             errorf("'' is not a valid start keyword");
-            error.ranges[0] = parsed_string_get(tree, expr->begin_token).range;
+            error.ranges[0] = parsed_string_get(expr.begin_token).range;
             exit_with_error();
         }
         if (bracket->end_symbol == SYMBOL_EPSILON) {
             errorf("'' is not a valid end keyword");
-            error.ranges[0] = parsed_string_get(tree, expr->end_token).range;
+            error.ranges[0] = parsed_string_get(expr.end_token).range;
             exit_with_error();
         }
         automaton_add_transition(automaton, b.entry, b.exit, bracket->symbol);
         break;
     }
     case PARSED_ZERO_OR_MORE: {
-        struct parsed_expr operand = parsed_expr_get(tree, expr->operand);
-        struct boundary_states in;
-        in = connect_expression(ctx, automaton, &operand, b);
+        struct boundary_states in =
+         connect_expression(ctx, automaton, expr.operand, b);
         automaton_add_transition(automaton, in.exit, in.entry, SYMBOL_EPSILON);
         automaton_add_transition(automaton, b.entry, b.exit, SYMBOL_EPSILON);
         break;
     }
     case PARSED_ONE_OR_MORE: {
-        struct parsed_expr operand = parsed_expr_get(tree, expr->operand);
-        struct boundary_states in;
-        in = connect_expression(ctx, automaton, &operand, b);
+        struct boundary_states in
+         = connect_expression(ctx, automaton, expr.operand, b);
         automaton_add_transition(automaton, in.exit, in.entry, SYMBOL_EPSILON);
         break;
     }
-    case PARSED_OPTIONAL: {
-        struct parsed_expr operand = parsed_expr_get(tree, expr->operand);
-        connect_expression(ctx, automaton, &operand, b);
+    case PARSED_OPTIONAL:
+        connect_expression(ctx, automaton, expr.operand, b);
         automaton_add_transition(automaton, b.entry, b.exit, SYMBOL_EPSILON);
         break;
-    }
     default:
         abort();
     }
@@ -528,12 +498,12 @@ static void build_body_expression(struct context *ctx,
 }
 
 static struct boundary_states connect_expression(struct context *ctx,
- struct automaton *a, struct parsed_expr *expr, struct boundary_states outer)
+ struct automaton *a, struct bluebird_node node, struct boundary_states outer)
 {
     struct boundary_states inner;
     inner.entry = ctx->next_state++;
     inner.exit = ctx->next_state++;
-    build_body_expression(ctx, a, expr, inner);
+    build_body_expression(ctx, a, node, inner);
     automaton_add_transition(a, outer.entry, inner.entry, SYMBOL_EPSILON);
     automaton_add_transition(a, inner.exit, outer.exit, SYMBOL_EPSILON);
     return inner;
@@ -631,9 +601,9 @@ uint32_t find_token(struct token *tokens, uint32_t number_of_tokens,
 }
 
 static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
- parsed_id id, enum token_type type)
+ struct bluebird_node string_node, enum token_type type)
 {
-    struct parsed_string keyword = parsed_string_get(ctx->tree, id);
+    struct parsed_string keyword = parsed_string_get(string_node);
     if (keyword.length == 0) {
         // Zero-length keywords are treated as epsilons.
         return SYMBOL_EPSILON;
