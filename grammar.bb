@@ -1,3 +1,5 @@
+#using bluebird.v1
+
 # This is the grammar for bluebird itself.
 # Compile with `bluebird -c grammar.bb -o 1-parse.h`.
 

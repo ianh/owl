@@ -38,6 +38,8 @@ static void write_to_output(const char *string, size_t len);
 
 static char *error_in_string;
 
+static const char *version_string = "bluebird.v1";
+
 int main(int argc, char *argv[])
 {
     // Parse arguments.
@@ -66,7 +68,10 @@ int main(int argc, char *argv[])
         case NO_PARAMETER:
             if (!strcmp(short_name, "h") || !strcmp(long_name, "help"))
                 needs_help = true;
-            else if (!strcmp(short_name, "i") || !strcmp(long_name, "input")) {
+            if (!strcmp(short_name, "V") || !strcmp(long_name, "version")) {
+                fprintf(stderr, "%s\n", version_string);
+                return 0;
+            } else if (!strcmp(short_name, "i") || !strcmp(long_name, "input")) {
                 if (input_filename)
                     exit_with_errorf("multiple input filenames");
                 parameter_state = INPUT_FILE_PARAMETER;
@@ -152,10 +157,39 @@ int main(int argc, char *argv[])
         fprintf(stderr, " -c          --compile          output a C header file instead of parsing input\n");
         fprintf(stderr, " -g grammar  --grammar grammar  specify the grammar text on the command line\n");
         fprintf(stderr, " -C          --color            force 256-color parse tree output\n");
+        fprintf(stderr, " -V          --version          print version info and exit\n");
         fprintf(stderr, " -h          --help             output this help text\n");
         return 1;
     }
     error_in_string = grammar_string;
+
+    // Check to see if the version is compatible.
+    size_t using_length = strlen("#using ");
+    size_t version_length = strlen(version_string);
+    if (strncmp(grammar_string, "#using ", using_length)) {
+        if (compile) {
+            errorf("compiling a grammar without a version string");
+            error.level = WARNING;
+            print_error();
+            error = (struct error){0};
+
+            fprintf(stderr, "\n  Bluebird's grammar format may change "
+             "between versions.  Add the string\n\n");
+            fprintf(stderr, "  #using bluebird.v1\n\n");
+            fprintf(stderr, "  to the top of your grammar file to lock in "
+             "this version.\n\n");
+        }
+    } else if (strncmp(grammar_string + using_length, version_string,
+     version_length) || !(grammar_string[using_length + version_length] == '\r'
+     || grammar_string[using_length + version_length] == '\n')) {
+        size_t i = using_length;
+        error.ranges[0].start = i;
+        while (grammar_string[i] && grammar_string[i] != '\r' &&
+         grammar_string[i] != '\n')
+            i++;
+        error.ranges[0].end = i;
+        exit_with_errorf("incompatible version");
+    }
 
     int output_fileno = -1;
     if (output_filename)
@@ -252,17 +286,25 @@ int main(int argc, char *argv[])
 }
 
 static int compare_source_ranges(const void *aa, const void *bb);
-struct error error;
+struct error error = {0};
 
-void print_error()
+void print_error(void)
 {
     // TODO: Line breaking, if there's time.
     int colors = terminal_colors(STDERR_FILENO);
-    if (colors >= 256)
-        fputs("\033[38;5;168m", stderr);
-    else if (colors >= 8)
-        fputs("\033[1;31m", stderr);
-    fputs("error:", stderr);
+    if (error.level == WARNING) {
+        if (colors >= 256)
+            fputs("\033[38;5;97m", stderr);
+        else if (colors >= 8)
+            fputs("\033[5;31m", stderr);
+        fputs("warning:", stderr);
+    } else {
+        if (colors >= 256)
+            fputs("\033[38;5;168m", stderr);
+        else if (colors >= 8)
+            fputs("\033[1;31m", stderr);
+        fputs("error:", stderr);
+    }
     if (colors >= 8)
         fputs("\033[0m", stderr);
     fprintf(stderr, " %s\n", error.text);
