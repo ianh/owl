@@ -610,8 +610,9 @@ void generate(struct generator *gen)
     if (mask_width == 0)
         mask_width = 1;
     set_unsigned_number_substitution(out, "reachability-mask-width", mask_width);
+    output_line(out, "struct fill_run_continuation;");
     output_line(out, "struct fill_run_state {");
-    output_line(out, "    %%state-type state;");
+    output_line(out, "    bool (*state_func)(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);");
     output_line(out, "    uint32_t reachability_mask[%%reachability-mask-width];");
     output_line(out, "};");
     output_line(out, "struct fill_run_continuation {");
@@ -619,6 +620,30 @@ void generate(struct generator *gen)
     output_line(out, "    uint32_t depth;");
     output_line(out, "    uint32_t capacity;");
     output_line(out, "};");
+    output_line(out, "static void grow_cont_stack(struct fill_run_continuation *cont) {");
+    output_line(out, "    size_t new_capacity = (cont->capacity + 2) * 3 / 2;");
+    output_line(out, "    if (new_capacity <= cont->capacity)");
+    output_line(out, "        abort();");
+    output_line(out, "    struct fill_run_state *new_states = realloc(cont->stack, new_capacity * sizeof(struct fill_run_state));");
+    output_line(out, "    if (!new_states)");
+    output_line(out, "        abort();");
+    output_line(out, "    cont->stack = new_states;");
+    output_line(out, "    cont->capacity = new_capacity;");
+    output_line(out, "}");
+    struct automaton *a = &gen->deterministic->automaton;
+    struct automaton *b = &gen->deterministic->bracket_automaton;
+    set_unsigned_number_substitution(out, "first-bracket-state-id",
+     a->number_of_states);
+    for (uint32_t i = 0; i < a->number_of_states; ++i) {
+        set_unsigned_number_substitution(out, "state-id", i);
+        output_line(out, "static bool state_func_%%state-id(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);");
+    }
+    for (uint32_t i = 0; i < b->number_of_states; ++i) {
+        set_unsigned_number_substitution(out, "state-id", i + a->number_of_states);
+        output_line(out, "static bool state_func_%%state-id(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);");
+    }
+    generate_automaton(gen, out, a, 0, NORMAL_AUTOMATON);
+    generate_automaton(gen, out, b, a->number_of_states, BRACKET_AUTOMATON);
     output_line(out, "static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t *failing_index);");
     output_line(out, "static size_t build_parse_tree(struct bluebird_default_tokenizer *, struct bluebird_token_run *, struct bluebird_tree *);");
     output_line(out, "");
@@ -640,7 +665,7 @@ void generate(struct generator *gen)
     output_line(out, "        .depth = 1,");
     output_line(out, "    };");
     output_line(out, "    c.stack = calloc(c.capacity, sizeof(struct fill_run_state));");
-    output_line(out, "    c.stack[0].state = %%start-state;");
+    output_line(out, "    c.stack[0].state_func = state_func_%%start-state;");
     output_line(out, "    uint16_t failing_index = 0;");
     output_line(out, "    while (bluebird_default_tokenizer_advance(&tokenizer, &token_run)) {");
     output_line(out, "        if (!fill_run_states(token_run, &c, &failing_index)) {");
@@ -652,22 +677,27 @@ void generate(struct generator *gen)
     output_line(out, "            return tree;");
     output_line(out, "        }");
     output_line(out, "    }");
-    output_line(out, "    %%state-type final_state = c.stack[c.depth - 1].state;");
+    output_line(out, "    struct fill_run_state top = c.stack[c.depth - 1];");
     output_line(out, "    free(c.stack);");
     output_line(out, "    if (string[tokenizer.offset] != '\\0') {");
     output_line(out, "        tree->error = ERROR_INVALID_TOKEN;");
     output_line(out, "        estimate_next_token_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);");
     output_line(out, "        return tree;");
     output_line(out, "    }");
-    output_line(out, "    switch (final_state) {");
+    output_string(out, "    if (");
+    bool has_accepting = false;
     for (state_id i = 0; i < gen->deterministic->automaton.number_of_states; ++i) {
         if (!gen->deterministic->automaton.states[i].accepting)
             continue;
+        has_accepting = true;
         set_unsigned_number_substitution(out, "state-id", i);
-        output_line(out, "    case %%state-id:");
+        if (i > 0)
+            output_string(out, " && ");
+        output_string(out, "top.state_func != state_func_%%state-id");
     }
-    output_line(out, "        break;");
-    output_line(out, "    default:");
+    if (!has_accepting)
+        output_string(out, "true");
+    output_line(out, ") {");
     output_line(out, "        tree->error = ERROR_MORE_INPUT_NEEDED;");
     output_line(out, "        find_end_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);");
     output_line(out, "        return tree;");
@@ -736,35 +766,17 @@ void generate(struct generator *gen)
     output_line(out, "    free(tree->string_tokens);");
     output_line(out, "    free(tree);");
     output_line(out, "}");
-    output_line(out, "static void grow_cont_stack(struct fill_run_continuation *cont) {");
-    output_line(out, "    size_t new_capacity = (cont->capacity + 2) * 3 / 2;");
-    output_line(out, "    if (new_capacity <= cont->capacity)");
-    output_line(out, "        abort();");
-    output_line(out, "    struct fill_run_state *new_states = realloc(cont->stack, new_capacity * sizeof(struct fill_run_state));");
-    output_line(out, "    if (!new_states)");
-    output_line(out, "        abort();");
-    output_line(out, "    cont->stack = new_states;");
-    output_line(out, "    cont->capacity = new_capacity;");
-    output_line(out, "}");
-    struct automaton *a = &gen->deterministic->automaton;
-    struct automaton *b = &gen->deterministic->bracket_automaton;
-    set_unsigned_number_substitution(out, "first-bracket-state-id",
-     a->number_of_states);
     output_line(out, "static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t *failing_index) {");
     output_line(out, "    uint16_t token_index = 0;");
     output_line(out, "    uint16_t number_of_tokens = run->number_of_tokens;");
-    output_line(out, "    struct fill_run_state top = cont->stack[cont->depth - 1];");
-    output_line(out, "    if (top.state == %%start-state) {");
-    output_line(out, "        // This is unnecessary, but it avoids a compiler warning about unused labels.");
-    output_line(out, "        goto state_%%start-state;");
+    output_line(out, "    while (token_index < number_of_tokens) {");
+    output_line(out, "        if (!cont->stack[cont->depth - 1].state_func(run, cont, token_index)) {");
+    output_line(out, "            *failing_index = token_index;");
+    output_line(out, "            return false;");
+    output_line(out, "        }");
+    output_line(out, "        token_index++;");
     output_line(out, "    }");
-    output_line(out, "start:");
-    output_line(out, "    switch (top.state) {");
-    generate_automaton(gen, out, a, 0, NORMAL_AUTOMATON);
-    generate_automaton(gen, out, b, a->number_of_states, BRACKET_AUTOMATON);
-    output_line(out, "    }");
-    output_line(out, "    *failing_index = token_index;");
-    output_line(out, "    return false;");
+    output_line(out, "    return true;");
     output_line(out, "}");
     generate_action_table(gen, out);
     generate_keyword_reader(gen, out);
@@ -1030,14 +1042,14 @@ static void generate_automaton(struct generator *gen,
     for (uint32_t i = 0; i < a->number_of_states; ++i) {
         struct state s = a->states[i];
         set_unsigned_number_substitution(out, "state-id", i + offset);
-        output_line(out, "    case %%state-id:");
-        output_line(out, "state_%%state-id: {");
+        output_line(out, "static bool state_func_%%state-id(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {");
         uint32_t mask_width = reachability_mask_width(gen);
         if (type == BRACKET_AUTOMATON && mask_width > 0) {
             // Check if any of the end states we're expecting are still
             // reachable.
             struct bitset r = gen->deterministic->bracket_reachability[i];
-            output_string(out, "        if (");
+            output_line(out, "    struct fill_run_state top = cont->stack[cont->depth - 1];");
+            output_string(out, "    if (");
             for (uint32_t i = 0; i < mask_width; ++i) {
                 if (i > 0)
                     output_string(out, " && ");
@@ -1051,29 +1063,22 @@ static void generate_automaton(struct generator *gen,
                 output_string(out, "!(%%mask-bits & top.reachability_mask[%%mask-index])");
             }
             output_line(out, ")");
-            output_line(out, "            break;");
+            output_line(out, "        return false;");
         }
         if (s.accepting && type == BRACKET_AUTOMATON) {
             set_unsigned_number_substitution(out, "state-transition-symbol",
              s.transition_symbol);
-            output_line(out, "        if (cont->depth == 0)");
-            output_line(out, "            break;");
-            output_line(out, "        cont->depth--;");
-            output_line(out, "        top = cont->stack[cont->depth - 1];");
-            output_line(out, "        run->tokens[token_index] = %%state-transition-symbol;");
-            output_line(out, "        goto start;");
-            output_line(out, "    }");
+            output_line(out, "    if (cont->depth <= 1)");
+            output_line(out, "        return false;");
+            output_line(out, "    cont->depth--;");
+            output_line(out, "    run->tokens[token_index] = %%state-transition-symbol;");
+            output_line(out, "    return cont->stack[cont->depth - 1].state_func(run, cont, token_index);");
+            output_line(out, "}");
             continue;
         }
-        output_line(out, "        if (token_index >= number_of_tokens) {");
-        output_line(out, "            top.state = %%state-id;");
-        output_line(out, "            cont->stack[cont->depth - 1] = top;");
-        output_line(out, "            return true;");
-        output_line(out, "        }");
-        output_line(out, "        %%token-type token = run->tokens[token_index];");
-        output_line(out, "        run->states[token_index] = %%state-id;");
-        output_line(out, "        token_index++;");
-        output_line(out, "        switch (token) {");
+        output_line(out, "    %%token-type token = run->tokens[token_index];");
+        output_line(out, "    run->states[token_index] = %%state-id;");
+        output_line(out, "    switch (token) {");
         struct bitset reachability_mask = bitset_create_empty(reachability_mask_width(gen));
         for (uint32_t j = 0; j < s.number_of_transitions; ++j) {
             struct transition t = s.transitions[j];
@@ -1088,16 +1093,15 @@ static void generate_automaton(struct generator *gen,
             }
             set_unsigned_number_substitution(out, "token-symbol", t.symbol);
             set_unsigned_number_substitution(out, "token-target", t.target + offset);
-            output_line(out, "        case %%token-symbol: goto state_%%token-target;");
+            output_line(out, "    case %%token-symbol: cont->stack[cont->depth - 1].state_func = state_func_%%token-target; return true;");
         }
-        output_string(out, "        default:");
+        output_string(out, "    default:");
         if (!bitset_is_empty(&reachability_mask)) {
             output_line(out, "");
-            output_line(out, "            if (cont->depth >= cont->capacity)");
-            output_line(out, "                grow_cont_stack(cont);");
-            output_line(out, "            top.state = %%state-id;");
-            output_line(out, "            cont->stack[cont->depth - 1] = top;");
-            output_line(out, "            cont->depth++;");
+            output_line(out, "        if (cont->depth >= cont->capacity)");
+            output_line(out, "            grow_cont_stack(cont);");
+            output_line(out, "        cont->stack[cont->depth - 1].state_func = state_func_%%state-id;");
+            output_line(out, "        cont->depth++;");
             for (uint32_t i = 0; i < mask_width; ++i) {
                 set_unsigned_number_substitution(out, "mask-index", i);
                 uint64_t bits = reachability_mask.bit_groups[i / 2];
@@ -1106,16 +1110,14 @@ static void generate_automaton(struct generator *gen,
                 else
                     bits &= UINT32_MAX;
                 set_unsigned_number_substitution(out, "mask-bits", (uint32_t)bits);
-                output_line(out, "            top.reachability_mask[%%mask-index] = %%mask-bits;");
+                output_line(out, "        cont->stack[cont->depth - 1].reachability_mask[%%mask-index] = %%mask-bits;");
             }
-            output_line(out, "            token_index--;");
-            output_line(out, "            goto state_%%first-bracket-state-id;");
+            output_line(out, "        return state_func_%%first-bracket-state-id(run, cont, token_index);");
         } else
-            output_line(out, " token_index--; break;");
+            output_line(out, " return false;");
         bitset_destroy(&reachability_mask);
-        output_line(out, "        }");
-        output_line(out, "        break;");
         output_line(out, "    }");
+        output_line(out, "}");
     }
 }
 
