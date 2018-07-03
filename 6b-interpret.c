@@ -419,7 +419,7 @@ static void fill_rows(struct interpret_context *ctx,
     uint32_t start = location_cursor + *offset;
     for (size_t i = 0; i < node->number_of_children; ++i) {
         struct interpret_node *child = node->children[i];
-        location_cursor = offset_labels(&ctx->document, location_cursor,
+        offset_labels(&ctx->document, location_cursor,
          (uint32_t)child->start_location, *offset, depth + 1);
         if (depth == 0)
             abort();
@@ -825,10 +825,9 @@ static void follow_transition_reversed(struct interpret_context *ctx,
     }
     size_t offset = end;
     for (uint16_t *a = entry->actions; a && *a; a++) {
-        uint32_t action_offset = ctx->next_action_offset;
         if (CONSTRUCT_IS_END_ACTION(*a) && offset != start)
             offset = push_action_offsets(ctx, offset, start);
-        action_offset = ctx->next_action_offset - 1;
+        uint32_t action_offset = ctx->next_action_offset - 1;
 #if 0
         printf("action: %u\n", offset);
         print_action(*a, action_offset);
@@ -837,7 +836,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
          SIZE_MAX - action_offset);
     }
     if (offset != start)
-        offset = push_action_offsets(ctx, offset, start);
+        push_action_offsets(ctx, offset, start);
     if (bracket_automaton && state ==
      ctx->deterministic->bracket_automaton.start_state)
         nfa_state = state_array_pop(&ctx->nfa_stack);

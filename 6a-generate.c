@@ -1444,6 +1444,10 @@ retry:
     output_line(out, "    free(state_stack);");
     output_line(out, "    return construct_finish(&construct_state, offset);");
     output_line(out, "}");
+    free(bucket_sizes);
+    free(buckets);
+    free(table_buckets);
+    free(nfa_states);
 }
 
 static bool rule_is_named(struct rule *rule, const char *name)
