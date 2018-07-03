@@ -138,6 +138,11 @@ void generate(struct generator *gen)
     output_line(out, "// The bluebird_next function returns the next sibling node.");
     output_line(out, "struct bluebird_node bluebird_next(struct bluebird_node);");
     output_line(out, "");
+    output_line(out, "// Tests two nodes for equality.");
+    output_line(out, "static inline bool bluebird_nodes_equal(struct bluebird_node a, struct bluebird_node b) {");
+    output_line(out, "    return a._tree == b._tree && a._offset == b._offset;");
+    output_line(out, "}");
+    output_line(out, "");
     output_line(out, "// Returns the root bluebird_node.");
     output_line(out, "struct bluebird_node bluebird_tree_root_node(struct bluebird_tree *tree);");
     output_line(out, "");
