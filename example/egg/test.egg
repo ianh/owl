@@ -1,0 +1,17 @@
+print("Lexical scope test:")
+function counter()
+    local a = 1
+    function foo()
+        a = a + 1
+        return a
+    end
+    return foo
+end
+a = counter()
+print(a())
+b = counter()
+print(a())
+print(b())
+print(b())
+print(b())
+print(a())
