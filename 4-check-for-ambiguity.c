@@ -6,12 +6,13 @@
 #include <assert.h>
 
 // The goal of ambiguity checking is to find one of two things:
-// 1. An intrinsically ambiguous set of edges between two states.  That is,
-//  - a pair of distinct epsilon-transition paths between two states,
-//  - a pair of distinct bracket transitions whose corresponding accepting
-//    states are simultaneously reachable, or
-//  - a single bracket transition whose accepting state is part of an ambiguous
-//    path.
+// 1. An "intrinsically ambiguous" pair of paths between two states.  That is,
+//  - two different epsilon-transition paths between the same two states,
+//  - two different bracket transitions whose corresponding accepting states are
+//    reachable along paths with the same symbols, or
+//  - a single bracket transition whose accepting state is itself part of an
+//    ambiguous path.
+// or
 // 2. A pair of distinct states which can be reached along paths following the
 //    same input.
 //
@@ -22,12 +23,16 @@
 // two different paths in the original automaton, and therefore two
 // distinguishable sequences of actions for the same input -- an ambiguity.
 
-// This is the "epsilon filtering" technique from [1], simplified a little bit
-// because we follow an entire path at once.
 enum epsilon_state {
     ALLOW_EPSILON_SUCCESSORS,
     DISALLOW_EPSILON_SUCCESSORS,
 };
+// The `epsilon_state` field implements the "epsilon filtering" technique from
+//  . , simplified a little bit because we follow an entire path at once.
+//   \
+//    Allauzen, C., Mohri, M., & Rastogi, A. (2011). General Algorithms for
+//    Testing the Ambiguity of Finite Automata and the Double-Tape Ambiguity of
+//    Finite-State Transducers. Int. J. Found. Comput. Sci., 22, 883-904.
 struct state_pair {
     state_id b;
     state_id a:31;
@@ -150,16 +155,16 @@ struct context {
     state_id *bracket_states;
 };
 
-static void build_ambiguity_path(struct context *context,
- struct ambiguity *ambiguity, struct path_offset offset, struct path_node *node,
- int32_t direction, bool swapped);
-
 static void search_state_pairs(struct context *context,
  struct state_pair_table *table, struct automaton *automaton,
  enum direction direction);
 static void follow_state_pair_transition(struct path_node node, state_id a,
  state_id b, uint32_t weight, enum direction direction,
  struct state_pair_table *table, struct worklist *worklist);
+
+static void build_ambiguity_path(struct context *context,
+ struct ambiguity *ambiguity, struct path_offset offset, struct path_node *node,
+ int32_t direction, bool swapped);
 
 // Copying a node fills in the offset as well.
 static void path_node_copy(struct context *context,
@@ -279,14 +284,15 @@ void check_for_ambiguity(struct combined_grammar *combined,
             break;
         }
 
-        // We found some new bracket ambiguities.  Loop around and see if we can
-        // find an ambiguity in the root automaton now.
+        // We found some new bracket ambiguities.  Clear the table and keep
+        // looping until we don't find any more.
         state_pair_table_clear(&table);
     }
 
     ambiguity->has_ambiguity = table.has_ambiguity;
     if (table.has_ambiguity) {
-        // We found an ambiguous path through the root automaton.
+        // We found an ambiguous path through the root automaton.  Write it to
+        // the output ambiguity struct.
         uint32_t path_index = state_pair_table_lookup(&table, table.ambiguity,
          fnv(&table.ambiguity, sizeof(table.ambiguity)));
         struct path_node in = table.in_paths[path_index];
@@ -330,13 +336,274 @@ void check_for_ambiguity(struct combined_grammar *combined,
     free(context.bracket_states);
 }
 
+static void search_state_pairs(struct context *context,
+ struct state_pair_table *table, struct automaton *automaton,
+ enum direction direction)
+{
+    table->has_ambiguity = false;
+    automaton_compute_epsilon_closure(automaton, FOLLOW_ACTION_TRANSITIONS);
+    // The worklist is a binary min-heap of state pairs.  The heap is ordered by
+    // a weight (currently, the number of symbols it takes to reach the state
+    // pair), which lets us produce minimal paths which focus on the ambiguity
+    // itself.
+    struct worklist worklist = {0};
+    if (direction == FORWARD) {
+        follow_state_pair_transition(boundary_node, automaton->start_state,
+         automaton->start_state, 0, direction, table, &worklist);
+    } else {
+        struct state s = automaton->states[automaton->start_state];
+        for (uint32_t i = 0; i < s.number_of_transitions; ++i) {
+            state_id target = s.transitions[i].target;
+            // The BACKWARD_UNRESOLVED direction means we ignore accepting
+            // states we already have an ambiguous path for.
+            if (direction == BACKWARD_UNRESOLVED &&
+             ambiguous_bracket_path(context, automaton->states[target].
+             transition_symbol)->type != INVALID_NODE)
+                continue;
+            follow_state_pair_transition(boundary_node, target, target, 0,
+             BACKWARD, table, &worklist);
+        }
+        // The logic above is the only place where the distinction between
+        // BACKWARD_UNRESOLVED and BACKWARD matters.  Simplify `direction` to
+        // BACKWARD for the rest of the function so we don't have to deal with
+        // both.
+        direction = BACKWARD;
+    }
+    while (worklist.number_of_items > 0) {
+        struct work_item item = worklist.items[0];
+        struct state_pair s = item.pair;
+
+        // Rebalance the heap to ensure the minimum-weight item is at the top.
+        struct work_item last = worklist.items[--worklist.number_of_items];
+        uint32_t i = 0;
+        while (2*i+1 < worklist.number_of_items) {
+            uint32_t j = 2*i+1;
+            if (2*i+2 < worklist.number_of_items &&
+             worklist.items[2*i+2].weight < worklist.items[j].weight)
+                j = 2*i+2;
+            if (last.weight > worklist.items[j].weight)
+                worklist.items[i] = worklist.items[j];
+            else
+                break;
+            i = j;
+        }
+        worklist.items[i] = last;
+
+        // Check if we've already visited this state pair and set the path field
+        // if necessary (`in_paths` for FORWARD, `out_paths` for BACKWARD).
+        uint32_t hash = fnv(&s, sizeof(s));
+        uint32_t index = state_pair_table_add(table, s, hash);
+        if (table->status[index] == LOCKED)
+            continue;
+        if (direction == FORWARD) {
+            bool set_in_path = false;
+            if (table->in_paths[index].type == INVALID_NODE) {
+                table->in_paths[index] = item.node;
+                table->in_weights[index] = item.weight;
+                set_in_path = true;
+            }
+            if ((item.node.flags & AMBIGUOUS_NODE) &&
+             table->ain_paths[index].type == INVALID_NODE) {
+                table->ain_paths[index] = item.node;
+                table->in_weights[index] = item.weight;
+            }
+            if (!set_in_path)
+                continue;
+        }
+        if (direction == BACKWARD) {
+            if (table->out_paths[index].type == INVALID_NODE) {
+                table->out_paths[index] = item.node;
+                // Check to see if either of our requirements are satisfied:
+                // - a path that contains two distinct states, or
+                // - a path that contains an intrinsically ambiguous edge.
+                bool contains_distinct_states = s.a != s.b &&
+                 table->in_paths[index].type != INVALID_NODE;
+                bool contains_intrinsic_ambiguity =
+                 table->ain_paths[index].type != INVALID_NODE;
+                // If this is the lowest-weighted path that satisfies the
+                // requirements, track the current node as the new ambiguity.
+                if ((contains_distinct_states || contains_intrinsic_ambiguity)
+                 && (!table->has_ambiguity || item.weight +
+                 table->in_weights[index] < table->ambiguity_weight)) {
+                    table->has_ambiguity = true;
+                    table->ambiguity = s;
+                    table->ambiguity_weight = item.weight +
+                     table->in_weights[index];
+                }
+            } else
+                continue;
+        }
+
+        // Add each successor of this state pair to the worklist.
+        uint32_t w = item.weight;
+        struct state a = automaton->states[s.a];
+        struct state b = automaton->states[s.b];
+        bool follow_epsilons = s.epsilon_state == ALLOW_EPSILON_SUCCESSORS;
+        if (direction == BACKWARD)
+            follow_epsilons = !follow_epsilons;
+        if (follow_epsilons) {
+            // Add action transitions by visiting the two states' epsilon
+            // closures.  Since states aren't stored in their own epsilon
+            // closures, this is a bit more code than it might otherwise be.
+            struct epsilon_closure ac, bc;
+            ac = automaton->epsilon_closure_for_state[s.a];
+            bc = automaton->epsilon_closure_for_state[s.b];
+            for (uint32_t i = 0; i < ac.reachable.number_of_states; ++i) {
+                for (uint32_t j = 0; j < bc.reachable.number_of_states; ++j) {
+                    follow_state_pair_transition((struct path_node){
+                        .type = ACTION_NODE,
+                        .next_pair = s,
+                        .actions[0] = ac.actions + ac.action_indexes[i],
+                        .actions[1] = bc.actions + bc.action_indexes[j],
+                    }, ac.reachable.states[i], bc.reachable.states[j], w,
+                     direction, table, &worklist);
+                }
+                follow_state_pair_transition((struct path_node){
+                    .type = ACTION_NODE,
+                    .next_pair = s,
+                    .actions[0] = ac.actions + ac.action_indexes[i],
+                }, ac.reachable.states[i], s.b, w, direction, table, &worklist);
+                // Check `ambiguous_action_indexes` to see if there's a second
+                // path between these two states.  If there is, we create a node
+                // with both action lists and with the AMBIGUOUS_NODE flag set--
+                // `follow_state_pair_transition` will add this node to
+                // `ain_nodes` as an intrinsic ambiguity.
+                if (direction == FORWARD && s.a == s.b &&
+                 ac.ambiguous_action_indexes[i] != UINT32_MAX) {
+                    follow_state_pair_transition((struct path_node){
+                        .type = ACTION_NODE,
+                        .next_pair = s,
+                        .flags = AMBIGUOUS_NODE,
+                        .actions[0] = ac.actions + ac.action_indexes[i],
+                        .actions[1] = ac.actions +
+                         ac.ambiguous_action_indexes[i],
+                    }, ac.reachable.states[i], ac.reachable.states[i], w,
+                     direction, table, &worklist);
+                }
+            }
+            for (uint32_t j = 0; j < bc.reachable.number_of_states; ++j) {
+                follow_state_pair_transition((struct path_node){
+                    .type = ACTION_NODE,
+                    .next_pair = s,
+                    .actions[1] = bc.actions + bc.action_indexes[j],
+                }, s.a, bc.reachable.states[j], w, direction, table, &worklist);
+            }
+            follow_state_pair_transition((struct path_node){
+                .next_pair = s,
+                .type = ACTION_NODE,
+            }, s.a, s.b, w, direction, table, &worklist);
+        } else {
+            // Add successors of symbol and bracket transitions.
+            for (uint32_t i = 0; i < a.number_of_transitions; ++i) {
+                struct transition at = a.transitions[i];
+                if (at.symbol == SYMBOL_EPSILON)
+                    continue;
+                bool bracket = at.symbol >= context->combined->number_of_tokens;
+                for (uint32_t j = 0; j < b.number_of_transitions; ++j) {
+                    struct transition bt = b.transitions[j];
+                    if (!bracket) {
+                        // This is a normal symbol transition.
+                        if (at.symbol != bt.symbol)
+                            continue;
+                        follow_state_pair_transition((struct path_node){
+                            .type = SYMBOL_NODE,
+                            .next_pair = s,
+                            .symbol = at.symbol,
+                        }, at.target, bt.target, w + 1, direction, table,
+                         &worklist);
+                        continue;
+                    }
+                    if (bt.symbol == SYMBOL_EPSILON)
+                        continue;
+                    if (bt.symbol < context->combined->number_of_tokens)
+                        continue;
+                    // This is a bracket transition.
+
+                    // Check the `bracket_paths` table to see if the accepting
+                    // state pair corresponding to these two bracket transition
+                    // symbols has an associated path.
+                    state_id sa = context->bracket_states[at.symbol -
+                     context->combined->number_of_tokens];
+                    state_id sb = context->bracket_states[bt.symbol -
+                     context->combined->number_of_tokens];
+                    struct state_pair p = state_pair_make(sa, sb,
+                     DISALLOW_EPSILON_SUCCESSORS);
+                    uint32_t k;
+                    k = state_pair_table_lookup(&context->bracket_paths, p,
+                     fnv(&p, sizeof(p)));
+                    if (context->bracket_paths.status[k] == LOCKED) {
+                        // The "locked" flag indicates there's a path here.
+                        // If we're moving along two different transition
+                        // symbols, this is an intrinsic ambiguity -- mark it
+                        // using the AMBIGUOUS_NODE flag.
+                        follow_state_pair_transition((struct path_node){
+                            .type = BRACKET_TRANSITION_NODE,
+                            .next_pair = s,
+                            .bracket_pair = p,
+                            .flags = (at.symbol == bt.symbol ? 0 :
+                             AMBIGUOUS_NODE) | (sa == p.a ? 0 :
+                             SWAPPED_BRACKET_PATH),
+                        }, at.target, bt.target, w +
+                         context->bracket_paths.in_paths[k].offset.symbols,
+                         direction, table, &worklist);
+                    }
+
+                    if (at.symbol == bt.symbol) {
+                        // If this bracket transition already has an intrinsic
+                        // ambiguity, track it using the JOIN_NODE node we
+                        // stored in the `ambiguous_bracket_paths` array.
+                        struct path_node n = *ambiguous_bracket_path(context,
+                         at.symbol);
+                        if (n.type != INVALID_NODE) {
+                            n.next_pair = s;
+                            follow_state_pair_transition(n, at.target,
+                             bt.target, w + n.join[0]->offset.symbols +
+                             n.join[1]->offset.symbols, direction, table,
+                             &worklist);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    free(worklist.items);
+}
+
+static void follow_state_pair_transition(struct path_node node, state_id a,
+ state_id b, uint32_t weight, enum direction direction,
+ struct state_pair_table *table, struct worklist *worklist)
+{
+    struct state_pair pair;
+    if (node.type == ACTION_NODE) {
+        pair = state_pair_make(a, b, direction == FORWARD ?
+         DISALLOW_EPSILON_SUCCESSORS : ALLOW_EPSILON_SUCCESSORS);
+    } else {
+        pair = state_pair_make(a, b, direction == FORWARD ?
+         ALLOW_EPSILON_SUCCESSORS : DISALLOW_EPSILON_SUCCESSORS);
+    }
+    if (a != pair.a)
+        node.flags |= SWAPPED_PATH;
+    uint32_t i = worklist->number_of_items++;
+    worklist->items = grow_array(worklist->items,
+     &worklist->items_allocated_bytes,
+     worklist->number_of_items * sizeof(struct work_item));
+    // Setting i = (i-1)/2 moves up the binary min-heap.
+    for(; i > 0 && weight < worklist->items[(i-1)/2].weight; i = (i-1)/2)
+        worklist->items[i] = worklist->items[(i-1)/2];
+    worklist->items[i] = (struct work_item){
+        .node = node,
+        .pair = pair,
+        .weight = weight,
+    };
+}
+
 static void build_ambiguity_path(struct context *context,
  struct ambiguity *ambiguity, struct path_offset offset, struct path_node *node,
  int32_t direction, bool swapped)
 {
-    // Here, we fill in the `ambiguity` struct based on a path through the
-    // product automaton.  We use the offsets computed in `path_node_copy` to
-    // figure out where to put each action and symbol.
+    // `build_ambiguity_path` fills in the ambiguity struct according to the
+    // path described in `node`.  The offsets computed in `path_node_copy` are
+    // used to figure out where to put each action and symbol.
     for (; node && node->type != BOUNDARY_NODE; node = node->next) {
         if (node->flags & SWAPPED_PATH)
             swapped = !swapped;
@@ -408,237 +675,15 @@ static void build_ambiguity_path(struct context *context,
     }
 }
 
-static void search_state_pairs(struct context *context,
- struct state_pair_table *table, struct automaton *automaton,
- enum direction direction)
-{
-    table->has_ambiguity = false;
-    automaton_compute_epsilon_closure(automaton, FOLLOW_ACTION_TRANSITIONS);
-    struct worklist worklist = {0};
-    if (direction == FORWARD) {
-        follow_state_pair_transition(boundary_node, automaton->start_state,
-         automaton->start_state, 0, direction, table, &worklist);
-    } else {
-        struct state s = automaton->states[automaton->start_state];
-        for (uint32_t i = 0; i < s.number_of_transitions; ++i) {
-            state_id target = s.transitions[i].target;
-            if (direction == BACKWARD_UNRESOLVED &&
-             ambiguous_bracket_path(context, automaton->states[target].
-             transition_symbol)->type != INVALID_NODE)
-                continue;
-            follow_state_pair_transition(boundary_node, target, target, 0,
-             BACKWARD, table, &worklist);
-        }
-        // This is the only place where the distinction between
-        // BACKWARD_UNRESOLVED and BACKWARD matters.  Simplify `direction` to
-        // BACKWARD for the rest of the function so we don't have to deal with
-        // both.
-        direction = BACKWARD;
-    }
-    while (worklist.number_of_items > 0) {
-        struct work_item item = worklist.items[0];
-        struct state_pair s = item.pair;
-
-        // Rebalance the heap.
-        struct work_item last = worklist.items[--worklist.number_of_items];
-        uint32_t i = 0;
-        while (2*i+1 < worklist.number_of_items) {
-            uint32_t j = 2*i+1;
-            if (2*i+2 < worklist.number_of_items &&
-             worklist.items[2*i+2].weight < worklist.items[j].weight)
-                j = 2*i+2;
-            if (last.weight > worklist.items[j].weight)
-                worklist.items[i] = worklist.items[j];
-            else
-                break;
-            i = j;
-        }
-        worklist.items[i] = last;
-
-        uint32_t hash = fnv(&s, sizeof(s));
-        uint32_t index = state_pair_table_add(table, s, hash);
-        if (table->status[index] == LOCKED)
-            continue;
-        if (direction == FORWARD) {
-            bool set_in_path = false;
-            if (table->in_paths[index].type == INVALID_NODE) {
-                table->in_paths[index] = item.node;
-                table->in_weights[index] = item.weight;
-                set_in_path = true;
-            }
-            if ((item.node.flags & AMBIGUOUS_NODE) &&
-             table->ain_paths[index].type == INVALID_NODE) {
-                table->ain_paths[index] = item.node;
-                table->in_weights[index] = item.weight;
-            }
-            if (!set_in_path)
-                continue;
-        }
-        if (direction == BACKWARD) {
-            if (table->out_paths[index].type == INVALID_NODE) {
-                table->out_paths[index] = item.node;
-                if (((s.a != s.b && table->in_paths[index].type != INVALID_NODE)
-                 || table->ain_paths[index].type != INVALID_NODE) &&
-                 (!table->has_ambiguity || item.weight +
-                 table->in_weights[index] < table->ambiguity_weight)) {
-                    // We found a complete path which satisfies our
-                    // requirements: i.e.,
-                    // - it contains two distinct states, or
-                    // - it contains an intrinsically ambiguous edge.
-                    table->has_ambiguity = true;
-                    table->ambiguity = s;
-                    table->ambiguity_weight = item.weight +
-                     table->in_weights[index];
-                }
-            } else
-                continue;
-        }
-
-        uint32_t w = item.weight;
-        struct state a = automaton->states[s.a];
-        struct state b = automaton->states[s.b];
-        bool follow_epsilons = s.epsilon_state == ALLOW_EPSILON_SUCCESSORS;
-        if (direction == BACKWARD)
-            follow_epsilons = !follow_epsilons;
-        if (follow_epsilons) {
-            // Search through action transitions.
-            struct epsilon_closure ac, bc;
-            ac = automaton->epsilon_closure_for_state[s.a];
-            bc = automaton->epsilon_closure_for_state[s.b];
-            for (uint32_t i = 0; i < ac.reachable.number_of_states; ++i) {
-                for (uint32_t j = 0; j < bc.reachable.number_of_states; ++j) {
-                    follow_state_pair_transition((struct path_node){
-                        .type = ACTION_NODE,
-                        .next_pair = s,
-                        .actions[0] = ac.actions + ac.action_indexes[i],
-                        .actions[1] = bc.actions + bc.action_indexes[j],
-                    }, ac.reachable.states[i], bc.reachable.states[j], w,
-                     direction, table, &worklist);
-                }
-                follow_state_pair_transition((struct path_node){
-                    .type = ACTION_NODE,
-                    .next_pair = s,
-                    .actions[0] = ac.actions + ac.action_indexes[i],
-                }, ac.reachable.states[i], s.b, w, direction, table, &worklist);
-                if (direction == FORWARD && s.a == s.b &&
-                 ac.ambiguous_action_indexes[i] != UINT32_MAX) {
-                    follow_state_pair_transition((struct path_node){
-                        .type = ACTION_NODE,
-                        .next_pair = s,
-                        .flags = AMBIGUOUS_NODE,
-                        .actions[0] = ac.actions + ac.action_indexes[i],
-                        .actions[1] = ac.actions +
-                         ac.ambiguous_action_indexes[i],
-                    }, ac.reachable.states[i], ac.reachable.states[i], w,
-                     direction, table, &worklist);
-                }
-            }
-            for (uint32_t j = 0; j < bc.reachable.number_of_states; ++j) {
-                follow_state_pair_transition((struct path_node){
-                    .type = ACTION_NODE,
-                    .next_pair = s,
-                    .actions[1] = bc.actions + bc.action_indexes[j],
-                }, s.a, bc.reachable.states[j], w, direction, table, &worklist);
-            }
-            follow_state_pair_transition((struct path_node){
-                .next_pair = s,
-                .type = ACTION_NODE,
-            }, s.a, s.b, w, direction, table, &worklist);
-        } else {
-            // Search through symbol and bracket transitions.
-            for (uint32_t i = 0; i < a.number_of_transitions; ++i) {
-                struct transition at = a.transitions[i];
-                if (at.symbol == SYMBOL_EPSILON)
-                    continue;
-                bool bracket = at.symbol >= context->combined->number_of_tokens;
-                for (uint32_t j = 0; j < b.number_of_transitions; ++j) {
-                    struct transition bt = b.transitions[j];
-                    if (!bracket) {
-                        if (at.symbol != bt.symbol)
-                            continue;
-                        follow_state_pair_transition((struct path_node){
-                            .type = SYMBOL_NODE,
-                            .next_pair = s,
-                            .symbol = at.symbol,
-                        }, at.target, bt.target, w + 1, direction, table,
-                         &worklist);
-                        continue;
-                    }
-                    if (bt.symbol == SYMBOL_EPSILON)
-                        continue;
-                    if (bt.symbol < context->combined->number_of_tokens)
-                        continue;
-                    state_id sa = context->bracket_states[at.symbol -
-                     context->combined->number_of_tokens];
-                    state_id sb = context->bracket_states[bt.symbol -
-                     context->combined->number_of_tokens];
-                    struct state_pair p = state_pair_make(sa, sb,
-                     DISALLOW_EPSILON_SUCCESSORS);
-                    uint32_t k;
-                    k = state_pair_table_lookup(&context->bracket_paths, p,
-                     fnv(&p, sizeof(p)));
-                    if (context->bracket_paths.status[k] == LOCKED) {
-                        follow_state_pair_transition((struct path_node){
-                            .type = BRACKET_TRANSITION_NODE,
-                            .next_pair = s,
-                            .bracket_pair = p,
-                            .flags = (at.symbol == bt.symbol ? 0 :
-                             AMBIGUOUS_NODE) | (sa == p.a ? 0 :
-                             SWAPPED_BRACKET_PATH),
-                        }, at.target, bt.target, w +
-                         context->bracket_paths.in_paths[k].offset.symbols,
-                         direction, table, &worklist);
-                    }
-                    if (at.symbol == bt.symbol) {
-                        struct path_node n = *ambiguous_bracket_path(context,
-                         at.symbol);
-                        if (n.type != INVALID_NODE) {
-                            n.next_pair = s;
-                            follow_state_pair_transition(n, at.target,
-                             bt.target, w + n.join[0]->offset.symbols +
-                             n.join[1]->offset.symbols, direction, table,
-                             &worklist);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    free(worklist.items);
-}
-
-static void follow_state_pair_transition(struct path_node node, state_id a,
- state_id b, uint32_t weight, enum direction direction,
- struct state_pair_table *table, struct worklist *worklist)
-{
-    struct state_pair pair;
-    if (node.type == ACTION_NODE) {
-        pair = state_pair_make(a, b, direction == FORWARD ?
-         DISALLOW_EPSILON_SUCCESSORS : ALLOW_EPSILON_SUCCESSORS);
-    } else {
-        pair = state_pair_make(a, b, direction == FORWARD ?
-         ALLOW_EPSILON_SUCCESSORS : DISALLOW_EPSILON_SUCCESSORS);
-    }
-    if (a != pair.a)
-        node.flags |= SWAPPED_PATH;
-    uint32_t i = worklist->number_of_items++;
-    worklist->items = grow_array(worklist->items,
-     &worklist->items_allocated_bytes,
-     worklist->number_of_items * sizeof(struct work_item));
-    // Setting i = (i-1)/2 moves up the binary min-heap.
-    for(; i > 0 && weight < worklist->items[(i-1)/2].weight; i = (i-1)/2)
-        worklist->items[i] = worklist->items[(i-1)/2];
-    worklist->items[i] = (struct work_item){
-        .node = node,
-        .pair = pair,
-        .weight = weight,
-    };
-}
-
 static void path_node_copy(struct context *context,
  struct state_pair_table *table, struct path_node *which_paths,
  struct path_node *node)
 {
+    // Copies a path from table storage into heap storage, filling in the
+    // offset field according to how many actions and symbols the path contains.
+    // The `build_ambiguity_path` function writes actions and symbols into the
+    // final ambiguity path using this offset field as a guide -- that's why
+    // these two functions have such a similar structure.
     if (node->flags & COPIED_PATH)
         return;
     struct path_offset *offset = &node->offset;
