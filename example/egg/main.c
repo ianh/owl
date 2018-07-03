@@ -98,6 +98,8 @@ static table_id alloc_env_table(void);
 static table_id alloc_string(size_t length);
 static char *get_string(table_id index);
 
+static const struct val true_val = { .type = TYPE_TRUE };
+static const struct val false_val = { .type = TYPE_FALSE };
 static struct val number_val(double number);
 static struct val string_val(const char *string, size_t len);
 
@@ -139,7 +141,7 @@ static struct val builtin_print(struct bluebird_node arg)
     for (; !arg.empty; arg = bluebird_next(arg))
         val_print(stdout, eval_expr(arg));
     printf("\n");
-    return (struct val){ .type = TYPE_FALSE };
+    return false_val;
 }
 
 static enum control_flow eval_stmt_list(struct bluebird_node stmt_list,
@@ -293,9 +295,9 @@ static struct val eval_expr(struct bluebird_node expr_node)
     case PARSED_NUMBER:
         return number_val(parsed_number_get(expr.number).number);
     case PARSED_TRUE:
-        return (struct val){ .type = TYPE_TRUE };
+        return true_val;
     case PARSED_FALSE:
-        return (struct val){ .type = TYPE_FALSE };
+        return false_val;
     case PARSED_VARIABLE: {
         struct val key = string_for_identifier(expr.identifier);
         for (table_id e = environment; e; e = tables[e].next) {
@@ -433,25 +435,25 @@ static struct val eval_expr(struct bluebird_node expr_node)
             return left;
     }
     case PARSED_EQUAL_TO:
-        return (struct val){ .type = val_equal(eval_expr(expr.left),
-         eval_expr(expr.right)) ? TYPE_TRUE : TYPE_FALSE };
+        return val_equal(eval_expr(expr.left), eval_expr(expr.right)) ?
+         true_val : false_val;
     case PARSED_NOT_EQUAL_TO:
-        return (struct val){ .type = val_equal(eval_expr(expr.left),
-         eval_expr(expr.right)) ? TYPE_FALSE : TYPE_TRUE };
+        return val_equal(eval_expr(expr.left), eval_expr(expr.right)) ?
+         true_val : false_val;
     case PARSED_LESS_THAN:
-        return (struct val){ .type = eval_number(expr.left) <
-         eval_number(expr.right) ? TYPE_TRUE : TYPE_FALSE };
+        return eval_number(expr.left) < eval_number(expr.right) ?
+         true_val : false_val;
     case PARSED_GREATER_THAN:
-        return (struct val){ .type = eval_number(expr.left) >
-         eval_number(expr.right) ? TYPE_TRUE : TYPE_FALSE };
+        return eval_number(expr.left) > eval_number(expr.right) ?
+         true_val : false_val;
     case PARSED_LESS_THAN_OR_EQUAL_TO:
-        return (struct val){ .type = eval_number(expr.left) <=
-         eval_number(expr.right) ? TYPE_TRUE : TYPE_FALSE };
+        return eval_number(expr.left) <= eval_number(expr.right) ?
+         true_val : false_val;
     case PARSED_GREATER_THAN_OR_EQUAL_TO:
-        return (struct val){ .type = eval_number(expr.left) >=
-         eval_number(expr.right) ? TYPE_TRUE : TYPE_FALSE };
+        return eval_number(expr.left) >= eval_number(expr.right) ?
+         true_val : false_val;
     default:
-        return (struct val){ .type = TYPE_FALSE };
+        return false_val;
     }
 }
 
