@@ -1,17 +1,15 @@
 # grammar reference
 
-A bluebird grammar is a sequence of rules: `rule-name = ...`.
+A bluebird grammar is made up of rules of the form `rule-name = ...`.  The first rule (or *root rule*) is matched against the input—the other rules can be used in patterns (described below) within the root rule or other rules.
 
 ## patterns
-
-The simplest kind of rule has the form `rule-name = pattern`.
 
 A *pattern* matches sequences of tokens. It's made up of *atomic patterns*, which match individual tokens:
 
 | atomic pattern | what it matches |
 | --- | --- |
-| `'keyword'` | A keyword matches a literal sequence of characters; this keyword would match the text `keyword`.  The keyword string can contain any character. |
-| `'a;ksdf;aklsdjf'` | This keyword would match the text `a;ksdf;aklsdjf`. |
+| `'keyword'` | A keyword is a literal sequence of characters; this keyword would match the token `keyword`.  The keyword string can contain any character. |
+| `'a;ksdf;aklsdjf'` | This keyword would match the token `a;ksdf;aklsdjf`. |
 | `string` | A string begins with a `'` or `"`, then continues to the next matching `'` or `"`, skipping over characters escaped with `\`.  For example, `"\n"` produces the same string as `"n"`. |
 | `number` | A number begins with a digit (0-9) or a decimal point (`.`) followed by a digit.  Once the beginning of the number is matched, the rest of the number is read using `strtod()`.  Note that `number` doesn't match a leading `-` to avoid ambiguity with the `-` operator: you should add negation at a higher level in your grammar. |
 | `identifier` | An identifier begins with a letter or an underscore `_`, then continues with letters, underscores, and digits (0-9).  Dashes are also allowed as long as you don't have a `-` keyword anywhere in your grammar. |
@@ -49,6 +47,8 @@ Guard brackets enclose a pattern in begin and end keywords:
 
 The keywords that begin and end a guard bracket are called the *begin keyword* and the *end keyword*.  A keyword used in a normal pattern can't be used as a begin or end keyword.  A begin keyword also can't be used as an end keyword (or vice versa).
 
+The simplest kind of rule represents a single pattern: `rule-name = pattern`.
+
 ## named choices
 
 A rule with named choices has the form
@@ -66,7 +66,7 @@ This rule matches the same token sequences as
 rule-name = a | b | ...
 ```
 
-but keeps track of which choice was picked in the resulting parse tree.
+but keeps track of which choice was picked (and records the choice in the resulting parse tree).
 
 ## operators
 
@@ -91,9 +91,9 @@ An operator group begins with the `.operators` keyword, followed by the operator
 
 Each operator in the group has the form `pattern : op-name`.
 
-An operator group matches token sequences based on its fixity.  If `next` represents the next group up in the list, and `op` represents the operators in the group, each group matches the sequences:
+An operator matches token sequences based on the fixity of its group.  In the following table, `next` represents the next group up in the list, and `op` represents the operators in the group.
 
-| operator group | what each operator matches |
+| operator group | what it matches |
 | --- | --- |
 | `.operators prefix` | `op* next` |
 | `.operators postfix` | `next op*` |
@@ -144,7 +144,7 @@ Every rule name is also a pattern.
 | `a\:b` | The rule `a`, but excluding the choice or operator `b`. |
 | `a\:b\:c@d` | The rule `a`, excluding the choices (or operators) `b` and `c`, renamed to `d` in the resulting parse tree. |
 
-Any identifier can be a rule name, including `identifier`, `string`, and `number`.  If you name a rule after one of these tokens, its name will refer to the rule instead of the token.
+You can name a rule using any identifier, including `identifier`, `string`, and `number`.  If you name a rule after one of these tokens, its name will refer to the rule instead of the token.
 
 Except within guard brackets `[ ]`, a rule can only refer to rules after it in the grammar.  The first rule in the grammar is matched against the input text directly; other rules are only useful as patterns.
 
@@ -156,11 +156,30 @@ A *line comment token* will cause the rest of the line on which it appears to be
 line-comment-token '//'
 ```
 
-## grammar.bb
+## versioning
 
-For a precise description of the grammar, here's the file bluebird uses to generate its own parser:
+The bluebird grammar format may change in the future.  To allow future versions to interpret older grammars as they were originally written, bluebird matches its current version against a version specified at the beginning of your grammar file:
 
 ```
+#using bluebird.v1
+```
+
+If the version is older, bluebird may attempt to interpret the grammar in the same way that older version did.  If the version is newer, bluebird will exit with an error.  If no version is specified, bluebird will assume you're OK with the current version.
+
+To see the current version string for your installation, run `bluebird --version`:
+
+```
+$ bluebird --version
+bluebird.v1
+```
+
+## grammar.bb
+
+Here's the file bluebird uses to generate its own parser.  This file is somewhat mysterious: it's written using the same syntax it defines.
+
+```
+#using bluebird.v1
+
 # This is the grammar for bluebird itself.
 # Compile with `bluebird -c grammar.bb -o 1-parse.h`.
 
@@ -194,4 +213,3 @@ expr =
 comment-token = 'line-comment-token' string
 line-comment-token '#'
 ```
-
