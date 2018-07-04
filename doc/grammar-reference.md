@@ -201,7 +201,7 @@ expr =
   identifier ('\\' ':' identifier@exception)* ('@' identifier@rename)? : ident
   string : literal
   [ '(' expr ')' ] : parens
-  [ '[' string@begin-token expr? string@end-token ']' ] : bracketed
+  [ '[' string@begin-token expr\:choice? string@end-token ']' ] : bracketed
  .operators postfix
   '*' : zero-or-more
   '+' : one-or-more

@@ -1,31 +1,50 @@
 Bluebird is an experimental parser generator.  It targets the class of *visibly pushdown languages*, which sit between regular languages and context-free languages on the formal language hierarchy.
 
-Unlike traditional context-free-language parser generators, bluebird can tell you about ambiguities directly in terms of the language it recognizes:
-
--this is where the colorful image goes-
-
-Here's an example of a bluebird grammar for a language with arithmetic and variable assignment:
+Here's a bluebird grammar for a language with variable assignment, a print statement, and some arithmetic expressions:
 
 ```
 program = statement*
 statement =
-  identifier '=' expression : assignment
-  'print' expression : print
+    identifier '=' expression : assignment
+    'print' expression : print
 expression =
-  identifier : variable
-  number : number
-  [ '(' expression ')' ] : parens
- .operators prefix
-  '-' : negate
- .operators infix left
-  '*' : multiply
-  '/' : divide
- .operators infix left
-  '+' : add
-  '-' : subtract
+    identifier : variable
+    number : number
+    [ '(' expression ')' ] : parens
+  .operators prefix
+    '-' : negate
+  .operators infix left
+    '*' : multiply
+    '/' : divide
+  .operators infix left
+    '+' : add
+    '-' : subtract
 ```
 
-Check out more examples in the [example/](example/) directory.
+(This is [example/calc/](example/calc/)—see more in the [example/](example/) directory.)
+
+If your grammar happens to be ambiguous, bluebird will show you the ambiguity by displaying two different parse trees for the same input:
+
+```
+$ bluebird ambiguous.bb
+error: this grammar is ambiguous
+
+. a ( b )
+
+  can be parsed in two different ways: as
+
+. a        ( b        )
+  |        | expr:var
+  expr:var expr:parens-
+  program--------------
+
+  or as
+
+. a ( b        )
+  |   expr:var
+  expr:function-call
+  program-----------
+```
 
 ## motivation
 
@@ -43,34 +62,48 @@ $ make
 
 Run `make install` to copy the `bluebird` tool into `/usr/local/bin/bluebird`.
 
-Bluebird has two modes of operation&mdash;**test mode** and **compilation mode**.
+Bluebird has two modes of operation&mdash;**interpreter mode** and **compilation mode**.
 
 In **interpreter mode**, bluebird reads your grammar file, then parses standard input on the fly, producing a visual representation of the parse tree as soon as you hit `^D`:
 
 ```
-$ bluebird grammar.bb
-...
+$ bluebird test/expr.bb
+1 + 2
+^D
+. 1            + 2
+  expr:literal   expr:literal
+  expr:plus------------------
 ```
 
-You can specify a file to use as input on the command line with `--input` or `-i`:
+You can specify a file to use as input with `--input` or `-i`:
 
 ```
-$ bluebird grammar.bb -i file
-...
+$ bluebird test/expr.bb -i multiply.txt
+. 8            * 7
+  expr:literal   expr:literal
+  expr:times-----------------
 ```
 
-In **compilation mode**, bluebird reads your grammar file, but doesn't parse any input right away.  Instead, it generates C code with functions that let you parse the input later:
+In **compilation mode**, bluebird reads your grammar file, but doesn't parse any input right away.  Instead, it generates C code with functions that let you parse the input later.
 
 ```
-$ bluebird -c grammar.bb -o parser.h
+$ bluebird -c test/expr.bb -o parser.h
 ```
 
-You can `#include` the generated parser into a C program:
+You can `#include` this generated parser into a C program:
 
 ```
-...
+#include "parser.h"
 ```
 
+Wherever you #define `BLUEBIRD_PARSER_IMPLEMENTATION`, the implementation of the parser will also be included.  Make sure to do this somewhere in your program:
+
+```
+#define BLUEBIRD_PARSER_IMPLEMENTATION
+#include "parser.h"
+```
+
+For more about how to use this header, see the docs on [using the generated parser](doc/generated-parser.md).
 
 ## rules and grammars
 
@@ -104,20 +137,20 @@ The symbols just inside the brackets — `'{'` and `'}'` here — are the *begin
 
 ```
 expression =
-  identifier | number | parens : value
- .operators prefix
-  '-' : negate
- .operators infix left
-  '+' : add
-  '-' : subtract
+    identifier | number | parens : value
+  .operators prefix
+    '-' : negate
+  .operators infix left
+    '+' : add
+    '-' : subtract
 parens = [ '(' expression ')' ]
 ```
 
 Operators in the same `.operators` clause have the same precedence level; clauses nearer the top of the list are higher in precedence.
 
-To learn more, check out the [grammar reference](docs/grammar-reference.md).
+To learn more, check out the [grammar reference](docs/grammar-reference.md) and the [example/](example/) directory.
 
-## reasons to use it
+## reasons to use bluebird
 
 * Bluebird's parsing model can be understood without talking about parser states, backtracking, lookahead, or any other implementation details.
 * Seeing ambiguities in terms of the parsed language makes understanding and removing them much easier.
@@ -134,3 +167,7 @@ To learn more, check out the [grammar reference](docs/grammar-reference.md).
 * The performance of the generated parser is decent, but I haven't done a lot of benchmarking or optimization—other more mature parsers are likely to give you better throughput.
 * The generated parser is a C header file, so if you're not using C, this may not be very useful.
 * If you need more kinds of tokens than the default tokenizer can provide, custom tokenizers aren't supported at the moment.
+
+## related work
+
+…
