@@ -353,7 +353,7 @@ void generate(struct generator *gen)
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
             set_substitution(out, "referenced-slot", rule->slots[j].name,
              rule->slots[j].name_length, LOWERCASE_WITH_UNDERSCORES);
-            output_line(out, "        .%%referenced-slot.empty = true,");
+            output_line(out, "            .%%referenced-slot.empty = true,");
         }
         if (rule->number_of_slots == 0)
             output_line(out, "        0");
