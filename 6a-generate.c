@@ -706,10 +706,10 @@ void generate(struct generator *gen)
     for (state_id i = 0; i < gen->deterministic->automaton.number_of_states; ++i) {
         if (!gen->deterministic->automaton.states[i].accepting)
             continue;
-        has_accepting = true;
         set_unsigned_number_substitution(out, "state-id", i);
-        if (i > 0)
+        if (has_accepting)
             output_string(out, " && ");
+        has_accepting = true;
         output_string(out, "top.state_func != state_func_%%state-id");
     }
     if (!has_accepting)
