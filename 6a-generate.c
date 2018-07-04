@@ -139,9 +139,7 @@ void generate(struct generator *gen)
     output_line(out, "struct bluebird_node bluebird_next(struct bluebird_node);");
     output_line(out, "");
     output_line(out, "// Tests two nodes for equality.");
-    output_line(out, "static inline bool bluebird_nodes_equal(struct bluebird_node a, struct bluebird_node b) {");
-    output_line(out, "    return a._tree == b._tree && a._offset == b._offset;");
-    output_line(out, "}");
+    output_line(out, "bool bluebird_nodes_equal(struct bluebird_node a, struct bluebird_node b);");
     output_line(out, "");
     output_line(out, "// Returns the root bluebird_node.");
     output_line(out, "struct bluebird_node bluebird_tree_root_node(struct bluebird_tree *tree);");
@@ -346,11 +344,21 @@ void generate(struct generator *gen)
     output_line(out, "}");
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
+        set_unsigned_number_substitution(out, "rule-index", i);
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
         output_line(out, "struct parsed_%%rule parsed_%%rule_get(struct bluebird_node node) {");
-        output_line(out, "    if (node.empty)");
-        output_line(out, "        return (struct parsed_%%rule){0};");
+        output_line(out, "    if (node.empty || node._type != %%rule-index) {");
+        output_line(out, "        return (struct parsed_%%rule){");
+        for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
+            set_substitution(out, "referenced-slot", rule->slots[j].name,
+             rule->slots[j].name_length, LOWERCASE_WITH_UNDERSCORES);
+            output_line(out, "        .%%referenced-slot.empty = true,");
+        }
+        if (rule->number_of_slots == 0)
+            output_line(out, "        0");
+        output_line(out, "        };");
+        output_line(out, "    }");
         output_line(out, "    size_t offset = node._offset;");
         output_line(out, "    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.");
         if (rule->is_token)
@@ -537,6 +545,10 @@ void generate(struct generator *gen)
     output_line(out, "        ._type = node._type,");
     output_line(out, "        .empty = offset == 0,");
     output_line(out, "    };");
+    output_line(out, "}");
+
+    output_line(out, "bool bluebird_nodes_equal(struct bluebird_node a, struct bluebird_node b) {");
+    output_line(out, "    return a._tree == b._tree && a._offset == b._offset;");
     output_line(out, "}");
 
     output_line(out, "struct bluebird_node bluebird_tree_root_node(struct bluebird_tree *tree) {");
