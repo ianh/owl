@@ -1622,1810 +1622,1732 @@ static void construct_action_apply(struct construct_state *s, uint16_t action, s
 
 struct fill_run_continuation;
 struct fill_run_state {
-    bool (*state_func)(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
+    void (*state_func)(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
     uint32_t reachability_mask[1];
+    struct fill_run_continuation *cont;
 };
 struct fill_run_continuation {
     struct fill_run_state *stack;
-    uint32_t depth;
+    uint32_t top_index;
     uint32_t capacity;
+    bool error;
 };
-static void grow_cont_stack(struct fill_run_continuation *cont) {
-    size_t new_capacity = (cont->capacity + 2) * 3 / 2;
-    if (new_capacity <= cont->capacity)
-        abort();
-    struct fill_run_state *new_states = realloc(cont->stack, new_capacity * sizeof(struct fill_run_state));
-    if (!new_states)
-        abort();
-    cont->stack = new_states;
-    cont->capacity = new_capacity;
+static void continuation_stack_push(struct fill_run_state **top) {
+    struct fill_run_continuation *cont = (*top)->cont;
+    cont->top_index++;
+    if (cont->top_index >= cont->capacity) {
+        size_t new_capacity = (cont->capacity + 2) * 3 / 2;
+        if (new_capacity <= cont->capacity)
+            abort();
+        struct fill_run_state *new_states = realloc(cont->stack, new_capacity * sizeof(struct fill_run_state));
+        if (!new_states)
+            abort();
+        cont->stack = new_states;
+        cont->capacity = new_capacity;
+        *top = &cont->stack[cont->top_index];
+    } else
+        (*top)++;
+    (*top)->cont = cont;
 }
-static bool state_func_0(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_1(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_2(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_3(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_4(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_5(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_6(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_7(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_8(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_9(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_10(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_11(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_12(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_13(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_14(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_15(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_16(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_17(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_18(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_19(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_20(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_21(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_22(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_23(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_24(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_25(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_26(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_27(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_28(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_29(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_30(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_31(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_32(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_33(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_34(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_35(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_36(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_37(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_38(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_39(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_40(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_41(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_42(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_43(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_44(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_45(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_46(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_47(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_48(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_49(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_50(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_51(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_52(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_53(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_54(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_55(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_56(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_57(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_58(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_59(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_60(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_61(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_62(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_63(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_64(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_65(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_66(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_67(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_68(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_69(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_70(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_71(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_72(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_73(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_74(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_75(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_76(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_77(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_78(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_79(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_80(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_81(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_82(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_83(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_84(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_85(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_86(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_87(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_88(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_89(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_90(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_91(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index);
-static bool state_func_0(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_0(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_1(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_2(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_3(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_4(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_5(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_6(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_7(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_8(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_9(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_10(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_11(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_12(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_13(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_14(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_15(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_16(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_17(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_18(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_19(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_20(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_21(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_22(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_23(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_24(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_25(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_26(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_27(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_28(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_29(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_30(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_31(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_32(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_33(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_34(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_35(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_36(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_37(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_38(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_39(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_40(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_41(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_42(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_43(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_44(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_45(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_46(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_47(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_48(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_49(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_50(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_51(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_52(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_53(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_54(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_55(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_56(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_57(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_58(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_59(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_60(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_61(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_62(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_63(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_64(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_65(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_66(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_67(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_68(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_69(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_70(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_71(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_72(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_73(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_74(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_75(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_76(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_77(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_78(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_79(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_80(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_81(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_82(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_83(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_84(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_85(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_86(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_87(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_88(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_89(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_90(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_91(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index);
+static void state_func_0(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 0;
     switch (token) {
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_2; return true;
-    default: return false;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_2; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_1(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_1(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 1;
     switch (token) {
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_58; return true;
-    default: return false;
+    case 23: top->state_func = state_func_58; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_2(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_2(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 2;
     switch (token) {
-    case 0: cont->stack[cont->depth - 1].state_func = state_func_3; return true;
-    default: return false;
+    case 0: top->state_func = state_func_3; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_3(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_3(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 3;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_4; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 21: top->state_func = state_func_4; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_3;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_4(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_4(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 4;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_14; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_15; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_9; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_10; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_11; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_12; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_13; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 10: top->state_func = state_func_14; return;
+    case 11: top->state_func = state_func_15; return;
+    case 16: top->state_func = state_func_9; return;
+    case 17: top->state_func = state_func_10; return;
+    case 18: top->state_func = state_func_11; return;
+    case 19: top->state_func = state_func_12; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_13; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_4;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_5(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_5(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 5;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_9; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_10; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_11; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_12; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_13; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_9; return;
+    case 17: top->state_func = state_func_10; return;
+    case 18: top->state_func = state_func_11; return;
+    case 19: top->state_func = state_func_12; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_13; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_5;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_6(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_6(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 6;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_9; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_10; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_11; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_12; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_13; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_9; return;
+    case 17: top->state_func = state_func_10; return;
+    case 18: top->state_func = state_func_11; return;
+    case 19: top->state_func = state_func_12; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_13; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_6;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_7(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_7(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 7;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_9; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_10; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_11; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_12; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_13; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_9; return;
+    case 17: top->state_func = state_func_10; return;
+    case 18: top->state_func = state_func_11; return;
+    case 19: top->state_func = state_func_12; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_13; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_7;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_8(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_8(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 8;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_19; return true;
-    default: return false;
+    case 21: top->state_func = state_func_19; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_9(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_9(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 9;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_9; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_10; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_11; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_12; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_13; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_9; return;
+    case 17: top->state_func = state_func_10; return;
+    case 18: top->state_func = state_func_11; return;
+    case 19: top->state_func = state_func_12; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_13; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_9;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_10(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_10(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 10;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_9; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_10; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_11; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_12; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_13; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_9; return;
+    case 17: top->state_func = state_func_10; return;
+    case 18: top->state_func = state_func_11; return;
+    case 19: top->state_func = state_func_12; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_13; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_10;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_11(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_11(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 11;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_9; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_10; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_11; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_12; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_13; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_9; return;
+    case 17: top->state_func = state_func_10; return;
+    case 18: top->state_func = state_func_11; return;
+    case 19: top->state_func = state_func_12; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_13; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_11;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_12(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_12(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 12;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_4; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 21: top->state_func = state_func_4; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_12;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_13(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_13(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 13;
     switch (token) {
-    case 0: cont->stack[cont->depth - 1].state_func = state_func_3; return true;
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_14; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_15; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_9; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_10; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_11; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_12; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_13; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 0: top->state_func = state_func_3; return;
+    case 1: top->state_func = state_func_8; return;
+    case 10: top->state_func = state_func_14; return;
+    case 11: top->state_func = state_func_15; return;
+    case 16: top->state_func = state_func_9; return;
+    case 17: top->state_func = state_func_10; return;
+    case 18: top->state_func = state_func_11; return;
+    case 19: top->state_func = state_func_12; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_13; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_13;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_14(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_14(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 14;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_17; return true;
-    default: return false;
+    case 1: top->state_func = state_func_17; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_15(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_15(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 15;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_16; return true;
-    default: return false;
+    case 21: top->state_func = state_func_16; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_16(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_16(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 16;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_9; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_10; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_11; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_12; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_13; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_9; return;
+    case 17: top->state_func = state_func_10; return;
+    case 18: top->state_func = state_func_11; return;
+    case 19: top->state_func = state_func_12; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_13; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_16;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_17(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_17(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 17;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_18; return true;
-    default: return false;
+    case 21: top->state_func = state_func_18; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_18(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_18(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 18;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_14; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_15; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_9; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_10; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_11; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_12; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_13; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_5; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_6; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_7; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 10: top->state_func = state_func_14; return;
+    case 11: top->state_func = state_func_15; return;
+    case 16: top->state_func = state_func_9; return;
+    case 17: top->state_func = state_func_10; return;
+    case 18: top->state_func = state_func_11; return;
+    case 19: top->state_func = state_func_12; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_13; return;
+    case 23: top->state_func = state_func_5; return;
+    case 24: top->state_func = state_func_6; return;
+    case 25: top->state_func = state_func_7; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_18;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_19(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_19(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 19;
     switch (token) {
-    case 2: cont->stack[cont->depth - 1].state_func = state_func_20; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_21; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 2: top->state_func = state_func_20; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_21; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_19;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_20(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_20(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 20;
     switch (token) {
-    case 3: cont->stack[cont->depth - 1].state_func = state_func_35; return true;
-    case 4: cont->stack[cont->depth - 1].state_func = state_func_36; return true;
-    case 5: cont->stack[cont->depth - 1].state_func = state_func_37; return true;
-    default: return false;
+    case 3: top->state_func = state_func_35; return;
+    case 4: top->state_func = state_func_36; return;
+    case 5: top->state_func = state_func_37; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_21(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_21(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 21;
     switch (token) {
-    case 0: cont->stack[cont->depth - 1].state_func = state_func_3; return true;
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_30; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_31; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_25; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_26; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_27; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_28; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_29; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 0: top->state_func = state_func_3; return;
+    case 1: top->state_func = state_func_8; return;
+    case 10: top->state_func = state_func_30; return;
+    case 11: top->state_func = state_func_31; return;
+    case 16: top->state_func = state_func_25; return;
+    case 17: top->state_func = state_func_26; return;
+    case 18: top->state_func = state_func_27; return;
+    case 19: top->state_func = state_func_28; return;
+    case 21: top->state_func = state_func_29; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_21;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_22(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_22(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 22;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_25; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_26; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_27; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_28; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_29; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_25; return;
+    case 17: top->state_func = state_func_26; return;
+    case 18: top->state_func = state_func_27; return;
+    case 19: top->state_func = state_func_28; return;
+    case 21: top->state_func = state_func_29; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_22;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_23(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_23(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 23;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_25; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_26; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_27; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_28; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_29; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_25; return;
+    case 17: top->state_func = state_func_26; return;
+    case 18: top->state_func = state_func_27; return;
+    case 19: top->state_func = state_func_28; return;
+    case 21: top->state_func = state_func_29; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_23;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_24(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_24(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 24;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_25; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_26; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_27; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_28; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_29; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_25; return;
+    case 17: top->state_func = state_func_26; return;
+    case 18: top->state_func = state_func_27; return;
+    case 19: top->state_func = state_func_28; return;
+    case 21: top->state_func = state_func_29; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_24;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_25(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_25(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 25;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_25; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_26; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_27; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_28; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_29; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_25; return;
+    case 17: top->state_func = state_func_26; return;
+    case 18: top->state_func = state_func_27; return;
+    case 19: top->state_func = state_func_28; return;
+    case 21: top->state_func = state_func_29; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_25;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_26(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_26(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 26;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_25; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_26; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_27; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_28; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_29; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_25; return;
+    case 17: top->state_func = state_func_26; return;
+    case 18: top->state_func = state_func_27; return;
+    case 19: top->state_func = state_func_28; return;
+    case 21: top->state_func = state_func_29; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_26;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_27(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_27(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 27;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_25; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_26; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_27; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_28; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_29; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_25; return;
+    case 17: top->state_func = state_func_26; return;
+    case 18: top->state_func = state_func_27; return;
+    case 19: top->state_func = state_func_28; return;
+    case 21: top->state_func = state_func_29; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_27;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_28(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_28(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 28;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_29; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 21: top->state_func = state_func_29; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_28;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_29(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_29(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 29;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_30; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_31; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_25; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_26; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_27; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_28; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_29; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 10: top->state_func = state_func_30; return;
+    case 11: top->state_func = state_func_31; return;
+    case 16: top->state_func = state_func_25; return;
+    case 17: top->state_func = state_func_26; return;
+    case 18: top->state_func = state_func_27; return;
+    case 19: top->state_func = state_func_28; return;
+    case 21: top->state_func = state_func_29; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_29;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_30(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_30(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 30;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_33; return true;
-    default: return false;
+    case 1: top->state_func = state_func_33; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_31(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_31(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 31;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_32; return true;
-    default: return false;
+    case 21: top->state_func = state_func_32; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_32(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_32(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 32;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_25; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_26; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_27; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_28; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_29; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 16: top->state_func = state_func_25; return;
+    case 17: top->state_func = state_func_26; return;
+    case 18: top->state_func = state_func_27; return;
+    case 19: top->state_func = state_func_28; return;
+    case 21: top->state_func = state_func_29; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_32;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_33(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_33(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 33;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_34; return true;
-    default: return false;
+    case 21: top->state_func = state_func_34; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_34(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_34(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 34;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_8; return true;
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_30; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_31; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_25; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_26; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_27; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_28; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_29; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_22; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_23; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_24; return true;
+    case 1: top->state_func = state_func_8; return;
+    case 10: top->state_func = state_func_30; return;
+    case 11: top->state_func = state_func_31; return;
+    case 16: top->state_func = state_func_25; return;
+    case 17: top->state_func = state_func_26; return;
+    case 18: top->state_func = state_func_27; return;
+    case 19: top->state_func = state_func_28; return;
+    case 21: top->state_func = state_func_29; return;
+    case 23: top->state_func = state_func_22; return;
+    case 24: top->state_func = state_func_23; return;
+    case 25: top->state_func = state_func_24; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_34;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_35(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_35(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 35;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_35;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_36(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_36(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 36;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_36;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_37(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_37(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 37;
     switch (token) {
-    case 6: cont->stack[cont->depth - 1].state_func = state_func_38; return true;
-    case 7: cont->stack[cont->depth - 1].state_func = state_func_39; return true;
-    case 8: cont->stack[cont->depth - 1].state_func = state_func_40; return true;
-    case 9: cont->stack[cont->depth - 1].state_func = state_func_41; return true;
-    default: return false;
+    case 6: top->state_func = state_func_38; return;
+    case 7: top->state_func = state_func_39; return;
+    case 8: top->state_func = state_func_40; return;
+    case 9: top->state_func = state_func_41; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_38(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_38(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 38;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_38;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_39(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_39(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 39;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_39;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_40(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_40(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 40;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_40;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_41(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_41(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 41;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_41;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_42(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_42(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 42;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_46; return true;
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_53; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_54; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_47; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_48; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_49; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_50; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 1: top->state_func = state_func_46; return;
+    case 10: top->state_func = state_func_53; return;
+    case 11: top->state_func = state_func_54; return;
+    case 16: top->state_func = state_func_47; return;
+    case 17: top->state_func = state_func_48; return;
+    case 18: top->state_func = state_func_49; return;
+    case 19: top->state_func = state_func_50; return;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_42;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_43(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_43(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 43;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_46; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_47; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_48; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_49; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_50; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 1: top->state_func = state_func_46; return;
+    case 16: top->state_func = state_func_47; return;
+    case 17: top->state_func = state_func_48; return;
+    case 18: top->state_func = state_func_49; return;
+    case 19: top->state_func = state_func_50; return;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_43;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_44(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_44(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 44;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_46; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_47; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_48; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_49; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_50; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 1: top->state_func = state_func_46; return;
+    case 16: top->state_func = state_func_47; return;
+    case 17: top->state_func = state_func_48; return;
+    case 18: top->state_func = state_func_49; return;
+    case 19: top->state_func = state_func_50; return;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_44;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_45(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_45(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 45;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_46; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_47; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_48; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_49; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_50; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 1: top->state_func = state_func_46; return;
+    case 16: top->state_func = state_func_47; return;
+    case 17: top->state_func = state_func_48; return;
+    case 18: top->state_func = state_func_49; return;
+    case 19: top->state_func = state_func_50; return;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_45;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_46(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_46(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 46;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_51; return true;
-    default: return false;
+    case 21: top->state_func = state_func_51; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_47(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_47(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 47;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_46; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_47; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_48; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_49; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_50; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 1: top->state_func = state_func_46; return;
+    case 16: top->state_func = state_func_47; return;
+    case 17: top->state_func = state_func_48; return;
+    case 18: top->state_func = state_func_49; return;
+    case 19: top->state_func = state_func_50; return;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_47;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_48(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_48(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 48;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_46; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_47; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_48; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_49; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_50; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 1: top->state_func = state_func_46; return;
+    case 16: top->state_func = state_func_47; return;
+    case 17: top->state_func = state_func_48; return;
+    case 18: top->state_func = state_func_49; return;
+    case 19: top->state_func = state_func_50; return;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_48;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_49(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_49(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 49;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_46; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_47; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_48; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_49; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_50; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 1: top->state_func = state_func_46; return;
+    case 16: top->state_func = state_func_47; return;
+    case 17: top->state_func = state_func_48; return;
+    case 18: top->state_func = state_func_49; return;
+    case 19: top->state_func = state_func_50; return;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_49;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_50(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_50(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 50;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_50;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_51(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_51(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 51;
     switch (token) {
-    case 2: cont->stack[cont->depth - 1].state_func = state_func_20; return true;
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_52; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 2: top->state_func = state_func_20; return;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_52; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_51;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_52(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_52(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 52;
     switch (token) {
-    case 0: cont->stack[cont->depth - 1].state_func = state_func_3; return true;
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_46; return true;
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_53; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_54; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_47; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_48; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_49; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_50; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 0: top->state_func = state_func_3; return;
+    case 1: top->state_func = state_func_46; return;
+    case 10: top->state_func = state_func_53; return;
+    case 11: top->state_func = state_func_54; return;
+    case 16: top->state_func = state_func_47; return;
+    case 17: top->state_func = state_func_48; return;
+    case 18: top->state_func = state_func_49; return;
+    case 19: top->state_func = state_func_50; return;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_52;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_53(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_53(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 53;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_56; return true;
-    default: return false;
+    case 1: top->state_func = state_func_56; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_54(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_54(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 54;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_55; return true;
-    default: return false;
+    case 21: top->state_func = state_func_55; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_55(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_55(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 55;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_46; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_47; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_48; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_49; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_50; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 1: top->state_func = state_func_46; return;
+    case 16: top->state_func = state_func_47; return;
+    case 17: top->state_func = state_func_48; return;
+    case 18: top->state_func = state_func_49; return;
+    case 19: top->state_func = state_func_50; return;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_55;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_56(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_56(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 56;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_57; return true;
-    default: return false;
+    case 21: top->state_func = state_func_57; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_57(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_57(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 57;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_46; return true;
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_53; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_54; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_47; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_48; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_49; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_50; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_42; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_43; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_44; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_45; return true;
+    case 1: top->state_func = state_func_46; return;
+    case 10: top->state_func = state_func_53; return;
+    case 11: top->state_func = state_func_54; return;
+    case 16: top->state_func = state_func_47; return;
+    case 17: top->state_func = state_func_48; return;
+    case 18: top->state_func = state_func_49; return;
+    case 19: top->state_func = state_func_50; return;
+    case 21: top->state_func = state_func_42; return;
+    case 23: top->state_func = state_func_43; return;
+    case 24: top->state_func = state_func_44; return;
+    case 25: top->state_func = state_func_45; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_57;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_58(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
+static void state_func_58(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 58;
     switch (token) {
-    case 20: cont->stack[cont->depth - 1].state_func = state_func_1; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_2; return true;
-    default: return false;
+    case 20: top->state_func = state_func_1; return;
+    case 21: top->state_func = state_func_2; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_59(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(3 & top.reachability_mask[0]))
-        return false;
+static void state_func_59(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(3 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 59;
     switch (token) {
-    case 12: cont->stack[cont->depth - 1].state_func = state_func_60; return true;
-    case 14: cont->stack[cont->depth - 1].state_func = state_func_61; return true;
-    default: return false;
+    case 12: top->state_func = state_func_60; return;
+    case 14: top->state_func = state_func_61; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_60(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_60(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 60;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_78; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_79; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_80; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_81; return true;
+    case 21: top->state_func = state_func_78; return;
+    case 23: top->state_func = state_func_79; return;
+    case 24: top->state_func = state_func_80; return;
+    case 25: top->state_func = state_func_81; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_60;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_61(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_61(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 61;
     switch (token) {
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_62; return true;
-    default: return false;
+    case 23: top->state_func = state_func_62; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_62(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_62(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 62;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_63; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_64; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_65; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_66; return true;
+    case 21: top->state_func = state_func_63; return;
+    case 23: top->state_func = state_func_64; return;
+    case 24: top->state_func = state_func_65; return;
+    case 25: top->state_func = state_func_66; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_62;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_63(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_63(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 63;
     switch (token) {
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_73; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_74; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_67; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_68; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_69; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_70; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_63; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_71; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_65; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_66; return true;
+    case 10: top->state_func = state_func_73; return;
+    case 11: top->state_func = state_func_74; return;
+    case 16: top->state_func = state_func_67; return;
+    case 17: top->state_func = state_func_68; return;
+    case 18: top->state_func = state_func_69; return;
+    case 19: top->state_func = state_func_70; return;
+    case 21: top->state_func = state_func_63; return;
+    case 23: top->state_func = state_func_71; return;
+    case 24: top->state_func = state_func_65; return;
+    case 25: top->state_func = state_func_66; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_63;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_64(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_64(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 64;
     switch (token) {
-    case 15: cont->stack[cont->depth - 1].state_func = state_func_72; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_67; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_68; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_69; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_70; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_63; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_71; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_65; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_66; return true;
+    case 15: top->state_func = state_func_72; return;
+    case 16: top->state_func = state_func_67; return;
+    case 17: top->state_func = state_func_68; return;
+    case 18: top->state_func = state_func_69; return;
+    case 19: top->state_func = state_func_70; return;
+    case 21: top->state_func = state_func_63; return;
+    case 23: top->state_func = state_func_71; return;
+    case 24: top->state_func = state_func_65; return;
+    case 25: top->state_func = state_func_66; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_64;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_65(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_65(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 65;
     switch (token) {
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_67; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_68; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_69; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_70; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_63; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_71; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_65; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_66; return true;
+    case 16: top->state_func = state_func_67; return;
+    case 17: top->state_func = state_func_68; return;
+    case 18: top->state_func = state_func_69; return;
+    case 19: top->state_func = state_func_70; return;
+    case 21: top->state_func = state_func_63; return;
+    case 23: top->state_func = state_func_71; return;
+    case 24: top->state_func = state_func_65; return;
+    case 25: top->state_func = state_func_66; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_65;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_66(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_66(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 66;
     switch (token) {
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_67; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_68; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_69; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_70; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_63; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_71; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_65; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_66; return true;
+    case 16: top->state_func = state_func_67; return;
+    case 17: top->state_func = state_func_68; return;
+    case 18: top->state_func = state_func_69; return;
+    case 19: top->state_func = state_func_70; return;
+    case 21: top->state_func = state_func_63; return;
+    case 23: top->state_func = state_func_71; return;
+    case 24: top->state_func = state_func_65; return;
+    case 25: top->state_func = state_func_66; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_66;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_67(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_67(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 67;
     switch (token) {
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_67; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_68; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_69; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_70; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_63; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_71; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_65; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_66; return true;
+    case 16: top->state_func = state_func_67; return;
+    case 17: top->state_func = state_func_68; return;
+    case 18: top->state_func = state_func_69; return;
+    case 19: top->state_func = state_func_70; return;
+    case 21: top->state_func = state_func_63; return;
+    case 23: top->state_func = state_func_71; return;
+    case 24: top->state_func = state_func_65; return;
+    case 25: top->state_func = state_func_66; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_67;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_68(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_68(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 68;
     switch (token) {
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_67; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_68; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_69; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_70; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_63; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_71; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_65; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_66; return true;
+    case 16: top->state_func = state_func_67; return;
+    case 17: top->state_func = state_func_68; return;
+    case 18: top->state_func = state_func_69; return;
+    case 19: top->state_func = state_func_70; return;
+    case 21: top->state_func = state_func_63; return;
+    case 23: top->state_func = state_func_71; return;
+    case 24: top->state_func = state_func_65; return;
+    case 25: top->state_func = state_func_66; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_68;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_69(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_69(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 69;
     switch (token) {
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_67; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_68; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_69; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_70; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_63; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_71; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_65; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_66; return true;
+    case 16: top->state_func = state_func_67; return;
+    case 17: top->state_func = state_func_68; return;
+    case 18: top->state_func = state_func_69; return;
+    case 19: top->state_func = state_func_70; return;
+    case 21: top->state_func = state_func_63; return;
+    case 23: top->state_func = state_func_71; return;
+    case 24: top->state_func = state_func_65; return;
+    case 25: top->state_func = state_func_66; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_69;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_70(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(0 & top.reachability_mask[0]))
-        return false;
+static void state_func_70(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(0 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 70;
     switch (token) {
-    default: return false;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_71(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_71(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 71;
     switch (token) {
-    case 15: cont->stack[cont->depth - 1].state_func = state_func_72; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_67; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_68; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_69; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_70; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_63; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_71; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_65; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_66; return true;
+    case 15: top->state_func = state_func_72; return;
+    case 16: top->state_func = state_func_67; return;
+    case 17: top->state_func = state_func_68; return;
+    case 18: top->state_func = state_func_69; return;
+    case 19: top->state_func = state_func_70; return;
+    case 21: top->state_func = state_func_63; return;
+    case 23: top->state_func = state_func_71; return;
+    case 24: top->state_func = state_func_65; return;
+    case 25: top->state_func = state_func_66; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_71;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_72(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
-    if (cont->depth <= 1)
-        return false;
-    cont->depth--;
+static void state_func_72(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
+    if (top->cont->top_index == 0) {
+        top->cont->error = true;
+        return;
+    }
+    top->cont->top_index--;
+    top--;
     run->tokens[token_index] = 25;
-    return cont->stack[cont->depth - 1].state_func(run, cont, token_index);
+    top->state_func(run, top, token_index);
+    return;
 }
-static bool state_func_73(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_73(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 73;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_76; return true;
-    default: return false;
+    case 1: top->state_func = state_func_76; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_74(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_74(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 74;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_75; return true;
-    default: return false;
+    case 21: top->state_func = state_func_75; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_75(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_75(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 75;
     switch (token) {
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_67; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_68; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_69; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_70; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_63; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_71; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_65; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_66; return true;
+    case 16: top->state_func = state_func_67; return;
+    case 17: top->state_func = state_func_68; return;
+    case 18: top->state_func = state_func_69; return;
+    case 19: top->state_func = state_func_70; return;
+    case 21: top->state_func = state_func_63; return;
+    case 23: top->state_func = state_func_71; return;
+    case 24: top->state_func = state_func_65; return;
+    case 25: top->state_func = state_func_66; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_75;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_76(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_76(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 76;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_77; return true;
-    default: return false;
+    case 21: top->state_func = state_func_77; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_77(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(2 & top.reachability_mask[0]))
-        return false;
+static void state_func_77(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(2 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 77;
     switch (token) {
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_73; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_74; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_67; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_68; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_69; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_70; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_63; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_71; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_65; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_66; return true;
+    case 10: top->state_func = state_func_73; return;
+    case 11: top->state_func = state_func_74; return;
+    case 16: top->state_func = state_func_67; return;
+    case 17: top->state_func = state_func_68; return;
+    case 18: top->state_func = state_func_69; return;
+    case 19: top->state_func = state_func_70; return;
+    case 21: top->state_func = state_func_63; return;
+    case 23: top->state_func = state_func_71; return;
+    case 24: top->state_func = state_func_65; return;
+    case 25: top->state_func = state_func_66; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_77;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_78(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_78(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 78;
     switch (token) {
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_87; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_88; return true;
-    case 13: cont->stack[cont->depth - 1].state_func = state_func_82; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_83; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_84; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_85; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_86; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_78; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_79; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_80; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_81; return true;
+    case 10: top->state_func = state_func_87; return;
+    case 11: top->state_func = state_func_88; return;
+    case 13: top->state_func = state_func_82; return;
+    case 16: top->state_func = state_func_83; return;
+    case 17: top->state_func = state_func_84; return;
+    case 18: top->state_func = state_func_85; return;
+    case 19: top->state_func = state_func_86; return;
+    case 21: top->state_func = state_func_78; return;
+    case 23: top->state_func = state_func_79; return;
+    case 24: top->state_func = state_func_80; return;
+    case 25: top->state_func = state_func_81; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_78;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_79(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_79(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 79;
     switch (token) {
-    case 13: cont->stack[cont->depth - 1].state_func = state_func_82; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_83; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_84; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_85; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_86; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_78; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_79; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_80; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_81; return true;
+    case 13: top->state_func = state_func_82; return;
+    case 16: top->state_func = state_func_83; return;
+    case 17: top->state_func = state_func_84; return;
+    case 18: top->state_func = state_func_85; return;
+    case 19: top->state_func = state_func_86; return;
+    case 21: top->state_func = state_func_78; return;
+    case 23: top->state_func = state_func_79; return;
+    case 24: top->state_func = state_func_80; return;
+    case 25: top->state_func = state_func_81; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_79;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_80(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_80(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 80;
     switch (token) {
-    case 13: cont->stack[cont->depth - 1].state_func = state_func_82; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_83; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_84; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_85; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_86; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_78; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_79; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_80; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_81; return true;
+    case 13: top->state_func = state_func_82; return;
+    case 16: top->state_func = state_func_83; return;
+    case 17: top->state_func = state_func_84; return;
+    case 18: top->state_func = state_func_85; return;
+    case 19: top->state_func = state_func_86; return;
+    case 21: top->state_func = state_func_78; return;
+    case 23: top->state_func = state_func_79; return;
+    case 24: top->state_func = state_func_80; return;
+    case 25: top->state_func = state_func_81; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_80;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_81(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_81(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 81;
     switch (token) {
-    case 13: cont->stack[cont->depth - 1].state_func = state_func_82; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_83; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_84; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_85; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_86; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_78; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_79; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_80; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_81; return true;
+    case 13: top->state_func = state_func_82; return;
+    case 16: top->state_func = state_func_83; return;
+    case 17: top->state_func = state_func_84; return;
+    case 18: top->state_func = state_func_85; return;
+    case 19: top->state_func = state_func_86; return;
+    case 21: top->state_func = state_func_78; return;
+    case 23: top->state_func = state_func_79; return;
+    case 24: top->state_func = state_func_80; return;
+    case 25: top->state_func = state_func_81; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_81;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_82(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
-    if (cont->depth <= 1)
-        return false;
-    cont->depth--;
+static void state_func_82(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
+    if (top->cont->top_index == 0) {
+        top->cont->error = true;
+        return;
+    }
+    top->cont->top_index--;
+    top--;
     run->tokens[token_index] = 24;
-    return cont->stack[cont->depth - 1].state_func(run, cont, token_index);
+    top->state_func(run, top, token_index);
+    return;
 }
-static bool state_func_83(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_83(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 83;
     switch (token) {
-    case 13: cont->stack[cont->depth - 1].state_func = state_func_82; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_83; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_84; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_85; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_86; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_78; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_79; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_80; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_81; return true;
+    case 13: top->state_func = state_func_82; return;
+    case 16: top->state_func = state_func_83; return;
+    case 17: top->state_func = state_func_84; return;
+    case 18: top->state_func = state_func_85; return;
+    case 19: top->state_func = state_func_86; return;
+    case 21: top->state_func = state_func_78; return;
+    case 23: top->state_func = state_func_79; return;
+    case 24: top->state_func = state_func_80; return;
+    case 25: top->state_func = state_func_81; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_83;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_84(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_84(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 84;
     switch (token) {
-    case 13: cont->stack[cont->depth - 1].state_func = state_func_82; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_83; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_84; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_85; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_86; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_78; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_79; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_80; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_81; return true;
+    case 13: top->state_func = state_func_82; return;
+    case 16: top->state_func = state_func_83; return;
+    case 17: top->state_func = state_func_84; return;
+    case 18: top->state_func = state_func_85; return;
+    case 19: top->state_func = state_func_86; return;
+    case 21: top->state_func = state_func_78; return;
+    case 23: top->state_func = state_func_79; return;
+    case 24: top->state_func = state_func_80; return;
+    case 25: top->state_func = state_func_81; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_84;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_85(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_85(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 85;
     switch (token) {
-    case 13: cont->stack[cont->depth - 1].state_func = state_func_82; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_83; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_84; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_85; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_86; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_78; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_79; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_80; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_81; return true;
+    case 13: top->state_func = state_func_82; return;
+    case 16: top->state_func = state_func_83; return;
+    case 17: top->state_func = state_func_84; return;
+    case 18: top->state_func = state_func_85; return;
+    case 19: top->state_func = state_func_86; return;
+    case 21: top->state_func = state_func_78; return;
+    case 23: top->state_func = state_func_79; return;
+    case 24: top->state_func = state_func_80; return;
+    case 25: top->state_func = state_func_81; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_85;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_86(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_86(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 86;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_78; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_79; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_80; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_81; return true;
+    case 21: top->state_func = state_func_78; return;
+    case 23: top->state_func = state_func_79; return;
+    case 24: top->state_func = state_func_80; return;
+    case 25: top->state_func = state_func_81; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_86;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_87(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_87(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 87;
     switch (token) {
-    case 1: cont->stack[cont->depth - 1].state_func = state_func_90; return true;
-    default: return false;
+    case 1: top->state_func = state_func_90; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_88(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_88(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 88;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_89; return true;
-    default: return false;
+    case 21: top->state_func = state_func_89; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_89(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_89(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 89;
     switch (token) {
-    case 13: cont->stack[cont->depth - 1].state_func = state_func_82; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_83; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_84; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_85; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_86; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_78; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_79; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_80; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_81; return true;
+    case 13: top->state_func = state_func_82; return;
+    case 16: top->state_func = state_func_83; return;
+    case 17: top->state_func = state_func_84; return;
+    case 18: top->state_func = state_func_85; return;
+    case 19: top->state_func = state_func_86; return;
+    case 21: top->state_func = state_func_78; return;
+    case 23: top->state_func = state_func_79; return;
+    case 24: top->state_func = state_func_80; return;
+    case 25: top->state_func = state_func_81; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_89;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
-static bool state_func_90(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_90(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 90;
     switch (token) {
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_91; return true;
-    default: return false;
+    case 21: top->state_func = state_func_91; return;
+    default: top->cont->error = true; return;
     }
 }
-static bool state_func_91(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t token_index) {
-    struct fill_run_state top = cont->stack[cont->depth - 1];
-    if (!(1 & top.reachability_mask[0]))
-        return false;
+static void state_func_91(struct bluebird_token_run *run, struct fill_run_state *top, uint16_t token_index) {
+    if (!(1 & top->reachability_mask[0])) {
+        top->cont->error = true;
+        return;
+    }
     uint32_t token = run->tokens[token_index];
     run->states[token_index] = 91;
     switch (token) {
-    case 10: cont->stack[cont->depth - 1].state_func = state_func_87; return true;
-    case 11: cont->stack[cont->depth - 1].state_func = state_func_88; return true;
-    case 13: cont->stack[cont->depth - 1].state_func = state_func_82; return true;
-    case 16: cont->stack[cont->depth - 1].state_func = state_func_83; return true;
-    case 17: cont->stack[cont->depth - 1].state_func = state_func_84; return true;
-    case 18: cont->stack[cont->depth - 1].state_func = state_func_85; return true;
-    case 19: cont->stack[cont->depth - 1].state_func = state_func_86; return true;
-    case 21: cont->stack[cont->depth - 1].state_func = state_func_78; return true;
-    case 23: cont->stack[cont->depth - 1].state_func = state_func_79; return true;
-    case 24: cont->stack[cont->depth - 1].state_func = state_func_80; return true;
-    case 25: cont->stack[cont->depth - 1].state_func = state_func_81; return true;
+    case 10: top->state_func = state_func_87; return;
+    case 11: top->state_func = state_func_88; return;
+    case 13: top->state_func = state_func_82; return;
+    case 16: top->state_func = state_func_83; return;
+    case 17: top->state_func = state_func_84; return;
+    case 18: top->state_func = state_func_85; return;
+    case 19: top->state_func = state_func_86; return;
+    case 21: top->state_func = state_func_78; return;
+    case 23: top->state_func = state_func_79; return;
+    case 24: top->state_func = state_func_80; return;
+    case 25: top->state_func = state_func_81; return;
     default:
-        if (cont->depth >= cont->capacity)
-            grow_cont_stack(cont);
-        cont->stack[cont->depth - 1].state_func = state_func_91;
-        cont->depth++;
-        cont->stack[cont->depth - 1].reachability_mask[0] = 3;
-        return state_func_59(run, cont, token_index);
+        continuation_stack_push(&top);
+        top->reachability_mask[0] = 3;
+        state_func_59(run, top, token_index);
+        return;
     }
 }
 static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_continuation *cont, uint16_t *failing_index);
@@ -3446,10 +3368,11 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
     struct bluebird_token_run *token_run = 0;
     struct fill_run_continuation c = {
         .capacity = 8,
-        .depth = 1,
+        .top_index = 0,
     };
     c.stack = calloc(c.capacity, sizeof(struct fill_run_state));
     c.stack[0].state_func = state_func_0;
+    c.stack[0].cont = &c;
     uint16_t failing_index = 0;
     while (bluebird_default_tokenizer_advance(&tokenizer, &token_run)) {
         if (!fill_run_states(token_run, &c, &failing_index)) {
@@ -3459,7 +3382,7 @@ struct bluebird_tree *bluebird_tree_create_from_string(const char *string) {
             return tree;
         }
     }
-    struct fill_run_state top = c.stack[c.depth - 1];
+    struct fill_run_state top = c.stack[c.top_index];
     free(c.stack);
     if (string[tokenizer.offset] != '\0') {
         tree->error = ERROR_INVALID_TOKEN;
@@ -3529,7 +3452,9 @@ static bool fill_run_states(struct bluebird_token_run *run, struct fill_run_cont
     uint16_t token_index = 0;
     uint16_t number_of_tokens = run->number_of_tokens;
     while (token_index < number_of_tokens) {
-        if (!cont->stack[cont->depth - 1].state_func(run, cont, token_index)) {
+        struct fill_run_state *top = &cont->stack[cont->top_index];
+        top->state_func(run, top, token_index);
+        if (cont->error) {
             *failing_index = token_index;
             return false;
         }
