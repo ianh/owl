@@ -1,0 +1,166 @@
+input = []
+cursor = 0
+length = 0
+
+function peek()
+    if cursor >= length then
+        local ch = read_input_length(1)
+        input[cursor] = ch
+        length = cursor + 1
+    end
+    return input[cursor]
+end
+
+function advance()
+    cursor = cursor + 1
+end
+
+function next()
+    local ch = peek()
+    advance()
+    return ch
+end
+
+function read()
+    while isspace(peek()) do
+        advance()
+    end
+    local ch = peek()
+    if ch == "" then
+        return [type="end of input"]
+    elseif ch == "(" then
+        return read_list()
+    elseif ch == "'" then
+        advance()
+        return [type="list", length=2, list=
+         [[type="identifier", name="quote"], read()]]
+    elseif ch == "-" || isdigit(ch) then
+        return read_number()
+    else
+        return read_identifier()
+    end
+end
+
+function read_identifier()
+    local name = ""
+    while !isspace(peek()) && peek() != ")" do
+        name = name + next()
+    end
+    return [type="identifier", name=name]
+end
+
+function read_number()
+    local sign = 1
+    if peek() == "-" then
+        sign = -1
+        advance()
+    end
+    if !isdigit(peek()) then
+        return [type="identifier", name="-"]
+    end
+    local n = 0
+    while isdigit(peek()) do
+        n = n * 10 + todigit(next())
+    end
+    return [type="number", number=n*sign]
+end
+
+function read_list()
+    advance() # past the open paren
+    local length = 0
+    local list = []
+    while peek() != "" do
+        while isspace(peek()) do
+            advance()
+        end
+        if peek() == ")" then
+            advance()
+            return [type="list", length=length, list=list]
+        end
+        list[length] = read()
+        length = length + 1
+    end
+    return [type="error"]
+end
+
+function print_val(val)
+    if val.type == "identifier" then
+        print(val.name)
+    elseif val.type == "number" then
+        print(val.number)
+    elseif val.type == "list" then
+        print("(")
+        local len = val.length
+        for v in val.list do
+            print_val(v)
+            len = len - 1
+            if len > 0 then
+                print(" ")
+            end
+        end
+        print(")")
+    else
+        print("[" + val.type + "]")
+    end
+end
+
+function eval(env, val)
+    if val.type == "identifier" then
+        return env[val.name]
+    elseif val.type == "list" then
+        return apply(eval(env, val.list[0]), env, val)
+    else
+        return val
+    end
+end
+
+function apply(func, env, val)
+    if func.type != "func" then
+        print_val(func)
+        println(" is not a function")
+        return [type="error"]
+    end
+    return func.func(env, val)
+end
+
+function quote(env, val)
+    return val.list[1]
+end
+
+function lambda(env, val)
+    local params = val.list[1]
+    local body = val.list[2]
+    function eval_lambda(call_env, call_val)
+        for i=v in params.list do
+            env[v.name] = eval(call_env, call_val.list[i + 1])
+        end
+        return eval(env, body)
+    end
+    return [type="func", func=eval_lambda]
+end
+
+function func_val(f)
+    return [type="func", func=f]
+end
+
+function plus(env, val)
+    return [type="number", number=eval(env, val.list[1]).number +
+     eval(env, val.list[2]).number]
+end
+
+function set(env, val)
+    local v = eval(env, val.list[2])
+    env[val.list[1].name] = v
+    return v
+end
+
+env = [quote=func_val(quote), lambda=func_val(lambda), ["+"]=func_val(plus), set=func_val(set)]
+
+while true do
+    print("> ")
+    print_val(eval(env, read()))
+    println()
+    if peek() == "" then
+        break
+    end
+end

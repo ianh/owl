@@ -75,6 +75,11 @@ static uint32_t number_of_functions;
 static table_id environment;
 
 static struct val builtin_print(struct bluebird_node arg);
+static struct val builtin_println(struct bluebird_node arg);
+static struct val builtin_isspace(struct bluebird_node arg);
+static struct val builtin_isdigit(struct bluebird_node arg);
+static struct val builtin_todigit(struct bluebird_node arg);
+static struct val builtin_read_input_length(struct bluebird_node arg);
 
 static enum control_flow eval_stmt_list(struct bluebird_node stmt_list_node,
  struct val *return_val);
@@ -124,6 +129,17 @@ int main(int argc, char *argv[])
     environment = alloc_env_table();
     table_set(environment, string_val("print", strlen("print")),
      (struct val){ .type = TYPE_BUILTIN_FUNCTION, .builtin = builtin_print });
+    table_set(environment, string_val("println", strlen("println")),
+     (struct val){ .type = TYPE_BUILTIN_FUNCTION, .builtin = builtin_println });
+    table_set(environment, string_val("isspace", strlen("isspace")),
+     (struct val){ .type = TYPE_BUILTIN_FUNCTION, .builtin = builtin_isspace });
+    table_set(environment, string_val("isdigit", strlen("isdigit")),
+     (struct val){ .type = TYPE_BUILTIN_FUNCTION, .builtin = builtin_isdigit });
+    table_set(environment, string_val("todigit", strlen("todigit")),
+     (struct val){ .type = TYPE_BUILTIN_FUNCTION, .builtin = builtin_todigit });
+    table_set(environment, string_val("read_input_length",
+     strlen("read_input_length")), (struct val){ .type = TYPE_BUILTIN_FUNCTION,
+     .builtin = builtin_read_input_length });
     enum control_flow flow = eval_stmt_list(program.stmt_list, 0);
     if (flow == BREAK)
         fprintf(stderr, "error: 'break' used outside loop\n");
@@ -134,14 +150,6 @@ int main(int argc, char *argv[])
     else
         return 0;
     exit(-1);
-}
-
-static struct val builtin_print(struct bluebird_node arg)
-{
-    for (; !arg.empty; arg = bluebird_next(arg))
-        val_print(stdout, eval_expr(arg));
-    printf("\n");
-    return false_val;
 }
 
 static enum control_flow eval_stmt_list(struct bluebird_node stmt_list,
@@ -319,11 +327,14 @@ static struct val eval_expr(struct bluebird_node expr_node)
             struct parsed_table_entry entry =
              parsed_table_entry_get(expr.table_entry);
             struct val key;
-            if (entry.identifier.empty) {
+            if (!entry.identifier.empty)
+                key = string_for_identifier(entry.identifier);
+            else if (!entry.key.empty)
+                key = eval_expr(entry.key);
+            else {
                 key = (struct val){ .type = TYPE_NUMBER, .number = index_key };
                 index_key++;
-            } else
-                key = string_for_identifier(entry.identifier);
+            }
             table_set(table, key, eval_expr(entry.expr));
             expr.table_entry = bluebird_next(expr.table_entry);
         }
@@ -395,6 +406,9 @@ static struct val eval_expr(struct bluebird_node expr_node)
     }
     case PARSED_NEGATE:
         return number_val(-eval_number(expr.operand));
+    case PARSED_NOT:
+        return eval_expr(expr.operand).type == TYPE_FALSE ?
+         true_val : false_val;
     case PARSED_TIMES:
         return number_val(eval_number(expr.left) * eval_number(expr.right));
     case PARSED_DIVIDED_BY:
@@ -439,7 +453,7 @@ static struct val eval_expr(struct bluebird_node expr_node)
          true_val : false_val;
     case PARSED_NOT_EQUAL_TO:
         return val_equal(eval_expr(expr.left), eval_expr(expr.right)) ?
-         true_val : false_val;
+         false_val : true_val;
     case PARSED_LESS_THAN:
         return eval_number(expr.left) < eval_number(expr.right) ?
          true_val : false_val;
@@ -691,4 +705,70 @@ static double eval_number(struct bluebird_node number_expr)
         exit(-1);
     }
     return a.number;
+}
+
+static struct val builtin_print(struct bluebird_node arg)
+{
+    for (; !arg.empty; arg = bluebird_next(arg))
+        val_print(stdout, eval_expr(arg));
+    return false_val;
+}
+
+static struct val builtin_println(struct bluebird_node arg)
+{
+    for (; !arg.empty; arg = bluebird_next(arg))
+        val_print(stdout, eval_expr(arg));
+    printf("\n");
+    return false_val;
+}
+
+static struct val builtin_isspace(struct bluebird_node arg)
+{
+    if (arg.empty)
+        return false_val;
+    struct val v = eval_expr(arg);
+    if (v.type != TYPE_STRING)
+        return false_val;
+    char c = get_string(v.table)[0];
+    return (c == ' ' || c == '\t' || c == '\r' || c == '\n') ?
+     true_val : false_val;
+}
+
+static struct val builtin_isdigit(struct bluebird_node arg)
+{
+    if (arg.empty)
+        return false_val;
+    struct val v = eval_expr(arg);
+    if (v.type != TYPE_STRING)
+        return false_val;
+    char c = get_string(v.table)[0];
+    return (c >= '0' && c <= '9') ? true_val : false_val;
+}
+
+static struct val builtin_todigit(struct bluebird_node arg)
+{
+    if (arg.empty)
+        return number_val(0);
+    struct val v = eval_expr(arg);
+    if (v.type != TYPE_STRING)
+        return number_val(0);
+    char c = get_string(v.table)[0];
+    if (c >= '0' && c <= '9')
+        return number_val(c - '0');
+    else
+        return number_val(0);
+}
+
+static struct val builtin_read_input_length(struct bluebird_node arg)
+{
+    if (arg.empty)
+        return false_val;
+    struct val v = eval_expr(arg);
+    if (v.type != TYPE_NUMBER)
+        return false_val;
+    size_t len = v.number;
+    table_id string = alloc_string(len + 1);
+    size_t n = fread(get_string(string), len, 1, stdin);
+    get_string(string)[n] = '\0';
+    return (struct val){ .type = TYPE_STRING, .table = string };
 }

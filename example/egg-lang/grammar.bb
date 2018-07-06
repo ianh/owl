@@ -17,7 +17,7 @@ stmt =
     'break' : break
     'continue' : continue
     expr\:negate\:table\:parens : expr
-table-entry = (identifier '=')? expr
+table-entry = ((identifier | [ '[' expr@key ']' ]) '=')? expr
 expr =
     string : string
     number : number
@@ -32,6 +32,7 @@ expr =
     '.' identifier : field
   .operators prefix
     '-' : negate
+    '!' : not
   .operators infix left
     '*' : times
     '/' : divided-by
@@ -40,16 +41,16 @@ expr =
     '+' : plus
     '-' : minus
   .operators infix left
-    '&&' : and
-  .operators infix left
-    '||' : or
-  .operators infix left
     '==' : equal-to
     '!=' : not-equal-to
     '<' : less-than
     '>' : greater-than
     '<=' : less-than-or-equal-to
     '>=' : greater-than-or-equal-to
+  .operators infix left
+    '&&' : and
+  .operators infix left
+    '||' : or
 parameter-list =
     [ '(' (identifier (',' identifier)*)? ')' ]
 
