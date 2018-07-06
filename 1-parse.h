@@ -3436,6 +3436,8 @@ enum bluebird_error bluebird_tree_get_error(struct bluebird_tree *tree, struct s
     return tree->error;
 }
 void bluebird_tree_destroy(struct bluebird_tree *tree) {
+    if (!tree)
+        return;
     if (tree->owns_string)
         free((void *)tree->string);
     free(tree->parse_tree);

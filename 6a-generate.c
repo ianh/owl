@@ -781,6 +781,8 @@ void generate(struct generator *gen)
     output_line(out, "    return tree->error;");
     output_line(out, "}");
     output_line(out, "void bluebird_tree_destroy(struct bluebird_tree *tree) {");
+    output_line(out, "    if (!tree)");
+    output_line(out, "        return;");
     output_line(out, "    if (tree->owns_string)");
     output_line(out, "        free((void *)tree->string);");
     output_line(out, "    free(tree->parse_tree);");
