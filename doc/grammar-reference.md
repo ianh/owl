@@ -175,7 +175,7 @@ bluebird.v1
 
 ## grammar.bb
 
-Here's the file bluebird uses to generate its own parser.  This file is somewhat mysterious: it's written using the same syntax it defines.
+Here's the file bluebird uses to generate its own parser—you can read it both as an example of a grammar and as the definition of the grammar syntax itself.
 
 ```
 #using bluebird.v1

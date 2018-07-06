@@ -2,7 +2,19 @@
 
 When you run bluebird with the `-c` option, it outputs a C header file representing a generated parser.  This document describes the functions and data types provided by this header.
 
-## getting something working
+## integrating the parser
+
+The header file has two parts (in [single-file library](https://github.com/nothings/single_file_libs) style): a header-like part and an implementation-like part.  By default, including the header only includes the header-like part.  To include the implementation as well, define `BLUEBIRD_PARSER_IMPLEMENTATION` before using `#include`:
+
+```
+// Include parser implementation.
+#define BLUEBIRD_PARSER_IMPLEMENTATION
+#include "parser.h"
+```
+
+The implementation should be included by a single `.c` file somewhere in your project.
+
+### step-by-step
 
 Here are some steps you can follow to create a new program that uses a generated parser:
 
@@ -26,8 +38,6 @@ Here are some steps you can follow to create a new program that uses a generated
    
 4. Build and run `main.c` using your favorite build system (or by running `cc -o test main.c && ./test`).
 5. Type some input matching your grammar into standard input to test that things are working.  You should see a parse tree matching your input.  Make sure to mark the end of the input using Control+D (or whatever the key shortcut for "end of input" is in your terminal).
-
-Now that we've got something working, let's take a closer look at what's happening in this program.
 
 ## creating a tree
 
@@ -79,9 +89,13 @@ default:
 }
 ```
 
+### cleaning up
+
+When you're done with a tree, use `bluebird_tree_destroy(tree)` to reclaim its memory.
+
 ## inside the tree
 
-Each time a rule matches part of the input, bluebird records details of the match in a hierarchical structure—that's the parse tree.  Let's take a look at an example grammar that matches lists:
+Each time a rule matches part of the input, bluebird records details of the match in a hierarchical structure—that's the parse tree.  Let's see what this tree looks like for an example grammar that matches lists:
 
 ```
 list = item (',' item)*
@@ -124,6 +138,8 @@ There's a function like this for every rule:
 | `list` | `struct parsed_list` | `parsed_list_get` |
 | `item` | `struct parsed_item` | `parsed_item_get` |
 
+### named options
+
 If a rule has named options, the chosen option is indicated by the `type` field in the match struct.  For example, our `item` rule
 
 ```
@@ -144,7 +160,7 @@ struct parsed_item {
 };
 ```
 
-and a `parsed_type` enum is generated with three values:
+and a `parsed_type` enum is generated with three values.
 
 ```
 enum parsed_type {
@@ -156,13 +172,40 @@ enum parsed_type {
 
 All option names go into the same `parsed_type` enum to avoid unneccessary prefixing.
 
-## moving around the tree
+### renames
+
+Occasionally, a rule will have multiple references to the same rule that need to be distinguished from one another:
+
+```
+set-index = expr '[' expr ']' '=' expr
+```
+
+The `@` operator in the grammar can be used to rename these references.
+
+```
+set-index = expr@array '[' expr@index ']' '=' expr@value
+```
+
+The new names appear in the fields of the parse tree struct:
+
+```
+struct parsed_set_index {
+    struct source_range range;
+    struct bluebird_ref array;
+    struct bluebird_ref index;
+    struct bluebird_ref value;
+};
+```
+
+### getting the root match
 
 The first rule (or *root rule*) in the grammar matches the entire input.  This *root match* is our starting point in the parse tree.  If `list` is the first rule in the grammar, bluebird will generate a `bluebird_tree_get_parsed_list` function which returns the root match:
 
 ```
 struct parsed_list list = bluebird_tree_get_parsed_list(tree);
 ```
+
+### iterating
 
 You can iterate over the list's items using `bluebird_next`:
 
@@ -185,7 +228,7 @@ for (struct bluebird_ref r = list.item; !r.empty; r = bluebird_next(r)) {
 
 Each `bluebird_ref` is valid for as long as the tree is—you can store them and reuse them as much as you want.
 
-## token data
+### token data
 
 The `identifier`, `number`, and `string` tokens record data about their match like rules do.  This data can also be unpacked using `parsed_identifier_get`, `parsed_number_get`, or `parsed_string_get`.
 
@@ -214,10 +257,6 @@ struct parsed_string parsed_string_get(struct bluebird_ref);
 ```
 
 If `has_escapes` is true, the string data is owned by the `bluebird_tree`—otherwise, it's a direct reference to the parsed text.
-
-## cleaning up
-
-When you're done with a tree, use `bluebird_tree_destroy(tree)` to reclaim its memory.
 
 ## function index
 
