@@ -34,26 +34,26 @@ void bluebird_tree_destroy(struct bluebird_tree *);
 // Prints a representation of the tree to standard output.
 void bluebird_tree_print(struct bluebird_tree *);
 
-// A bluebird_node represents an node in the parse tree.  Use the
+// A bluebird_ref references a list of children in the parse tree.  Use the
 // parsed_..._get() function corresponding to the element type to unpack the
-// node into its appropriate type of parsed_... element struct.
-struct bluebird_node {
+// child into its appropriate parsed_... struct.
+struct bluebird_ref {
     struct bluebird_tree *_tree;
     size_t _offset;
     uint32_t _type;
     bool empty;
 };
 
-// The bluebird_next function returns the next sibling node.
-struct bluebird_node bluebird_next(struct bluebird_node);
+// The bluebird_next function advances a ref to the next sibling element.
+struct bluebird_ref bluebird_next(struct bluebird_ref);
 
-// Tests two nodes for equality.
-bool bluebird_nodes_equal(struct bluebird_node a, struct bluebird_node b);
+// Tests two refs for equality.
+bool bluebird_refs_equal(struct bluebird_ref a, struct bluebird_ref b);
 
-// Returns the root bluebird_node.
-struct bluebird_node bluebird_tree_root_node(struct bluebird_tree *tree);
+// Returns the root bluebird_ref.
+struct bluebird_ref bluebird_tree_root_ref(struct bluebird_tree *tree);
 
-// As a shortcut, returns the parsed_grammar struct corresponding to the root node.
+// As a shortcut, returns the parsed_grammar struct corresponding to the root ref.
 struct parsed_grammar bluebird_tree_get_parsed_grammar(struct bluebird_tree *tree);
 
 // The range of text corresponding to a tree element.
@@ -107,33 +107,33 @@ enum parsed_type {
 
 struct parsed_grammar {
     struct source_range range;
-    struct bluebird_node rule;
-    struct bluebird_node comment_token;
+    struct bluebird_ref rule;
+    struct bluebird_ref comment_token;
 };
 
 struct parsed_rule {
     struct source_range range;
-    struct bluebird_node identifier;
-    struct bluebird_node body;
+    struct bluebird_ref identifier;
+    struct bluebird_ref body;
 };
 
 struct parsed_body {
     struct source_range range;
-    struct bluebird_node expr;
-    struct bluebird_node identifier;
-    struct bluebird_node operators;
+    struct bluebird_ref expr;
+    struct bluebird_ref identifier;
+    struct bluebird_ref operators;
 };
 
 struct parsed_operators {
     struct source_range range;
-    struct bluebird_node fixity;
-    struct bluebird_node operator;
+    struct bluebird_ref fixity;
+    struct bluebird_ref operator;
 };
 
 struct parsed_fixity {
     struct source_range range;
     enum parsed_type type;
-    struct bluebird_node assoc;
+    struct bluebird_ref assoc;
 };
 
 struct parsed_assoc {
@@ -143,26 +143,26 @@ struct parsed_assoc {
 
 struct parsed_operator {
     struct source_range range;
-    struct bluebird_node expr;
-    struct bluebird_node identifier;
+    struct bluebird_ref expr;
+    struct bluebird_ref identifier;
 };
 
 struct parsed_expr {
     struct source_range range;
     enum parsed_type type;
-    struct bluebird_node identifier;
-    struct bluebird_node exception;
-    struct bluebird_node rename;
-    struct bluebird_node string;
-    struct bluebird_node expr;
-    struct bluebird_node begin_token;
-    struct bluebird_node end_token;
-    struct bluebird_node operand;
+    struct bluebird_ref identifier;
+    struct bluebird_ref exception;
+    struct bluebird_ref rename;
+    struct bluebird_ref string;
+    struct bluebird_ref expr;
+    struct bluebird_ref begin_token;
+    struct bluebird_ref end_token;
+    struct bluebird_ref operand;
 };
 
 struct parsed_comment_token {
     struct source_range range;
-    struct bluebird_node string;
+    struct bluebird_ref string;
 };
 
 struct parsed_identifier {
@@ -183,18 +183,18 @@ struct parsed_string {
     bool has_escapes;
 };
 
-struct parsed_grammar parsed_grammar_get(struct bluebird_node);
-struct parsed_rule parsed_rule_get(struct bluebird_node);
-struct parsed_body parsed_body_get(struct bluebird_node);
-struct parsed_operators parsed_operators_get(struct bluebird_node);
-struct parsed_fixity parsed_fixity_get(struct bluebird_node);
-struct parsed_assoc parsed_assoc_get(struct bluebird_node);
-struct parsed_operator parsed_operator_get(struct bluebird_node);
-struct parsed_expr parsed_expr_get(struct bluebird_node);
-struct parsed_comment_token parsed_comment_token_get(struct bluebird_node);
-struct parsed_identifier parsed_identifier_get(struct bluebird_node);
-struct parsed_number parsed_number_get(struct bluebird_node);
-struct parsed_string parsed_string_get(struct bluebird_node);
+struct parsed_grammar parsed_grammar_get(struct bluebird_ref);
+struct parsed_rule parsed_rule_get(struct bluebird_ref);
+struct parsed_body parsed_body_get(struct bluebird_ref);
+struct parsed_operators parsed_operators_get(struct bluebird_ref);
+struct parsed_fixity parsed_fixity_get(struct bluebird_ref);
+struct parsed_assoc parsed_assoc_get(struct bluebird_ref);
+struct parsed_operator parsed_operator_get(struct bluebird_ref);
+struct parsed_expr parsed_expr_get(struct bluebird_ref);
+struct parsed_comment_token parsed_comment_token_get(struct bluebird_ref);
+struct parsed_identifier parsed_identifier_get(struct bluebird_ref);
+struct parsed_number parsed_number_get(struct bluebird_ref);
+struct parsed_string parsed_string_get(struct bluebird_ref);
 
 #endif
 
@@ -327,176 +327,176 @@ static void write_tree(struct bluebird_tree *tree, uint64_t value)
     }
     tree->parse_tree[tree->next_offset++] = value & 0x7f;
 }
-struct parsed_grammar parsed_grammar_get(struct bluebird_node node) {
-    if (node.empty || node._type != 0) {
+struct parsed_grammar parsed_grammar_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 0) {
         return (struct parsed_grammar){
             .rule.empty = true,
             .comment_token.empty = true,
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t start_location = read_tree(&offset, node._tree);
-    size_t end_location = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t start_location = read_tree(&offset, ref._tree);
+    size_t end_location = read_tree(&offset, ref._tree);
     struct parsed_grammar result = {
         .range.start = start_location,
         .range.end = end_location,
     };
-    result.rule._tree = node._tree;
-    result.rule._offset = read_tree(&offset, node._tree);
+    result.rule._tree = ref._tree;
+    result.rule._offset = read_tree(&offset, ref._tree);
     result.rule._type = 1;
     result.rule.empty = result.rule._offset == 0;
-    result.comment_token._tree = node._tree;
-    result.comment_token._offset = read_tree(&offset, node._tree);
+    result.comment_token._tree = ref._tree;
+    result.comment_token._offset = read_tree(&offset, ref._tree);
     result.comment_token._type = 8;
     result.comment_token.empty = result.comment_token._offset == 0;
     return result;
 }
-struct parsed_rule parsed_rule_get(struct bluebird_node node) {
-    if (node.empty || node._type != 1) {
+struct parsed_rule parsed_rule_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 1) {
         return (struct parsed_rule){
             .identifier.empty = true,
             .body.empty = true,
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t start_location = read_tree(&offset, node._tree);
-    size_t end_location = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t start_location = read_tree(&offset, ref._tree);
+    size_t end_location = read_tree(&offset, ref._tree);
     struct parsed_rule result = {
         .range.start = start_location,
         .range.end = end_location,
     };
-    result.identifier._tree = node._tree;
-    result.identifier._offset = read_tree(&offset, node._tree);
+    result.identifier._tree = ref._tree;
+    result.identifier._offset = read_tree(&offset, ref._tree);
     result.identifier._type = 9;
     result.identifier.empty = result.identifier._offset == 0;
-    result.body._tree = node._tree;
-    result.body._offset = read_tree(&offset, node._tree);
+    result.body._tree = ref._tree;
+    result.body._offset = read_tree(&offset, ref._tree);
     result.body._type = 2;
     result.body.empty = result.body._offset == 0;
     return result;
 }
-struct parsed_body parsed_body_get(struct bluebird_node node) {
-    if (node.empty || node._type != 2) {
+struct parsed_body parsed_body_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 2) {
         return (struct parsed_body){
             .expr.empty = true,
             .identifier.empty = true,
             .operators.empty = true,
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t start_location = read_tree(&offset, node._tree);
-    size_t end_location = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t start_location = read_tree(&offset, ref._tree);
+    size_t end_location = read_tree(&offset, ref._tree);
     struct parsed_body result = {
         .range.start = start_location,
         .range.end = end_location,
     };
-    result.expr._tree = node._tree;
-    result.expr._offset = read_tree(&offset, node._tree);
+    result.expr._tree = ref._tree;
+    result.expr._offset = read_tree(&offset, ref._tree);
     result.expr._type = 7;
     result.expr.empty = result.expr._offset == 0;
-    result.identifier._tree = node._tree;
-    result.identifier._offset = read_tree(&offset, node._tree);
+    result.identifier._tree = ref._tree;
+    result.identifier._offset = read_tree(&offset, ref._tree);
     result.identifier._type = 9;
     result.identifier.empty = result.identifier._offset == 0;
-    result.operators._tree = node._tree;
-    result.operators._offset = read_tree(&offset, node._tree);
+    result.operators._tree = ref._tree;
+    result.operators._offset = read_tree(&offset, ref._tree);
     result.operators._type = 3;
     result.operators.empty = result.operators._offset == 0;
     return result;
 }
-struct parsed_operators parsed_operators_get(struct bluebird_node node) {
-    if (node.empty || node._type != 3) {
+struct parsed_operators parsed_operators_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 3) {
         return (struct parsed_operators){
             .fixity.empty = true,
             .operator.empty = true,
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t start_location = read_tree(&offset, node._tree);
-    size_t end_location = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t start_location = read_tree(&offset, ref._tree);
+    size_t end_location = read_tree(&offset, ref._tree);
     struct parsed_operators result = {
         .range.start = start_location,
         .range.end = end_location,
     };
-    result.fixity._tree = node._tree;
-    result.fixity._offset = read_tree(&offset, node._tree);
+    result.fixity._tree = ref._tree;
+    result.fixity._offset = read_tree(&offset, ref._tree);
     result.fixity._type = 4;
     result.fixity.empty = result.fixity._offset == 0;
-    result.operator._tree = node._tree;
-    result.operator._offset = read_tree(&offset, node._tree);
+    result.operator._tree = ref._tree;
+    result.operator._offset = read_tree(&offset, ref._tree);
     result.operator._type = 6;
     result.operator.empty = result.operator._offset == 0;
     return result;
 }
-struct parsed_fixity parsed_fixity_get(struct bluebird_node node) {
-    if (node.empty || node._type != 4) {
+struct parsed_fixity parsed_fixity_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 4) {
         return (struct parsed_fixity){
             .assoc.empty = true,
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t start_location = read_tree(&offset, node._tree);
-    size_t end_location = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t start_location = read_tree(&offset, ref._tree);
+    size_t end_location = read_tree(&offset, ref._tree);
     struct parsed_fixity result = {
         .range.start = start_location,
         .range.end = end_location,
-        .type = read_tree(&offset, node._tree),
+        .type = read_tree(&offset, ref._tree),
     };
-    result.assoc._tree = node._tree;
-    result.assoc._offset = read_tree(&offset, node._tree);
+    result.assoc._tree = ref._tree;
+    result.assoc._offset = read_tree(&offset, ref._tree);
     result.assoc._type = 5;
     result.assoc.empty = result.assoc._offset == 0;
     return result;
 }
-struct parsed_assoc parsed_assoc_get(struct bluebird_node node) {
-    if (node.empty || node._type != 5) {
+struct parsed_assoc parsed_assoc_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 5) {
         return (struct parsed_assoc){
         0
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t start_location = read_tree(&offset, node._tree);
-    size_t end_location = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t start_location = read_tree(&offset, ref._tree);
+    size_t end_location = read_tree(&offset, ref._tree);
     struct parsed_assoc result = {
         .range.start = start_location,
         .range.end = end_location,
-        .type = read_tree(&offset, node._tree),
+        .type = read_tree(&offset, ref._tree),
     };
     return result;
 }
-struct parsed_operator parsed_operator_get(struct bluebird_node node) {
-    if (node.empty || node._type != 6) {
+struct parsed_operator parsed_operator_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 6) {
         return (struct parsed_operator){
             .expr.empty = true,
             .identifier.empty = true,
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t start_location = read_tree(&offset, node._tree);
-    size_t end_location = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t start_location = read_tree(&offset, ref._tree);
+    size_t end_location = read_tree(&offset, ref._tree);
     struct parsed_operator result = {
         .range.start = start_location,
         .range.end = end_location,
     };
-    result.expr._tree = node._tree;
-    result.expr._offset = read_tree(&offset, node._tree);
+    result.expr._tree = ref._tree;
+    result.expr._offset = read_tree(&offset, ref._tree);
     result.expr._type = 7;
     result.expr.empty = result.expr._offset == 0;
-    result.identifier._tree = node._tree;
-    result.identifier._offset = read_tree(&offset, node._tree);
+    result.identifier._tree = ref._tree;
+    result.identifier._offset = read_tree(&offset, ref._tree);
     result.identifier._type = 9;
     result.identifier.empty = result.identifier._offset == 0;
     return result;
 }
-struct parsed_expr parsed_expr_get(struct bluebird_node node) {
-    if (node.empty || node._type != 7) {
+struct parsed_expr parsed_expr_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 7) {
         return (struct parsed_expr){
             .identifier.empty = true,
             .exception.empty = true,
@@ -508,114 +508,114 @@ struct parsed_expr parsed_expr_get(struct bluebird_node node) {
             .operand.empty = true,
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t start_location = read_tree(&offset, node._tree);
-    size_t end_location = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t start_location = read_tree(&offset, ref._tree);
+    size_t end_location = read_tree(&offset, ref._tree);
     struct parsed_expr result = {
         .range.start = start_location,
         .range.end = end_location,
-        .type = read_tree(&offset, node._tree),
+        .type = read_tree(&offset, ref._tree),
     };
-    result.identifier._tree = node._tree;
-    result.identifier._offset = read_tree(&offset, node._tree);
+    result.identifier._tree = ref._tree;
+    result.identifier._offset = read_tree(&offset, ref._tree);
     result.identifier._type = 9;
     result.identifier.empty = result.identifier._offset == 0;
-    result.exception._tree = node._tree;
-    result.exception._offset = read_tree(&offset, node._tree);
+    result.exception._tree = ref._tree;
+    result.exception._offset = read_tree(&offset, ref._tree);
     result.exception._type = 9;
     result.exception.empty = result.exception._offset == 0;
-    result.rename._tree = node._tree;
-    result.rename._offset = read_tree(&offset, node._tree);
+    result.rename._tree = ref._tree;
+    result.rename._offset = read_tree(&offset, ref._tree);
     result.rename._type = 9;
     result.rename.empty = result.rename._offset == 0;
-    result.string._tree = node._tree;
-    result.string._offset = read_tree(&offset, node._tree);
+    result.string._tree = ref._tree;
+    result.string._offset = read_tree(&offset, ref._tree);
     result.string._type = 11;
     result.string.empty = result.string._offset == 0;
-    result.expr._tree = node._tree;
-    result.expr._offset = read_tree(&offset, node._tree);
+    result.expr._tree = ref._tree;
+    result.expr._offset = read_tree(&offset, ref._tree);
     result.expr._type = 7;
     result.expr.empty = result.expr._offset == 0;
-    result.begin_token._tree = node._tree;
-    result.begin_token._offset = read_tree(&offset, node._tree);
+    result.begin_token._tree = ref._tree;
+    result.begin_token._offset = read_tree(&offset, ref._tree);
     result.begin_token._type = 11;
     result.begin_token.empty = result.begin_token._offset == 0;
-    result.end_token._tree = node._tree;
-    result.end_token._offset = read_tree(&offset, node._tree);
+    result.end_token._tree = ref._tree;
+    result.end_token._offset = read_tree(&offset, ref._tree);
     result.end_token._type = 11;
     result.end_token.empty = result.end_token._offset == 0;
-    result.operand._tree = node._tree;
-    result.operand._offset = read_tree(&offset, node._tree);
+    result.operand._tree = ref._tree;
+    result.operand._offset = read_tree(&offset, ref._tree);
     result.operand._type = 7;
     result.operand.empty = result.operand._offset == 0;
     return result;
 }
-struct parsed_comment_token parsed_comment_token_get(struct bluebird_node node) {
-    if (node.empty || node._type != 8) {
+struct parsed_comment_token parsed_comment_token_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 8) {
         return (struct parsed_comment_token){
             .string.empty = true,
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t start_location = read_tree(&offset, node._tree);
-    size_t end_location = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t start_location = read_tree(&offset, ref._tree);
+    size_t end_location = read_tree(&offset, ref._tree);
     struct parsed_comment_token result = {
         .range.start = start_location,
         .range.end = end_location,
     };
-    result.string._tree = node._tree;
-    result.string._offset = read_tree(&offset, node._tree);
+    result.string._tree = ref._tree;
+    result.string._offset = read_tree(&offset, ref._tree);
     result.string._type = 11;
     result.string.empty = result.string._offset == 0;
     return result;
 }
-struct parsed_identifier parsed_identifier_get(struct bluebird_node node) {
-    if (node.empty || node._type != 9) {
+struct parsed_identifier parsed_identifier_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 9) {
         return (struct parsed_identifier){
         0
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t token_index = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t token_index = read_tree(&offset, ref._tree);
     struct parsed_identifier result = {
-        .identifier = node._tree->identifier_tokens[token_index].identifier,
-        .length = node._tree->identifier_tokens[token_index].length,
-        .range = node._tree->identifier_tokens[token_index].range,
+        .identifier = ref._tree->identifier_tokens[token_index].identifier,
+        .length = ref._tree->identifier_tokens[token_index].length,
+        .range = ref._tree->identifier_tokens[token_index].range,
     };
     return result;
 }
-struct parsed_number parsed_number_get(struct bluebird_node node) {
-    if (node.empty || node._type != 10) {
+struct parsed_number parsed_number_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 10) {
         return (struct parsed_number){
         0
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t token_index = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t token_index = read_tree(&offset, ref._tree);
     struct parsed_number result = {
-        .number = node._tree->number_tokens[token_index].number,
-        .range = node._tree->number_tokens[token_index].range,
+        .number = ref._tree->number_tokens[token_index].number,
+        .range = ref._tree->number_tokens[token_index].range,
     };
     return result;
 }
-struct parsed_string parsed_string_get(struct bluebird_node node) {
-    if (node.empty || node._type != 11) {
+struct parsed_string parsed_string_get(struct bluebird_ref ref) {
+    if (ref.empty || ref._type != 11) {
         return (struct parsed_string){
         0
         };
     }
-    size_t offset = node._offset;
-    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.
-    size_t token_index = read_tree(&offset, node._tree);
+    size_t offset = ref._offset;
+    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
+    size_t token_index = read_tree(&offset, ref._tree);
     struct parsed_string result = {
-        .string = node._tree->string_tokens[token_index].string,
-        .length = node._tree->string_tokens[token_index].length,
-        .has_escapes = node._tree->string_tokens[token_index].has_escapes,
-        .range = node._tree->string_tokens[token_index].range,
+        .string = ref._tree->string_tokens[token_index].string,
+        .length = ref._tree->string_tokens[token_index].length,
+        .has_escapes = ref._tree->string_tokens[token_index].has_escapes,
+        .range = ref._tree->string_tokens[token_index].range,
     };
     return result;
 }
@@ -776,10 +776,10 @@ static void check_for_error(struct bluebird_tree *tree) {
         fprintf(stderr, "invalid file\n");
         break;
     case ERROR_INVALID_TOKEN:
-        fprintf(stderr, "invalid token\n");
+        fprintf(stderr, "invalid token '%.*s'\n", (int)(tree->error_range.end - tree->error_range.start), tree->string + tree->error_range.start);
         break;
     case ERROR_UNEXPECTED_TOKEN:
-        fprintf(stderr, "unexpected token\n");
+        fprintf(stderr, "unexpected token '%.*s'\n", (int)(tree->error_range.end - tree->error_range.start), tree->string + tree->error_range.start);
         break;
     case ERROR_MORE_INPUT_NEEDED:
         fprintf(stderr, "more input needed\n");
@@ -789,21 +789,21 @@ static void check_for_error(struct bluebird_tree *tree) {
     }
     exit(-1);
 }
-static void parsed_grammar_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_rule_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_body_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_operators_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_fixity_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_assoc_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_operator_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_expr_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_comment_token_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_identifier_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_number_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_string_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);
-static void parsed_grammar_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_grammar it = parsed_grammar_get(node);
+static void parsed_grammar_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_rule_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_body_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_operators_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_fixity_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_assoc_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_operator_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_expr_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_comment_token_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_identifier_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_number_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_string_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);
+static void parsed_grammar_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_grammar it = parsed_grammar_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("grammar");
         if (strcmp("grammar", slot_name))
@@ -811,12 +811,12 @@ static void parsed_grammar_print(struct bluebird_tree *tree, struct bluebird_nod
         printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_rule_print(tree, it.rule, "rule", indent + 1);
         parsed_comment_token_print(tree, it.comment_token, "comment_token", indent + 1);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
-static void parsed_rule_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_rule it = parsed_rule_get(node);
+static void parsed_rule_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_rule it = parsed_rule_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("rule");
         if (strcmp("rule", slot_name))
@@ -824,12 +824,12 @@ static void parsed_rule_print(struct bluebird_tree *tree, struct bluebird_node n
         printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_identifier_print(tree, it.identifier, "identifier", indent + 1);
         parsed_body_print(tree, it.body, "body", indent + 1);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
-static void parsed_body_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_body it = parsed_body_get(node);
+static void parsed_body_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_body it = parsed_body_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("body");
         if (strcmp("body", slot_name))
@@ -838,12 +838,12 @@ static void parsed_body_print(struct bluebird_tree *tree, struct bluebird_node n
         parsed_expr_print(tree, it.expr, "expr", indent + 1);
         parsed_identifier_print(tree, it.identifier, "identifier", indent + 1);
         parsed_operators_print(tree, it.operators, "operators", indent + 1);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
-static void parsed_operators_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_operators it = parsed_operators_get(node);
+static void parsed_operators_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_operators it = parsed_operators_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("operators");
         if (strcmp("operators", slot_name))
@@ -851,12 +851,12 @@ static void parsed_operators_print(struct bluebird_tree *tree, struct bluebird_n
         printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_fixity_print(tree, it.fixity, "fixity", indent + 1);
         parsed_operator_print(tree, it.operator, "operator", indent + 1);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
-static void parsed_fixity_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_fixity it = parsed_fixity_get(node);
+static void parsed_fixity_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_fixity it = parsed_fixity_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("fixity");
         if (strcmp("fixity", slot_name))
@@ -876,12 +876,12 @@ static void parsed_fixity_print(struct bluebird_tree *tree, struct bluebird_node
         }
         printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_assoc_print(tree, it.assoc, "assoc", indent + 1);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
-static void parsed_assoc_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_assoc it = parsed_assoc_get(node);
+static void parsed_assoc_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_assoc it = parsed_assoc_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("assoc");
         if (strcmp("assoc", slot_name))
@@ -903,12 +903,12 @@ static void parsed_assoc_print(struct bluebird_tree *tree, struct bluebird_node 
             break;
         }
         printf(" (%zu - %zu)\n", it.range.start, it.range.end);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
-static void parsed_operator_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_operator it = parsed_operator_get(node);
+static void parsed_operator_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_operator it = parsed_operator_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("operator");
         if (strcmp("operator", slot_name))
@@ -916,12 +916,12 @@ static void parsed_operator_print(struct bluebird_tree *tree, struct bluebird_no
         printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_expr_print(tree, it.expr, "expr", indent + 1);
         parsed_identifier_print(tree, it.identifier, "identifier", indent + 1);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
-static void parsed_expr_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_expr it = parsed_expr_get(node);
+static void parsed_expr_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_expr it = parsed_expr_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("expr");
         if (strcmp("expr", slot_name))
@@ -966,76 +966,76 @@ static void parsed_expr_print(struct bluebird_tree *tree, struct bluebird_node n
         parsed_string_print(tree, it.begin_token, "begin_token", indent + 1);
         parsed_string_print(tree, it.end_token, "end_token", indent + 1);
         parsed_expr_print(tree, it.operand, "operand", indent + 1);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
-static void parsed_comment_token_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_comment_token it = parsed_comment_token_get(node);
+static void parsed_comment_token_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_comment_token it = parsed_comment_token_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("comment_token");
         if (strcmp("comment_token", slot_name))
             printf("@%s", slot_name);
         printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         parsed_string_print(tree, it.string, "string", indent + 1);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
-static void parsed_identifier_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_identifier it = parsed_identifier_get(node);
+static void parsed_identifier_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_identifier it = parsed_identifier_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("identifier");
         if (strcmp("identifier", slot_name))
             printf("@%s", slot_name);
         printf(" - %.*s", (int)it.length, it.identifier);
         printf(" (%zu - %zu)\n", it.range.start, it.range.end);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
-static void parsed_number_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_number it = parsed_number_get(node);
+static void parsed_number_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_number it = parsed_number_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("number");
         if (strcmp("number", slot_name))
             printf("@%s", slot_name);
         printf(" - %f", it.number);
         printf(" (%zu - %zu)\n", it.range.start, it.range.end);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
-static void parsed_string_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {
-    while (!node.empty) {
-        struct parsed_string it = parsed_string_get(node);
+static void parsed_string_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {
+    while (!ref.empty) {
+        struct parsed_string it = parsed_string_get(ref);
         for (int i = 0; i < indent; ++i) printf("  ");
         printf("string");
         if (strcmp("string", slot_name))
             printf("@%s", slot_name);
         printf(" - %.*s", (int)it.length, it.string);
         printf(" (%zu - %zu)\n", it.range.start, it.range.end);
-        node = bluebird_next(node);
+        ref = bluebird_next(ref);
     }
 }
 void bluebird_tree_print(struct bluebird_tree *tree) {
     check_for_error(tree);
-    parsed_grammar_print(tree, bluebird_tree_root_node(tree), "grammar", 0);
+    parsed_grammar_print(tree, bluebird_tree_root_ref(tree), "grammar", 0);
 }
-struct bluebird_node bluebird_next(struct bluebird_node node) {
-    size_t offset = read_tree(&node._offset, node._tree);
-    return (struct bluebird_node){
-        ._tree = node._tree,
+struct bluebird_ref bluebird_next(struct bluebird_ref ref) {
+    size_t offset = read_tree(&ref._offset, ref._tree);
+    return (struct bluebird_ref){
+        ._tree = ref._tree,
         ._offset = offset,
-        ._type = node._type,
+        ._type = ref._type,
         .empty = offset == 0,
     };
 }
-bool bluebird_nodes_equal(struct bluebird_node a, struct bluebird_node b) {
+bool bluebird_refs_equal(struct bluebird_ref a, struct bluebird_ref b) {
     return a._tree == b._tree && a._offset == b._offset;
 }
-struct bluebird_node bluebird_tree_root_node(struct bluebird_tree *tree) {
+struct bluebird_ref bluebird_tree_root_ref(struct bluebird_tree *tree) {
     check_for_error(tree);
-    return (struct bluebird_node){
+    return (struct bluebird_ref){
         ._tree = tree,
         ._offset = tree->root_offset,
         ._type = 0,
@@ -1044,7 +1044,7 @@ struct bluebird_node bluebird_tree_root_node(struct bluebird_tree *tree) {
 }
 struct parsed_grammar bluebird_tree_get_parsed_grammar(struct bluebird_tree *tree) {
     check_for_error(tree);
-    return parsed_grammar_get(bluebird_tree_root_node(tree));
+    return parsed_grammar_get(bluebird_tree_root_ref(tree));
 }
 #define IGNORE_TOKEN_WRITE(...)
 static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *text, void *info);

@@ -23,19 +23,19 @@ struct context {
 
 struct boundary_states;
 static void build_body_automaton(struct context *ctx,
- struct automaton *automaton, struct bluebird_node expr_node);
+ struct automaton *automaton, struct bluebird_ref expr_ref);
 static void build_body_expression(struct context *ctx,
- struct automaton *automaton, struct bluebird_node expr_node,
+ struct automaton *automaton, struct bluebird_ref expr_ref,
  struct boundary_states boundary);
 static struct boundary_states connect_expression(struct context *ctx,
- struct automaton *a, struct bluebird_node node, struct boundary_states outer);
+ struct automaton *a, struct bluebird_ref ref, struct boundary_states outer);
 
 static uint32_t add_slot(struct context *ctx, struct rule *rule,
  const char *slot_name, size_t slot_name_length, uint32_t referenced_rule_index,
  struct source_range range, const char *error_reason);
 
 static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
- struct bluebird_node string_node, enum token_type type);
+ struct bluebird_ref string_ref, enum token_type type);
 
 static uint32_t add_rule(struct context *ctx, const char *name, size_t len);
 static void add_token_rule(struct context *ctx, const char *name, size_t len);
@@ -69,9 +69,9 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
     // this in a separate pass so we can look up names before they appear in the
     // parse tree.
     grammar->root_rule = 0;
-    struct bluebird_node n;
-    for (n = g.rule; !n.empty; n = bluebird_next(n)) {
-        struct parsed_rule parsed_rule = parsed_rule_get(n);
+    struct bluebird_ref r;
+    for (r = g.rule; !r.empty; r = bluebird_next(r)) {
+        struct parsed_rule parsed_rule = parsed_rule_get(r);
         struct parsed_identifier name =
          parsed_identifier_get(parsed_rule.identifier);
         uint32_t index = add_rule(&context, name.identifier, name.length);
@@ -100,8 +100,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
     // separate pass in case there are "exception" specifiers which exclude
     // certain choices.
     uint32_t rule_index = 0;
-    for (n = g.rule; !n.empty; n = bluebird_next(n), rule_index++) {
-        struct parsed_rule parsed_rule = parsed_rule_get(n);
+    for (r = g.rule; !r.empty; r = bluebird_next(r), rule_index++) {
+        struct parsed_rule parsed_rule = parsed_rule_get(r);
         assert(rule_index < grammar->number_of_rules);
         struct rule *rule = &grammar->rules[rule_index];
         struct parsed_body body = parsed_body_get(parsed_rule.body);
@@ -205,8 +205,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
 
     // Now fill in the automata according to the contents of each parsed rule.
     rule_index = 0;
-    for (n = g.rule; !n.empty; n = bluebird_next(n), rule_index++) {
-        struct parsed_rule parsed_rule = parsed_rule_get(n);
+    for (r = g.rule; !r.empty; r = bluebird_next(r), rule_index++) {
+        struct parsed_rule parsed_rule = parsed_rule_get(r);
         struct rule *rule = &grammar->rules[rule_index];
 
         // Store the rule index in our context object so we don't have to pass
@@ -305,7 +305,7 @@ struct boundary_states {
 };
 
 static void build_body_automaton(struct context *ctx,
- struct automaton *out_automaton, struct bluebird_node expr_node)
+ struct automaton *out_automaton, struct bluebird_ref expr_ref)
 {
     struct automaton automaton = {0};
     struct boundary_states boundary = { .entry = 0, .exit = 1 };
@@ -314,7 +314,7 @@ static void build_body_automaton(struct context *ctx,
 
     struct context saved_context = *ctx;
     ctx->next_state = 2;
-    build_body_expression(ctx, &automaton, expr_node, boundary);
+    build_body_expression(ctx, &automaton, expr_ref, boundary);
     ctx->next_state = saved_context.next_state;
 
     determinize_minimize(&automaton, out_automaton);
@@ -322,10 +322,10 @@ static void build_body_automaton(struct context *ctx,
 }
 
 static void build_body_expression(struct context *ctx,
- struct automaton *automaton, struct bluebird_node expr_node,
+ struct automaton *automaton, struct bluebird_ref expr_ref,
  struct boundary_states b)
 {
-    struct parsed_expr expr = parsed_expr_get(expr_node);
+    struct parsed_expr expr = parsed_expr_get(expr_ref);
     if (ctx->expression_nesting++ > MAX_EXPRESSION_NESTING) {
         error.ranges[0] = expr.range;
         exit_with_errorf("operators are nested too deeply");
@@ -498,12 +498,12 @@ static void build_body_expression(struct context *ctx,
 }
 
 static struct boundary_states connect_expression(struct context *ctx,
- struct automaton *a, struct bluebird_node node, struct boundary_states outer)
+ struct automaton *a, struct bluebird_ref ref, struct boundary_states outer)
 {
     struct boundary_states inner;
     inner.entry = ctx->next_state++;
     inner.exit = ctx->next_state++;
-    build_body_expression(ctx, a, node, inner);
+    build_body_expression(ctx, a, ref, inner);
     automaton_add_transition(a, outer.entry, inner.entry, SYMBOL_EPSILON);
     automaton_add_transition(a, inner.exit, outer.exit, SYMBOL_EPSILON);
     return inner;
@@ -601,9 +601,9 @@ uint32_t find_token(struct token *tokens, uint32_t number_of_tokens,
 }
 
 static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
- struct bluebird_node string_node, enum token_type type)
+ struct bluebird_ref string_ref, enum token_type type)
 {
-    struct parsed_string keyword = parsed_string_get(string_node);
+    struct parsed_string keyword = parsed_string_get(string_ref);
     if (keyword.length == 0) {
         // Zero-length keywords are treated as epsilons.
         return SYMBOL_EPSILON;

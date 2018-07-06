@@ -125,26 +125,26 @@ void generate(struct generator *gen)
     output_line(out, "// Prints a representation of the tree to standard output.");
     output_line(out, "void bluebird_tree_print(struct bluebird_tree *);");
     output_line(out, "");
-    output_line(out, "// A bluebird_node represents an node in the parse tree.  Use the");
+    output_line(out, "// A bluebird_ref references a list of children in the parse tree.  Use the");
     output_line(out, "// parsed_..._get() function corresponding to the element type to unpack the");
-    output_line(out, "// node into its appropriate type of parsed_... element struct.");
-    output_line(out, "struct bluebird_node {");
+    output_line(out, "// child into its appropriate parsed_... struct.");
+    output_line(out, "struct bluebird_ref {");
     output_line(out, "    struct bluebird_tree *_tree;");
     output_line(out, "    size_t _offset;");
     output_line(out, "    uint32_t _type;");
     output_line(out, "    bool empty;");
     output_line(out, "};");
     output_line(out, "");
-    output_line(out, "// The bluebird_next function returns the next sibling node.");
-    output_line(out, "struct bluebird_node bluebird_next(struct bluebird_node);");
+    output_line(out, "// The bluebird_next function advances a ref to the next sibling element.");
+    output_line(out, "struct bluebird_ref bluebird_next(struct bluebird_ref);");
     output_line(out, "");
-    output_line(out, "// Tests two nodes for equality.");
-    output_line(out, "bool bluebird_nodes_equal(struct bluebird_node a, struct bluebird_node b);");
+    output_line(out, "// Tests two refs for equality.");
+    output_line(out, "bool bluebird_refs_equal(struct bluebird_ref a, struct bluebird_ref b);");
     output_line(out, "");
-    output_line(out, "// Returns the root bluebird_node.");
-    output_line(out, "struct bluebird_node bluebird_tree_root_node(struct bluebird_tree *tree);");
+    output_line(out, "// Returns the root bluebird_ref.");
+    output_line(out, "struct bluebird_ref bluebird_tree_root_ref(struct bluebird_tree *tree);");
     output_line(out, "");
-    output_line(out, "// As a shortcut, returns the parsed_%%root-rule struct corresponding to the root node.");
+    output_line(out, "// As a shortcut, returns the parsed_%%root-rule struct corresponding to the root ref.");
     output_line(out, "struct parsed_%%root-rule bluebird_tree_get_parsed_%%root-rule(struct bluebird_tree *tree);");
     output_line(out, "");
     output_line(out, "// The range of text corresponding to a tree element.");
@@ -221,7 +221,7 @@ void generate(struct generator *gen)
             struct slot slot = rule->slots[j];
             set_substitution(out, "referenced-slot", slot.name,
              slot.name_length, LOWERCASE_WITH_UNDERSCORES);
-            output_line(out, "    struct bluebird_node %%referenced-slot;");
+            output_line(out, "    struct bluebird_ref %%referenced-slot;");
         }
         if (rule->is_token)
             generate_fields_for_token_rule(out, rule, "    %%type%%field;\n");
@@ -232,7 +232,7 @@ void generate(struct generator *gen)
         struct rule *rule = &gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
-        output_line(out, "struct parsed_%%rule parsed_%%rule_get(struct bluebird_node);");
+        output_line(out, "struct parsed_%%rule parsed_%%rule_get(struct bluebird_ref);");
     }
     output_line(out, "");
     output_line(out, "#endif");
@@ -347,8 +347,8 @@ void generate(struct generator *gen)
         set_unsigned_number_substitution(out, "rule-index", i);
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
-        output_line(out, "struct parsed_%%rule parsed_%%rule_get(struct bluebird_node node) {");
-        output_line(out, "    if (node.empty || node._type != %%rule-index) {");
+        output_line(out, "struct parsed_%%rule parsed_%%rule_get(struct bluebird_ref ref) {");
+        output_line(out, "    if (ref.empty || ref._type != %%rule-index) {");
         output_line(out, "        return (struct parsed_%%rule){");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
             set_substitution(out, "referenced-slot", rule->slots[j].name,
@@ -359,24 +359,24 @@ void generate(struct generator *gen)
             output_line(out, "        0");
         output_line(out, "        };");
         output_line(out, "    }");
-        output_line(out, "    size_t offset = node._offset;");
-        output_line(out, "    read_tree(&offset, node._tree); // Read and ignore the 'next offset' field.");
+        output_line(out, "    size_t offset = ref._offset;");
+        output_line(out, "    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.");
         if (rule->is_token)
-            output_line(out, "    size_t token_index = read_tree(&offset, node._tree);");
+            output_line(out, "    size_t token_index = read_tree(&offset, ref._tree);");
         else {
-            output_line(out, "    size_t start_location = read_tree(&offset, node._tree);");
-            output_line(out, "    size_t end_location = read_tree(&offset, node._tree);");
+            output_line(out, "    size_t start_location = read_tree(&offset, ref._tree);");
+            output_line(out, "    size_t end_location = read_tree(&offset, ref._tree);");
         }
         output_line(out, "    struct parsed_%%rule result = {");
         if (rule->is_token) {
-            generate_fields_for_token_rule(out, rule, "        .%%field = node._tree->%%rule_tokens[token_index].%%field,\n");
-            output_line(out, "        .range = node._tree->%%rule_tokens[token_index].range,");
+            generate_fields_for_token_rule(out, rule, "        .%%field = ref._tree->%%rule_tokens[token_index].%%field,\n");
+            output_line(out, "        .range = ref._tree->%%rule_tokens[token_index].range,");
         } else {
             output_line(out, "        .range.start = start_location,");
             output_line(out, "        .range.end = end_location,");
         }
         if (rule->number_of_choices > 0)
-            output_line(out, "        .type = read_tree(&offset, node._tree),");
+            output_line(out, "        .type = read_tree(&offset, ref._tree),");
         output_line(out, "    };");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
             struct slot slot = rule->slots[j];
@@ -384,8 +384,8 @@ void generate(struct generator *gen)
              slot.name_length, LOWERCASE_WITH_UNDERSCORES);
             set_unsigned_number_substitution(out, "referenced-slot-type",
              slot.rule_index);
-            output_line(out, "    result.%%referenced-slot._tree = node._tree;");
-            output_line(out, "    result.%%referenced-slot._offset = read_tree(&offset, node._tree);");
+            output_line(out, "    result.%%referenced-slot._tree = ref._tree;");
+            output_line(out, "    result.%%referenced-slot._offset = read_tree(&offset, ref._tree);");
             output_line(out, "    result.%%referenced-slot._type = %%referenced-slot-type;");
             output_line(out, "    result.%%referenced-slot.empty = result.%%referenced-slot._offset == 0;");
         }
@@ -484,15 +484,15 @@ void generate(struct generator *gen)
         struct rule *rule = &gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
-        output_line(out, "static void parsed_%%rule_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent);");
+        output_line(out, "static void parsed_%%rule_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent);");
     }
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
-        output_line(out, "static void parsed_%%rule_print(struct bluebird_tree *tree, struct bluebird_node node, const char *slot_name, int indent) {");
-        output_line(out, "    while (!node.empty) {");
-        output_line(out, "        struct parsed_%%rule it = parsed_%%rule_get(node);");
+        output_line(out, "static void parsed_%%rule_print(struct bluebird_tree *tree, struct bluebird_ref ref, const char *slot_name, int indent) {");
+        output_line(out, "    while (!ref.empty) {");
+        output_line(out, "        struct parsed_%%rule it = parsed_%%rule_get(ref);");
         output_line(out, "        for (int i = 0; i < indent; ++i) printf(\"  \");");
         output_line(out, "        printf(\"%%rule\");");
         output_line(out, "        if (strcmp(\"%%rule\", slot_name))");
@@ -528,32 +528,32 @@ void generate(struct generator *gen)
              slot_rule->name_length, LOWERCASE_WITH_UNDERSCORES);
             output_line(out, "        parsed_%%slot-rule_print(tree, it.%%slot-name, \"%%slot-name\", indent + 1);");
         }
-        output_line(out, "        node = bluebird_next(node);");
+        output_line(out, "        ref = bluebird_next(ref);");
         output_line(out, "    }");
         output_line(out, "}");
     }
     output_line(out, "void bluebird_tree_print(struct bluebird_tree *tree) {");
     output_line(out, "    check_for_error(tree);");
-    output_line(out, "    parsed_%%root-rule_print(tree, bluebird_tree_root_node(tree), \"%%root-rule\", 0);");
+    output_line(out, "    parsed_%%root-rule_print(tree, bluebird_tree_root_ref(tree), \"%%root-rule\", 0);");
     output_line(out, "}");
 
-    output_line(out, "struct bluebird_node bluebird_next(struct bluebird_node node) {");
-    output_line(out, "    size_t offset = read_tree(&node._offset, node._tree);");
-    output_line(out, "    return (struct bluebird_node){");
-    output_line(out, "        ._tree = node._tree,");
+    output_line(out, "struct bluebird_ref bluebird_next(struct bluebird_ref ref) {");
+    output_line(out, "    size_t offset = read_tree(&ref._offset, ref._tree);");
+    output_line(out, "    return (struct bluebird_ref){");
+    output_line(out, "        ._tree = ref._tree,");
     output_line(out, "        ._offset = offset,");
-    output_line(out, "        ._type = node._type,");
+    output_line(out, "        ._type = ref._type,");
     output_line(out, "        .empty = offset == 0,");
     output_line(out, "    };");
     output_line(out, "}");
 
-    output_line(out, "bool bluebird_nodes_equal(struct bluebird_node a, struct bluebird_node b) {");
+    output_line(out, "bool bluebird_refs_equal(struct bluebird_ref a, struct bluebird_ref b) {");
     output_line(out, "    return a._tree == b._tree && a._offset == b._offset;");
     output_line(out, "}");
 
-    output_line(out, "struct bluebird_node bluebird_tree_root_node(struct bluebird_tree *tree) {");
+    output_line(out, "struct bluebird_ref bluebird_tree_root_ref(struct bluebird_tree *tree) {");
     output_line(out, "    check_for_error(tree);");
-    output_line(out, "    return (struct bluebird_node){");
+    output_line(out, "    return (struct bluebird_ref){");
     output_line(out, "        ._tree = tree,");
     output_line(out, "        ._offset = tree->root_offset,");
     output_line(out, "        ._type = %%root-rule-index,");
@@ -563,7 +563,7 @@ void generate(struct generator *gen)
 
     output_line(out, "struct parsed_%%root-rule bluebird_tree_get_parsed_%%root-rule(struct bluebird_tree *tree) {");
     output_line(out, "    check_for_error(tree);");
-    output_line(out, "    return parsed_%%root-rule_get(bluebird_tree_root_node(tree));");
+    output_line(out, "    return parsed_%%root-rule_get(bluebird_tree_root_ref(tree));");
     output_line(out, "}");
 
     set_unsigned_number_substitution(out, "identifier-token", 0xffffffff);

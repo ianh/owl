@@ -28,7 +28,7 @@ struct val {
         double number;
         table_id table;
         struct closure closure;
-        struct val (*builtin)(struct bluebird_node args);
+        struct val (*builtin)(struct bluebird_ref args);
     };
     enum type type;
 };
@@ -69,23 +69,23 @@ static table_id free_list;
 static enum mark current_mark = MARK_BLACK;
 static table_id stack_root;
 
-static struct bluebird_node *functions;
+static struct bluebird_ref *functions;
 static uint32_t number_of_functions;
 
 static table_id environment;
 
-static struct val builtin_print(struct bluebird_node arg);
-static struct val builtin_println(struct bluebird_node arg);
-static struct val builtin_isspace(struct bluebird_node arg);
-static struct val builtin_isdigit(struct bluebird_node arg);
-static struct val builtin_todigit(struct bluebird_node arg);
-static struct val builtin_read_input_length(struct bluebird_node arg);
+static struct val builtin_print(struct bluebird_ref arg);
+static struct val builtin_println(struct bluebird_ref arg);
+static struct val builtin_isspace(struct bluebird_ref arg);
+static struct val builtin_isdigit(struct bluebird_ref arg);
+static struct val builtin_todigit(struct bluebird_ref arg);
+static struct val builtin_read_input_length(struct bluebird_ref arg);
 
-static enum control_flow eval_stmt_list(struct bluebird_node stmt_list_node,
+static enum control_flow eval_stmt_list(struct bluebird_ref stmt_list_ref,
  struct val *return_val);
-static enum control_flow eval_stmt(struct bluebird_node stmt_node,
+static enum control_flow eval_stmt(struct bluebird_ref stmt_ref,
  struct val *return_val);
-static struct val eval_expr(struct bluebird_node expr_node);
+static struct val eval_expr(struct bluebird_ref expr_ref);
 
 static int val_snprint(char *s, int len, struct val value);
 static bool val_equal(struct val a, struct val b);
@@ -108,8 +108,8 @@ static const struct val false_val = { .type = TYPE_FALSE };
 static struct val number_val(double number);
 static struct val string_val(const char *string, size_t len);
 
-static struct val string_for_identifier(struct bluebird_node ident_node);
-static double eval_number(struct bluebird_node number_expr);
+static struct val string_for_identifier(struct bluebird_ref ident_ref);
+static double eval_number(struct bluebird_ref number_expr);
 
 int main(int argc, char *argv[])
 {
@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
     exit(-1);
 }
 
-static enum control_flow eval_stmt_list(struct bluebird_node stmt_list,
+static enum control_flow eval_stmt_list(struct bluebird_ref stmt_list,
  struct val *return_val)
 {
     struct parsed_stmt_list stmts = parsed_stmt_list_get(stmt_list);
@@ -166,23 +166,23 @@ static enum control_flow eval_stmt_list(struct bluebird_node stmt_list,
     return NORMAL;
 }
 
-static enum control_flow eval_stmt(struct bluebird_node stmt_node,
+static enum control_flow eval_stmt(struct bluebird_ref stmt_ref,
  struct val *return_val)
 {
-    struct parsed_stmt stmt = parsed_stmt_get(stmt_node);
+    struct parsed_stmt stmt = parsed_stmt_get(stmt_ref);
     switch (stmt.type) {
     case PARSED_FUNCTION: {
         struct val f = { .type = TYPE_CLOSURE };
         f.closure.environment_table = environment;
         uint32_t i = 0;
         for (; i < number_of_functions; ++i) {
-            if (bluebird_nodes_equal(stmt_node, functions[i]))
+            if (bluebird_refs_equal(stmt_ref, functions[i]))
                 break;
         }
         if (i >= number_of_functions) {
-            functions = realloc(functions, (i+1)*sizeof(struct bluebird_node));
+            functions = realloc(functions, (i+1)*sizeof(struct bluebird_ref));
             number_of_functions = i + 1;
-            functions[i] = stmt_node;
+            functions[i] = stmt_ref;
         }
         f.closure.function_index = i;
         table_set(environment, string_for_identifier(stmt.identifier), f);
@@ -292,9 +292,9 @@ static enum control_flow eval_stmt(struct bluebird_node stmt_node,
     return NORMAL;
 }
 
-static struct val eval_expr(struct bluebird_node expr_node)
+static struct val eval_expr(struct bluebird_ref expr_ref)
 {
-    struct parsed_expr expr = parsed_expr_get(expr_node);
+    struct parsed_expr expr = parsed_expr_get(expr_ref);
     switch (expr.type) {
     case PARSED_STRING: {
         struct parsed_string s = parsed_string_get(expr.string);
@@ -355,9 +355,9 @@ static struct val eval_expr(struct bluebird_node expr_node)
          (struct val){ .type = TYPE_TABLE, .table = environment });
         struct parsed_stmt function =
          parsed_stmt_get(functions[f.closure.function_index]);
-        struct bluebird_node param =
+        struct bluebird_ref param =
          parsed_parameter_list_get(function.parameter_list).identifier;
-        struct bluebird_node arg = expr.expr;
+        struct bluebird_ref arg = expr.expr;
         for (; !param.empty; param = bluebird_next(param)) {
             if (arg.empty) {
                 fprintf(stderr, "error: not enough arguments\n");
@@ -691,13 +691,13 @@ static struct val string_val(const char *string, size_t len)
     return (struct val){ .type = TYPE_STRING, .table = i };
 }
 
-static struct val string_for_identifier(struct bluebird_node ident_node)
+static struct val string_for_identifier(struct bluebird_ref ident_ref)
 {
-    struct parsed_identifier ident = parsed_identifier_get(ident_node);
+    struct parsed_identifier ident = parsed_identifier_get(ident_ref);
     return string_val(ident.identifier, ident.length);
 }
 
-static double eval_number(struct bluebird_node number_expr)
+static double eval_number(struct bluebird_ref number_expr)
 {
     struct val a = eval_expr(number_expr);
     if (a.type != TYPE_NUMBER) {
@@ -707,14 +707,14 @@ static double eval_number(struct bluebird_node number_expr)
     return a.number;
 }
 
-static struct val builtin_print(struct bluebird_node arg)
+static struct val builtin_print(struct bluebird_ref arg)
 {
     for (; !arg.empty; arg = bluebird_next(arg))
         val_print(stdout, eval_expr(arg));
     return false_val;
 }
 
-static struct val builtin_println(struct bluebird_node arg)
+static struct val builtin_println(struct bluebird_ref arg)
 {
     for (; !arg.empty; arg = bluebird_next(arg))
         val_print(stdout, eval_expr(arg));
@@ -722,7 +722,7 @@ static struct val builtin_println(struct bluebird_node arg)
     return false_val;
 }
 
-static struct val builtin_isspace(struct bluebird_node arg)
+static struct val builtin_isspace(struct bluebird_ref arg)
 {
     if (arg.empty)
         return false_val;
@@ -734,7 +734,7 @@ static struct val builtin_isspace(struct bluebird_node arg)
      true_val : false_val;
 }
 
-static struct val builtin_isdigit(struct bluebird_node arg)
+static struct val builtin_isdigit(struct bluebird_ref arg)
 {
     if (arg.empty)
         return false_val;
@@ -745,7 +745,7 @@ static struct val builtin_isdigit(struct bluebird_node arg)
     return (c >= '0' && c <= '9') ? true_val : false_val;
 }
 
-static struct val builtin_todigit(struct bluebird_node arg)
+static struct val builtin_todigit(struct bluebird_ref arg)
 {
     if (arg.empty)
         return number_val(0);
@@ -759,7 +759,7 @@ static struct val builtin_todigit(struct bluebird_node arg)
         return number_val(0);
 }
 
-static struct val builtin_read_input_length(struct bluebird_node arg)
+static struct val builtin_read_input_length(struct bluebird_ref arg)
 {
     if (arg.empty)
         return false_val;
