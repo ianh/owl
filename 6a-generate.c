@@ -467,10 +467,10 @@ void generate(struct generator *gen)
     output_line(out, "        fprintf(stderr, \"invalid file\\n\");");
     output_line(out, "        break;");
     output_line(out, "    case ERROR_INVALID_TOKEN:");
-    output_line(out, "        fprintf(stderr, \"invalid token\\n\");");
+    output_line(out, "        fprintf(stderr, \"invalid token '%.*s'\\n\", (int)(tree->error_range.end - tree->error_range.start), tree->string + tree->error_range.start);");
     output_line(out, "        break;");
     output_line(out, "    case ERROR_UNEXPECTED_TOKEN:");
-    output_line(out, "        fprintf(stderr, \"unexpected token\\n\");");
+    output_line(out, "        fprintf(stderr, \"unexpected token '%.*s'\\n\", (int)(tree->error_range.end - tree->error_range.start), tree->string + tree->error_range.start);");
     output_line(out, "        break;");
     output_line(out, "    case ERROR_MORE_INPUT_NEEDED:");
     output_line(out, "        fprintf(stderr, \"more input needed\\n\");");
