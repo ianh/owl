@@ -442,7 +442,13 @@ static state_id embed(struct automaton *into, struct automaton *from,
              t.symbol, t.action);
         }
     }
-    return from->start_state + n;
+    // If there aren't any transitions to or from the start state, the code
+    // above won't create the corresponding state in `into`.  In that case, we
+    // create a new state so our return value is actually valid.
+    if (from->start_state + n < into->number_of_states)
+        return from->start_state + n;
+    else
+        return automaton_create_state(into);
 }
 
 static void remove_choice_actions(struct automaton *a, struct bitset *choices)
