@@ -1022,6 +1022,7 @@ void bluebird_tree_print(struct bluebird_tree *tree) {
     parsed_grammar_print(tree, bluebird_tree_root_ref(tree), "grammar", 0);
 }
 struct bluebird_ref bluebird_next(struct bluebird_ref ref) {
+    if (ref.empty) return ref;
     size_t offset = read_tree(&ref._offset, ref._tree);
     return (struct bluebird_ref){
         ._tree = ref._tree,

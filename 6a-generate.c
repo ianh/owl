@@ -538,6 +538,7 @@ void generate(struct generator *gen)
     output_line(out, "}");
 
     output_line(out, "struct bluebird_ref bluebird_next(struct bluebird_ref ref) {");
+    output_line(out, "    if (ref.empty) return ref;");
     output_line(out, "    size_t offset = read_tree(&ref._offset, ref._tree);");
     output_line(out, "    return (struct bluebird_ref){");
     output_line(out, "        ._tree = ref._tree,");
