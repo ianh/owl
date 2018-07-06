@@ -5,8 +5,6 @@
 #include <readline/readline.h>
 #include <stdio.h>
 
-static double eval(struct bluebird_ref ref);
-
 struct binding {
     struct binding *next;
     char *name;
@@ -14,6 +12,7 @@ struct binding {
     double value;
 };
 static struct binding *bindings;
+static double eval(struct bluebird_ref ref);
 static struct binding *lookup(struct parsed_identifier id);
 
 int main()
@@ -22,7 +21,8 @@ int main()
         char *s = readline("> ");
         if (!s)
             break;
-        add_history(s);
+        if (*s)
+            add_history(s);
         struct bluebird_tree *tree = bluebird_tree_create_from_string(s);
         if (bluebird_tree_get_error(tree, NULL) != ERROR_NONE) {
             printf("parse error.\n");
@@ -41,7 +41,8 @@ int main()
                 b->name_length = id.length;
                 b->next = bindings;
                 bindings = b;
-            }
+            } else
+                printf("%g -> ", b->value);
             b->value = n;
         }
         printf("%g\n", n);
@@ -59,8 +60,7 @@ static double eval(struct bluebird_ref ref)
         struct binding *b = lookup(id);
         if (b)
             return b->value;
-        else
-            printf("variable '%.*s' not set\n", (int)id.length, id.identifier);
+        printf("'%.*s' not set\n", (int)id.length, id.identifier);
         return 0;
     }
     case PARSED_NUMBER:
@@ -84,11 +84,10 @@ static double eval(struct bluebird_ref ref)
 
 static struct binding *lookup(struct parsed_identifier id)
 {
-    struct binding *b = bindings;
-    for (; b; b = b->next) {
+    for (struct binding *b = bindings; b; b = b->next) {
         if (b->name_length == id.length &&
          !memcmp(b->name, id.identifier, id.length))
-            break;
+            return b;
     }
-    return b;
+    return NULL;
 }
