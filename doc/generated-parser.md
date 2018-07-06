@@ -218,3 +218,23 @@ If `has_escapes` is true, the string data is owned by the `bluebird_tree`—othe
 ## cleaning up
 
 When you're done with a tree, use `bluebird_tree_destroy(tree)` to reclaim its memory.
+
+## function index
+
+`ROOT` is the root rule name.  `RULE` ranges over all rules.
+
+| name | arguments | return value |
+| --- | --- | --- |
+| `bluebird_next` | A `bluebird_ref`. | The next ref matching the corresponding field in the rule, or an empty ref. |
+| `bluebird_refs_equal` | Two `bluebird_ref` values. | `true` if the refs refer to the same match; `false` otherwise. |
+| `bluebird_tree_create_from_file` | A `FILE *` to read from.  The file is read into an intermediate string and may be closed immediately. | A new tree. |
+| `bluebird_tree_create_from_string` | A null-terminated string to parse.  You retain ownership and must keep the string around until the tree is destroyed. | A new tree. |
+| `bluebird_tree_destroy` | A `bluebird_tree *` to destroy, freeing its resources back to the system.  May be `NULL`. | None. |
+| `bluebird_tree_get_error` | A `bluebird_tree *` and an `error_range` out-parameter.  The error range may be `NULL`. | An error which interrupted parsing, or `ERROR_NONE` if there was no error. |
+| `bluebird_tree_get_parsed_ROOT` | A `bluebird_tree *`. | A `parsed_ROOT` struct corresponding to the root match. |
+| `bluebird_tree_print` | A `bluebird_tree *` to print to stdout (typically for debugging purposes).  Must not be `NULL`. | None. |
+| `bluebird_tree_root_ref` | A `bluebird_tree *`. | The ref corresponding to the root match. |
+| `parsed_identifier_get` | A `bluebird_ref` corresponding to an identifier match. | A `parsed_identifier` struct corresponding to the identifier match. |
+| `parsed_number_get` | A `bluebird_ref` corresponding to a number match. | A `parsed_number` struct corresponding to the number match. |
+| `parsed_string_get` | A `bluebird_ref` corresponding to a string match. | A `parsed_string` struct corresponding to the identifier match. |
+| `parsed_RULE_get` | A `bluebird_ref` corresponding to a match for `RULE`. | A `parsed_RULE` struct corresponding to the ref's match. |
