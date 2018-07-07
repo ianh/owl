@@ -1,0 +1,2 @@
+(set repl (lambda () (begin (print (eval (read))) (repl))))
+(repl)

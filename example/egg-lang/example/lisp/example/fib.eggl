@@ -1,0 +1,6 @@
+(set fib (lambda (a)
+    (if (<= a 1)
+        1
+        (+ (fib (- a 1)) (fib (- a 2))))))
+
+(fib 20)

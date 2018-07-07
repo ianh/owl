@@ -104,37 +104,43 @@ function print_val(val)
     end
 end
 
-function eval(env, val)
+function eval(val)
     if val.type == "identifier" then
         return env[val.name]
     elseif val.type == "list" then
-        return apply(eval(env, val.list[0]), env, val)
+        return apply(eval(val.list[0]), val)
     else
         return val
     end
 end
 
-function apply(func, env, val)
+function apply(func, val)
     if func.type != "func" then
         print_val(func)
         println(" is not a function")
         return [type="error"]
     end
-    return func.func(env, val)
+    return func.func(val)
 end
 
-function quote(env, val)
+function quote(val)
     return val.list[1]
 end
 
-function lambda(env, val)
+function lambda(val)
     local params = val.list[1]
     local body = val.list[2]
-    function eval_lambda(call_env, call_val)
-        for i=v in params.list do
-            env[v.name] = eval(call_env, call_val.list[i + 1])
+    function eval_lambda(call_val)
+        local saved = []
+        for k=v in env do
+            saved[k] = v
         end
-        return eval(env, body)
+        for i=v in params.list do
+            env[v.name] = eval(call_val.list[i + 1])
+        end
+        local val = eval(body)
+        env = saved
+        return val
     end
     return [type="func", func=eval_lambda]
 end
@@ -143,22 +149,144 @@ function func_val(f)
     return [type="func", func=f]
 end
 
-function plus(env, val)
-    return [type="number", number=eval(env, val.list[1]).number +
-     eval(env, val.list[2]).number]
+function begin(val)
+    local i = 1
+    local v = [type="list", length=0, list=[]]
+    while i < val.length do
+        v = eval(val.list[i])
+    end
+    return v
 end
 
-function set(env, val)
-    local v = eval(env, val.list[2])
+function if_func(val)
+    local pred = eval(val.list[1])
+    local v = pred
+    if pred.length > 0 then
+        v = eval(val.list[2])
+    elseif val.length >= 4 then
+        v = eval(val.list[3])
+    end
+    return v
+end
+
+function plus(val)
+    return [type="number", number=eval(val.list[1]).number +
+     eval(val.list[2]).number]
+end
+
+function minus(val)
+    return [type="number", number=eval(val.list[1]).number -
+     eval(val.list[2]).number]
+end
+
+function times(val)
+    return [type="number", number=eval(val.list[1]).number *
+     eval(val.list[2]).number]
+end
+
+function divided_by(val)
+    return [type="number", number=eval(val.list[1]).number /
+     eval(val.list[2]).number]
+end
+
+function eq_func(val)
+    local v = eval(val.list[1])
+    if v.number == eval(val.list[2]).number then
+        return [type="list", length=1, list=[v]]
+    else
+        return [type="list", length=0, list=[]]
+    end
+end
+
+function neq_func(val)
+    local v = eval(val.list[1])
+    if v.number != eval(val.list[2]).number then
+        return [type="list", length=1, list=[v]]
+    else
+        return [type="list", length=0, list=[]]
+    end
+end
+
+function lt_func(val)
+    local v = eval(val.list[1])
+    if v.number < eval(val.list[2]).number then
+        return [type="list", length=1, list=[v]]
+    else
+        return [type="list", length=0, list=[]]
+    end
+end
+
+function gt_func(val)
+    local v = eval(val.list[1])
+    if v.number > eval(val.list[2]).number then
+        return [type="list", length=1, list=[v]]
+    else
+        return [type="list", length=0, list=[]]
+    end
+end
+
+function le_func(val)
+    local v = eval(val.list[1])
+    if v.number <= eval(val.list[2]).number then
+        return [type="list", length=1, list=[v]]
+    else
+        return [type="list", length=0, list=[]]
+    end
+end
+
+function ge_func(val)
+    local v = eval(val.list[1])
+    if v.number >= eval(val.list[2]).number then
+        return [type="list", length=1, list=[v]]
+    else
+        return [type="list", length=0, list=[]]
+    end
+end
+
+function set(val)
+    local v = eval(val.list[2])
     env[val.list[1].name] = v
     return v
 end
 
-env = [quote=func_val(quote), lambda=func_val(lambda), ["+"]=func_val(plus), set=func_val(set)]
+function read_func(val)
+    return read()
+end
+
+function eval_func(val)
+    return eval(eval(val.list[1]))
+end
+
+function print_func(val)
+    print_val(eval(val.list[1]))
+    println()
+    return [type="list", length=0, list=[]]
+end
+
+env = [
+    quote=func_val(quote),
+    lambda=func_val(lambda),
+    begin=func_val(begin),
+    ["if"]=func_val(if_func),
+    ["+"]=func_val(plus),
+    ["-"]=func_val(minus),
+    ["*"]=func_val(times),
+    ["/"]=func_val(divided_by),
+    ["="]=func_val(eq_func),
+    ["/="]=func_val(neq_func),
+    ["<"]=func_val(lt_func),
+    [">"]=func_val(gt_func),
+    ["<="]=func_val(le_func),
+    [">="]=func_val(ge_func),
+    set=func_val(set),
+    read=func_val(read_func),
+    eval=func_val(eval_func),
+    print=func_val(print_func),
+]
 
 while true do
     print("> ")
-    print_val(eval(env, read()))
+    print_val(eval(read()))
     println()
     if peek() == "" then
         break

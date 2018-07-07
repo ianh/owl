@@ -25,7 +25,7 @@ expr =
     'false' : false
     identifier : variable
     [ '(' expr ')' ] : parens
-    [ '[' (table-entry (',' table-entry)*)? ']' ] : table
+    [ '[' (table-entry (',' table-entry)* ','?)? ']' ] : table
   .operators postfix
     [ '(' (expr (',' expr)*)? ')' ] : call
     [ '[' expr ']' ] : lookup
