@@ -1264,13 +1264,15 @@ static void generate_action_table(struct generator *gen,
      compare_action_table_bucket_groups);
 
     // Size the table to a power of two.
-    uint32_t table_size = 16;
+    uint32_t table_size = 128;
     uint32_t total_entries = d->action_map.number_of_entries +
      d->bracket_action_map.number_of_entries;
-    while (table_size <= total_entries)
+    uint32_t divisor = 1;
+    // FIXME: Figure out the actual math for the size of this table.
+    while (table_size <= total_entries / divisor) {
         table_size *= 2;
-    // FIXME: Figure out the math for what the size of this table should be.
-    table_size /= 8;
+        divisor += 1;
+    }
     uint32_t table_mask = table_size - 1;
 
     // This array maps old NFA states to new NFA states.
