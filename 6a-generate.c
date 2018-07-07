@@ -1171,6 +1171,7 @@ struct action_table_bucket {
     // For bracket transitions; this is the state to push on the stack.
     state_id push_nfa_state;
     uint32_t action_index;
+    uint32_t table_index;
 };
 
 static int compare_action_table_bucket_groups(const void *aa, const void *bb)
@@ -1186,9 +1187,13 @@ static int compare_action_table_bucket_groups(const void *aa, const void *bb)
 }
 
 // 0xe5aa55e5 is just an arbitrary 32-bit prime number.
-#define ACTION_TABLE_ENTRY_HASH(target_nfa_state, dfa_state, dfa_symbol) \
+#define ACTION_TABLE_ENTRY_HASH_1(target_nfa_state, dfa_state, dfa_symbol) \
  ((((((0xe5aa55e5 ^ (target_nfa_state)) * 0xe5aa55e5) ^ (dfa_state)) * \
  0xe5aa55e5) ^ (dfa_symbol)) * 0xe5aa55e5)
+
+#define ACTION_TABLE_ENTRY_HASH_2(target_nfa_state, dfa_state, dfa_symbol) \
+ ((((((0xf2579761 ^ (target_nfa_state)) * 0xf2579761) ^ (dfa_state)) * \
+ 0xf2579761) ^ (dfa_symbol)) * 0xf2579761)
 
 static void generate_action_table(struct generator *gen,
  struct generator_output *out)
@@ -1260,8 +1265,9 @@ static void generate_action_table(struct generator *gen,
 
     // Size the table to a power of two.
     uint32_t table_size = 16;
-    while (table_size <= d->action_map.number_of_entries +
-     d->bracket_action_map.number_of_entries)
+    uint32_t total_entries = d->action_map.number_of_entries +
+     d->bracket_action_map.number_of_entries;
+    while (table_size <= total_entries)
         table_size *= 2;
     // FIXME: Figure out the math for what the size of this table should be.
     table_size /= 8;
@@ -1277,8 +1283,8 @@ static void generate_action_table(struct generator *gen,
     uint32_t *bucket_sizes = calloc(table_size, sizeof(uint32_t));
     uint32_t nfa_state = max_nfa_state + 1;
     uint32_t saved_nfa_state = 0;
-    // Start at a bucket limit of 1 and increase it.
-    uint32_t bucket_limit = 1;
+    // Start at the minimum possible bucket limit.
+    uint32_t bucket_limit = (total_entries + table_size - 1) / table_size;
     // How many times should we try to randomize indexes?
 #define MAX_TRIES 100000
     uint32_t tries_left = MAX_TRIES;
@@ -1292,9 +1298,12 @@ static void generate_action_table(struct generator *gen,
             uint32_t j = 0;
             for (; j < group.length; ++j) {
                 struct action_table_bucket *bucket = &buckets[group.index + j];
-                uint32_t k = ACTION_TABLE_ENTRY_HASH(nfa_state,
-                 bucket->dfa_state, bucket->dfa_symbol);
-                k &= table_mask;
+                uint32_t k1 = ACTION_TABLE_ENTRY_HASH_1(nfa_state,
+                 bucket->dfa_state, bucket->dfa_symbol) & table_mask;
+                uint32_t k2 = ACTION_TABLE_ENTRY_HASH_2(nfa_state,
+                 bucket->dfa_state, bucket->dfa_symbol) & table_mask;
+                uint32_t k = bucket_sizes[k1] <= bucket_sizes[k2] ? k1 : k2;
+                bucket->table_index = k;
                 bucket->next = table_buckets[k];
                 table_buckets[k] = bucket;
                 if (bucket_sizes[k]++ >= bucket_limit)
@@ -1308,9 +1317,7 @@ retry:
             // Roll back changes and try a new nfa_state.
             for (; j < group.length; --j) {
                 struct action_table_bucket *bucket = &buckets[group.index + j];
-                uint32_t k = ACTION_TABLE_ENTRY_HASH(nfa_state,
-                 bucket->dfa_state, bucket->dfa_symbol);
-                k &= table_mask;
+                uint32_t k = bucket->table_index;
                 bucket_sizes[k]--;
                 table_buckets[k] = table_buckets[k]->next;
             }
@@ -1386,15 +1393,21 @@ retry:
     output_line(out, "");
     output_line(out, "static const struct action_table_entry *action_table_lookup(%%state-type nfa_state, %%state-type dfa_state, %%token-type token) {");
 #define STRINGIFY(...) EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__)
-    set_literal_substitution(out, "action-table-entry-hash",
-     STRINGIFY(ACTION_TABLE_ENTRY_HASH(nfa_state, dfa_state, token)));
+    set_literal_substitution(out, "action-table-entry-hash-1",
+     STRINGIFY(ACTION_TABLE_ENTRY_HASH_1(nfa_state, dfa_state, token)));
+    set_literal_substitution(out, "action-table-entry-hash-2",
+     STRINGIFY(ACTION_TABLE_ENTRY_HASH_2(nfa_state, dfa_state, token)));
     set_unsigned_number_substitution(out, "action-table-mask", table_mask);
-    output_line(out, "    uint32_t index = %%action-table-entry-hash & %%action-table-mask;");
+    output_line(out, "    uint32_t index1 = %%action-table-entry-hash-1 & %%action-table-mask;");
+    output_line(out, "    uint32_t index2 = %%action-table-entry-hash-2 & %%action-table-mask;");
     output_line(out, "    uint32_t j = 0;");
     output_line(out, "    const struct action_table_entry *entry = 0;");
 //    output_line(out, "    printf(\"Searching for: %u,%u,%u\\n\", nfa_state, dfa_state, token);");
     output_line(out, "    for (; j < %%bucket-limit; ++j) {");
-    output_line(out, "        entry = &action_table[index][j];");
+    output_line(out, "        entry = &action_table[index1][j];");
+    output_line(out, "        if (entry->target_nfa_state == nfa_state && entry->dfa_state == dfa_state && entry->dfa_symbol == token)");
+    output_line(out, "            break;");
+    output_line(out, "        entry = &action_table[index2][j];");
     output_line(out, "        if (entry->target_nfa_state == nfa_state && entry->dfa_state == dfa_state && entry->dfa_symbol == token)");
     output_line(out, "            break;");
     output_line(out, "    }");
