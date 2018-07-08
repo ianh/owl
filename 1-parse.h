@@ -337,7 +337,7 @@ struct parsed_grammar parsed_grammar_get(struct bluebird_ref ref) {
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
     size_t start_location = read_tree(&offset, ref._tree);
-    size_t end_location = read_tree(&offset, ref._tree);
+    size_t end_location = start_location + read_tree(&offset, ref._tree);
     struct parsed_grammar result = {
         .range.start = start_location,
         .range.end = end_location,
@@ -362,7 +362,7 @@ struct parsed_rule parsed_rule_get(struct bluebird_ref ref) {
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
     size_t start_location = read_tree(&offset, ref._tree);
-    size_t end_location = read_tree(&offset, ref._tree);
+    size_t end_location = start_location + read_tree(&offset, ref._tree);
     struct parsed_rule result = {
         .range.start = start_location,
         .range.end = end_location,
@@ -388,7 +388,7 @@ struct parsed_body parsed_body_get(struct bluebird_ref ref) {
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
     size_t start_location = read_tree(&offset, ref._tree);
-    size_t end_location = read_tree(&offset, ref._tree);
+    size_t end_location = start_location + read_tree(&offset, ref._tree);
     struct parsed_body result = {
         .range.start = start_location,
         .range.end = end_location,
@@ -417,7 +417,7 @@ struct parsed_operators parsed_operators_get(struct bluebird_ref ref) {
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
     size_t start_location = read_tree(&offset, ref._tree);
-    size_t end_location = read_tree(&offset, ref._tree);
+    size_t end_location = start_location + read_tree(&offset, ref._tree);
     struct parsed_operators result = {
         .range.start = start_location,
         .range.end = end_location,
@@ -441,7 +441,7 @@ struct parsed_fixity parsed_fixity_get(struct bluebird_ref ref) {
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
     size_t start_location = read_tree(&offset, ref._tree);
-    size_t end_location = read_tree(&offset, ref._tree);
+    size_t end_location = start_location + read_tree(&offset, ref._tree);
     struct parsed_fixity result = {
         .range.start = start_location,
         .range.end = end_location,
@@ -462,7 +462,7 @@ struct parsed_assoc parsed_assoc_get(struct bluebird_ref ref) {
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
     size_t start_location = read_tree(&offset, ref._tree);
-    size_t end_location = read_tree(&offset, ref._tree);
+    size_t end_location = start_location + read_tree(&offset, ref._tree);
     struct parsed_assoc result = {
         .range.start = start_location,
         .range.end = end_location,
@@ -480,7 +480,7 @@ struct parsed_operator parsed_operator_get(struct bluebird_ref ref) {
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
     size_t start_location = read_tree(&offset, ref._tree);
-    size_t end_location = read_tree(&offset, ref._tree);
+    size_t end_location = start_location + read_tree(&offset, ref._tree);
     struct parsed_operator result = {
         .range.start = start_location,
         .range.end = end_location,
@@ -511,7 +511,7 @@ struct parsed_expr parsed_expr_get(struct bluebird_ref ref) {
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
     size_t start_location = read_tree(&offset, ref._tree);
-    size_t end_location = read_tree(&offset, ref._tree);
+    size_t end_location = start_location + read_tree(&offset, ref._tree);
     struct parsed_expr result = {
         .range.start = start_location,
         .range.end = end_location,
@@ -560,7 +560,7 @@ struct parsed_comment_token parsed_comment_token_get(struct bluebird_ref ref) {
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
     size_t start_location = read_tree(&offset, ref._tree);
-    size_t end_location = read_tree(&offset, ref._tree);
+    size_t end_location = start_location + read_tree(&offset, ref._tree);
     struct parsed_comment_token result = {
         .range.start = start_location,
         .range.end = end_location,
@@ -624,7 +624,7 @@ static size_t finish_node(uint32_t rule, uint32_t choice, size_t next_sibling, s
     size_t offset = tree->next_offset;
     write_tree(tree, next_sibling);
     write_tree(tree, start_location);
-    write_tree(tree, end_location);
+    write_tree(tree, end_location - start_location);
     switch (rule) {
     case 0: {
         write_tree(tree, slots[0]);

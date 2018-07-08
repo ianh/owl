@@ -412,7 +412,7 @@ void generate(struct generator *gen)
             output_line(out, "    size_t token_index = read_tree(&offset, ref._tree);");
         else {
             output_line(out, "    size_t start_location = read_tree(&offset, ref._tree);");
-            output_line(out, "    size_t end_location = read_tree(&offset, ref._tree);");
+            output_line(out, "    size_t end_location = start_location + read_tree(&offset, ref._tree);");
         }
         output_line(out, "    struct parsed_%%rule result = {");
         if (rule->is_token) {
@@ -445,7 +445,7 @@ void generate(struct generator *gen)
     output_line(out, "    size_t offset = tree->next_offset;");
     output_line(out, "    write_tree(tree, next_sibling);");
     output_line(out, "    write_tree(tree, start_location);");
-    output_line(out, "    write_tree(tree, end_location);");
+    output_line(out, "    write_tree(tree, end_location - start_location);");
     output_line(out, "    switch (rule) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
