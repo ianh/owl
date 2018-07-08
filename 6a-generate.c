@@ -814,10 +814,15 @@ void generate(struct generator *gen)
         output_line(out, "    }");
         output_line(out, "}");
     }
-    output_line(out, "static void (*state_funcs[%%total-number-of-states])(struct bluebird_token_run *, struct fill_run_state *, uint16_t) = {");
+    output_string(out, "static void (*state_funcs[%%total-number-of-states])(struct bluebird_token_run *, struct fill_run_state *, uint16_t) = {");
+    const int funcs_per_line = 4;
     for (state_id i = 0; i < total_states; ++i) {
         set_unsigned_number_substitution(out, "func-id", func_id_for_state[i]);
-        output_line(out, "    state_func_%%func-id,");
+        if (i % funcs_per_line == 0) {
+            output_line(out, "");
+            output_string(out, "   ");
+        }
+        output_string(out, " state_func_%%func-id,");
     }
     output_line(out, "};");
     free(sorted_states);
@@ -878,20 +883,15 @@ void generate(struct generator *gen)
     output_line(out, "        estimate_next_token_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);");
     output_line(out, "        return tree;");
     output_line(out, "    }");
-    output_string(out, "    if (");
-    bool has_accepting = false;
+    output_line(out, "    switch (top.state) {");
     for (state_id i = 0; i < gen->deterministic->automaton.number_of_states; ++i) {
         if (!gen->deterministic->automaton.states[i].accepting)
             continue;
         set_unsigned_number_substitution(out, "state-id", i);
-        if (has_accepting)
-            output_string(out, " && ");
-        has_accepting = true;
-        output_string(out, "top.state != %%state-id");
+        output_line(out, "    case %%state-id:");
     }
-    if (!has_accepting)
-        output_string(out, "true");
-    output_line(out, ") {");
+    output_line(out, "        break;");
+    output_line(out, "    default:");
     output_line(out, "        tree->error = ERROR_MORE_INPUT_NEEDED;");
     output_line(out, "        find_end_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);");
     output_line(out, "        return tree;");
@@ -1393,7 +1393,7 @@ static void generate_action_table(struct generator *gen,
     // Start at the minimum possible bucket limit.
     uint32_t bucket_limit = (total_entries + table_size - 1) / table_size;
     // How many times should we try to randomize indexes?
-#define MAX_TRIES 100000
+#define MAX_TRIES 1000
     uint32_t tries_left = MAX_TRIES;
     for (uint32_t i = 0; i < number_of_groups; ++i) {
         struct action_table_bucket_group group = groups[i];
@@ -1403,11 +1403,12 @@ static void generate_action_table(struct generator *gen,
             if (nfa_state == UINT32_MAX)
                 abort();
             uint32_t j = 0;
+            uint32_t adjusted_state = nfa_state - max_nfa_state;
             for (; j < group.length; ++j) {
                 struct action_table_bucket *bucket = &buckets[group.index + j];
-                uint32_t k1 = ACTION_TABLE_ENTRY_HASH_1(nfa_state,
+                uint32_t k1 = ACTION_TABLE_ENTRY_HASH_1(adjusted_state,
                  bucket->dfa_state, bucket->dfa_symbol) & table_mask;
-                uint32_t k2 = ACTION_TABLE_ENTRY_HASH_2(nfa_state,
+                uint32_t k2 = ACTION_TABLE_ENTRY_HASH_2(adjusted_state,
                  bucket->dfa_state, bucket->dfa_symbol) & table_mask;
                 uint32_t k = bucket_sizes[k1] <= bucket_sizes[k2] ? k1 : k2;
                 bucket->table_index = k;
@@ -1416,7 +1417,7 @@ static void generate_action_table(struct generator *gen,
                 if (bucket_sizes[k]++ >= bucket_limit)
                     goto retry;
             }
-            nfa_states[buckets[group.index].target_nfa_state] = nfa_state;
+            nfa_states[buckets[group.index].target_nfa_state] = adjusted_state;
             nfa_state++;
             saved_nfa_state = nfa_state;
             break;
