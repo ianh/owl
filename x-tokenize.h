@@ -51,8 +51,8 @@
 TOKENIZE_BODY
 (
 
-struct bluebird_token_run {
-    struct bluebird_token_run *prev;
+struct owl_token_run {
+    struct owl_token_run *prev;
     uint16_t number_of_tokens;
     uint16_t lengths_size;
     uint8_t lengths[TOKEN_RUN_LENGTH * 2];
@@ -60,7 +60,7 @@ struct bluebird_token_run {
     STATE_T states[TOKEN_RUN_LENGTH];
 };
 
-struct bluebird_default_tokenizer {
+struct owl_default_tokenizer {
     const char *text;
     size_t offset;
 
@@ -109,8 +109,8 @@ static bool char_continues_identifier(char c, void *info)
     return char_is_numeric(c) || char_starts_identifier(c);
 }
 
-static bool encode_length(struct bluebird_token_run *run,
- uint16_t *lengths_size, size_t length)
+static bool encode_length(struct owl_token_run *run, uint16_t *lengths_size,
+ size_t length)
 {
     uint8_t mark = 0;
     while (*lengths_size < sizeof(run->lengths)) {
@@ -124,7 +124,7 @@ static bool encode_length(struct bluebird_token_run *run,
     return false;
 }
 
-static bool encode_token_length(struct bluebird_token_run *run,
+static bool encode_token_length(struct owl_token_run *run,
  uint16_t *lengths_size, size_t length, size_t whitespace)
 {
     uint16_t size = *lengths_size;
@@ -135,8 +135,7 @@ static bool encode_token_length(struct bluebird_token_run *run,
     return false;
 }
 
-static size_t decode_length(struct bluebird_token_run *run,
- uint16_t *length_offset)
+static size_t decode_length(struct owl_token_run *run, uint16_t *length_offset)
 {
     size_t length = 0;
     while (*length_offset < sizeof(run->lengths)) {
@@ -150,7 +149,7 @@ static size_t decode_length(struct bluebird_token_run *run,
     abort();
 }
 
-static size_t decode_token_length(struct bluebird_token_run *run,
+static size_t decode_token_length(struct owl_token_run *run,
  uint16_t *length_offset, size_t *string_offset)
 {
     size_t whitespace = decode_length(run, length_offset);
@@ -159,10 +158,10 @@ static size_t decode_token_length(struct bluebird_token_run *run,
     return length;
 }
 
-static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
- *tokenizer, struct bluebird_token_run **previous_run)
+static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
+ *tokenizer, struct owl_token_run **previous_run)
 {
-    struct bluebird_token_run *run = malloc(sizeof(struct bluebird_token_run));
+    struct owl_token_run *run = malloc(sizeof(struct owl_token_run));
     if (!run)
         return false;
     uint16_t number_of_tokens = 0;
@@ -310,8 +309,8 @@ static bool bluebird_default_tokenizer_advance(struct bluebird_default_tokenizer
 }
 
 // Here, 'run' must be the most recent run produced by the tokenizer.
-static void find_token_range(struct bluebird_default_tokenizer *tokenizer,
- struct bluebird_token_run *run, uint16_t index, size_t *start, size_t *end)
+static void find_token_range(struct owl_default_tokenizer *tokenizer,
+ struct owl_token_run *run, uint16_t index, size_t *start, size_t *end)
 {
     size_t offset = tokenizer->offset - tokenizer->whitespace;
     size_t last_offset = offset;
@@ -327,7 +326,7 @@ static void find_token_range(struct bluebird_default_tokenizer *tokenizer,
     *end = last_offset;
 }
 
-static void estimate_next_token_range(struct bluebird_default_tokenizer
+static void estimate_next_token_range(struct owl_default_tokenizer
  *tokenizer, size_t *start, size_t *end)
 {
     *start = tokenizer->offset;
@@ -338,7 +337,7 @@ static void estimate_next_token_range(struct bluebird_default_tokenizer
     *end = i;
 }
 
-static void find_end_range(struct bluebird_default_tokenizer *tokenizer,
+static void find_end_range(struct owl_default_tokenizer *tokenizer,
  size_t *start, size_t *end)
 {
     *start = tokenizer->offset - tokenizer->whitespace - 1;

@@ -2,7 +2,7 @@
 
 *Egg* is a programming language loosely inspired by Lua.
 
-To build `egg`, first build `bluebird`.  Then run `make`:
+To build `egg`, first build `owl`.  Then run `make`:
 
 ```
 $ make

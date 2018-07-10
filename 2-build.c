@@ -10,7 +10,7 @@
 
 struct context {
     struct grammar *grammar;
-    struct bluebird_tree *tree;
+    struct owl_tree *tree;
 
     uint32_t rule_index;
     symbol_id next_symbol;
@@ -23,19 +23,19 @@ struct context {
 
 struct boundary_states;
 static void build_body_automaton(struct context *ctx,
- struct automaton *automaton, struct bluebird_ref expr_ref);
+ struct automaton *automaton, struct owl_ref expr_ref);
 static void build_body_expression(struct context *ctx,
- struct automaton *automaton, struct bluebird_ref expr_ref,
+ struct automaton *automaton, struct owl_ref expr_ref,
  struct boundary_states boundary);
 static struct boundary_states connect_expression(struct context *ctx,
- struct automaton *a, struct bluebird_ref ref, struct boundary_states outer);
+ struct automaton *a, struct owl_ref ref, struct boundary_states outer);
 
 static uint32_t add_slot(struct context *ctx, struct rule *rule,
  const char *slot_name, size_t slot_name_length, uint32_t referenced_rule_index,
  struct source_range range, const char *error_reason);
 
 static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
- struct bluebird_ref string_ref, enum token_type type);
+ struct owl_ref string_ref, enum token_type type);
 
 static uint32_t add_rule(struct context *ctx, const char *name, size_t len);
 static void add_token_rule(struct context *ctx, const char *name, size_t len);
@@ -57,20 +57,20 @@ do { \
     } \
 } while (0)
 
-void build(struct grammar *grammar, struct bluebird_tree *tree)
+void build(struct grammar *grammar, struct owl_tree *tree)
 {
     struct context context = {
         .grammar = grammar,
         .tree = tree,
     };
-    struct parsed_grammar g = bluebird_tree_get_parsed_grammar(tree);
+    struct parsed_grammar g = owl_tree_get_parsed_grammar(tree);
 
     // First, create rule structs for each rule in the grammar.  We have to do
     // this in a separate pass so we can look up names before they appear in the
     // parse tree.
     grammar->root_rule = 0;
-    struct bluebird_ref r;
-    for (r = g.rule; !r.empty; r = bluebird_next(r)) {
+    struct owl_ref r;
+    for (r = g.rule; !r.empty; r = owl_next(r)) {
         struct parsed_rule parsed_rule = parsed_rule_get(r);
         struct parsed_identifier name =
          parsed_identifier_get(parsed_rule.identifier);
@@ -86,7 +86,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
         grammar->rules[index].name_range = name.range;
     }
     if (grammar->number_of_rules == 0) {
-        errorf("a bluebird grammar needs at least one rule of the form "
+        errorf("a owl grammar needs at least one rule of the form "
          "'rule_name = ...'");
         exit_with_error();
     }
@@ -100,7 +100,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
     // separate pass in case there are "exception" specifiers which exclude
     // certain choices.
     uint32_t rule_index = 0;
-    for (r = g.rule; !r.empty; r = bluebird_next(r), rule_index++) {
+    for (r = g.rule; !r.empty; r = owl_next(r), rule_index++) {
         struct parsed_rule parsed_rule = parsed_rule_get(r);
         assert(rule_index < grammar->number_of_rules);
         struct rule *rule = &grammar->rules[rule_index];
@@ -133,8 +133,8 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             choice->name_length = choice_identifier.length;
             choice->name_range = choice_identifier.range;
             choice->expr_range = expr.range;
-            body.expr = bluebird_next(body.expr);
-            body.identifier = bluebird_next(body.identifier);
+            body.expr = owl_next(body.expr);
+            body.identifier = owl_next(body.identifier);
         }
 
         // Create operator structs from each operator.
@@ -194,18 +194,18 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 operator->fixity = rule_fixity;
                 operator->associativity = rule_associativity;
                 operator->precedence = precedence;
-                ops.operator = bluebird_next(ops.operator);
+                ops.operator = owl_next(ops.operator);
             }
             // Each new 'operators' section has a lower precedence than the
             // previous one.
             precedence--;
-            body.operators = bluebird_next(body.operators);
+            body.operators = owl_next(body.operators);
         }
     }
 
     // Now fill in the automata according to the contents of each parsed rule.
     rule_index = 0;
-    for (r = g.rule; !r.empty; r = bluebird_next(r), rule_index++) {
+    for (r = g.rule; !r.empty; r = owl_next(r), rule_index++) {
         struct parsed_rule parsed_rule = parsed_rule_get(r);
         struct rule *rule = &grammar->rules[rule_index];
 
@@ -224,7 +224,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
 
         // Fill in the choice automata...
         uint32_t choice_index = 0;
-        for (; !body.expr.empty; body.expr = bluebird_next(body.expr)) {
+        for (; !body.expr.empty; body.expr = owl_next(body.expr)) {
             struct choice *choice = &rule->choices[choice_index++];
             build_body_automaton(&context, &choice->automaton, body.expr);
         }
@@ -236,9 +236,9 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
                 struct parsed_operator op = parsed_operator_get(ops.operator);
                 struct choice *operator = &rule->choices[choice_index++];
                 build_body_automaton(&context, &operator->automaton, op.expr);
-                ops.operator = bluebird_next(ops.operator);
+                ops.operator = owl_next(ops.operator);
             }
-            body.operators = bluebird_next(body.operators);
+            body.operators = owl_next(body.operators);
         }
 
         // Add slots for operands -- 'left'/'right' for infix operators, and
@@ -295,7 +295,7 @@ void build(struct grammar *grammar, struct bluebird_tree *tree)
             error.ranges[1] = s.range;
             exit_with_errorf("the same comment token was specified twice");
         }
-        g.comment_token = bluebird_next(g.comment_token);
+        g.comment_token = owl_next(g.comment_token);
     }
 }
 
@@ -305,7 +305,7 @@ struct boundary_states {
 };
 
 static void build_body_automaton(struct context *ctx,
- struct automaton *out_automaton, struct bluebird_ref expr_ref)
+ struct automaton *out_automaton, struct owl_ref expr_ref)
 {
     struct automaton automaton = {0};
     struct boundary_states boundary = { .entry = 0, .exit = 1 };
@@ -322,7 +322,7 @@ static void build_body_automaton(struct context *ctx,
 }
 
 static void build_body_expression(struct context *ctx,
- struct automaton *automaton, struct bluebird_ref expr_ref,
+ struct automaton *automaton, struct owl_ref expr_ref,
  struct boundary_states b)
 {
     struct parsed_expr expr = parsed_expr_get(expr_ref);
@@ -333,14 +333,14 @@ static void build_body_expression(struct context *ctx,
     struct rule *rule = &ctx->grammar->rules[ctx->rule_index];
     switch (expr.type) {
     case PARSED_CHOICE:
-        for (; !expr.operand.empty; expr.operand = bluebird_next(expr.operand))
+        for (; !expr.operand.empty; expr.operand = owl_next(expr.operand))
             connect_expression(ctx, automaton, expr.operand, b);
         break;
     case PARSED_CONCATENATION: {
         struct boundary_states inner = { .entry = ctx->next_state++ };
         automaton_add_transition(automaton, b.entry, inner.entry,
          SYMBOL_EPSILON);
-        for (;!expr.operand.empty; expr.operand = bluebird_next(expr.operand)) {
+        for (;!expr.operand.empty; expr.operand = owl_next(expr.operand)) {
             inner.exit = ctx->next_state++;
             build_body_expression(ctx, automaton, expr.operand, inner);
             inner.entry = inner.exit;
@@ -404,7 +404,7 @@ static void build_body_expression(struct context *ctx,
                  "for '%.*s'", (int)exception.length, exception.identifier,
                  (int)referent->name_length, referent->name);
             }
-            expr.exception = bluebird_next(expr.exception);
+            expr.exception = owl_next(expr.exception);
         }
         bitset_complement(&choices);
         struct slot *slot = &rule->slots[slot_index];
@@ -498,7 +498,7 @@ static void build_body_expression(struct context *ctx,
 }
 
 static struct boundary_states connect_expression(struct context *ctx,
- struct automaton *a, struct bluebird_ref ref, struct boundary_states outer)
+ struct automaton *a, struct owl_ref ref, struct boundary_states outer)
 {
     struct boundary_states inner;
     inner.entry = ctx->next_state++;
@@ -601,7 +601,7 @@ uint32_t find_token(struct token *tokens, uint32_t number_of_tokens,
 }
 
 static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
- struct bluebird_ref string_ref, enum token_type type)
+ struct owl_ref string_ref, enum token_type type)
 {
     struct parsed_string keyword = parsed_string_get(string_ref);
     if (keyword.length == 0) {

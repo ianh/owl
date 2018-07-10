@@ -24,7 +24,7 @@ struct token;
 
 // The main function of this step.  The `grammar` struct should be initialized
 // to be full of zeros.
-void build(struct grammar *grammar, struct bluebird_tree *tree);
+void build(struct grammar *grammar, struct owl_tree *tree);
 
 void grammar_destroy(struct grammar *grammar);
 

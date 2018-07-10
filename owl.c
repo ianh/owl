@@ -38,7 +38,7 @@ static void write_to_output(const char *string, size_t len);
 
 static char *error_in_string;
 
-static const char *version_string = "bluebird.v1";
+static const char *version_string = "owl.v1";
 
 int main(int argc, char *argv[])
 {
@@ -82,10 +82,8 @@ int main(int argc, char *argv[])
                 parameter_state = OUTPUT_FILE_PARAMETER;
             } else if (!strcmp(short_name, "g") ||
              !strcmp(long_name, "grammar")) {
-                if (grammar_string) {
-                    exit_with_errorf("bluebird only supports one grammar at a "
-                     "time");
-                }
+                if (grammar_string)
+                    exit_with_errorf("owl only supports one grammar at a time");
                 parameter_state = GRAMMAR_TEXT_PARAMETER;
             } else if (!strcmp(short_name, "c") ||
              !strcmp(long_name, "compile"))
@@ -101,10 +99,8 @@ int main(int argc, char *argv[])
                 FILE *grammar_file = fopen_or_error(argv[i], "r");
                 grammar_string = read_string(grammar_file);
                 fclose(grammar_file);
-            } else {
-                exit_with_errorf("bluebird only supports one grammar at a "
-                 "time");
-            }
+            } else
+                exit_with_errorf("owl only supports one grammar at a time");
             break;
         case INPUT_FILE_PARAMETER:
             if (short_name[0] || long_name[0]) {
@@ -151,7 +147,7 @@ int main(int argc, char *argv[])
         needs_help = true;
     }
     if (needs_help) {
-        fprintf(stderr, "usage: bluebird [options] grammar.bb\n");
+        fprintf(stderr, "usage: owl [options] grammar.owl\n");
         fprintf(stderr, " -i file     --input file       read from file instead of standard input\n");
         fprintf(stderr, " -o file     --output file      write to file instead of standard output\n");
         fprintf(stderr, " -c          --compile          output a C header file instead of parsing input\n");
@@ -173,9 +169,9 @@ int main(int argc, char *argv[])
             print_error();
             error = (struct error){0};
 
-            fprintf(stderr, "\n  Bluebird's grammar format may change "
-             "between versions.  Add the string\n\n");
-            fprintf(stderr, "  #using bluebird.v1\n\n");
+            fprintf(stderr, "\n  Owl's grammar format may change between "
+             "versions.  Add the string\n\n");
+            fprintf(stderr, "  #using owl.v1\n\n");
             fprintf(stderr, "  to the top of your grammar file to lock in "
              "this version.\n\n");
         }
@@ -200,9 +196,9 @@ int main(int argc, char *argv[])
     }
 
     // This is the part where things actually happen.
-    struct bluebird_tree *tree;
-    tree = bluebird_tree_create_from_string(grammar_string);
-    switch (bluebird_tree_get_error(tree, &error.ranges[0])) {
+    struct owl_tree *tree;
+    tree = owl_tree_create_from_string(grammar_string);
+    switch (owl_tree_get_error(tree, &error.ranges[0])) {
     case ERROR_INVALID_TOKEN:
         exit_with_errorf("'%.*s' isn't a valid operator",
          (int)(error.ranges[0].end - error.ranges[0].start),
@@ -217,7 +213,7 @@ int main(int argc, char *argv[])
         break;
     }
 #if DEBUG_OUTPUT
-    bluebird_tree_print(tree);
+    owl_tree_print(tree);
 #endif
 
     struct grammar grammar = {0};
@@ -280,7 +276,7 @@ int main(int argc, char *argv[])
     deterministic_grammar_destroy(&deterministic);
     combined_grammar_destroy(&combined);
     grammar_destroy(&grammar);
-    bluebird_tree_destroy(tree);
+    owl_tree_destroy(tree);
     free(grammar_string);
     return 0;
 }

@@ -28,7 +28,7 @@ struct val {
         double number;
         table_id table;
         struct closure closure;
-        struct val (*builtin)(struct bluebird_ref args);
+        struct val (*builtin)(struct owl_ref args);
     };
     enum type type;
 };
@@ -69,23 +69,23 @@ static table_id free_list;
 static enum mark current_mark = MARK_BLACK;
 static table_id stack_root;
 
-static struct bluebird_ref *functions;
+static struct owl_ref *functions;
 static uint32_t number_of_functions;
 
 static table_id environment;
 
-static struct val builtin_print(struct bluebird_ref arg);
-static struct val builtin_println(struct bluebird_ref arg);
-static struct val builtin_isspace(struct bluebird_ref arg);
-static struct val builtin_isdigit(struct bluebird_ref arg);
-static struct val builtin_todigit(struct bluebird_ref arg);
-static struct val builtin_read_input_length(struct bluebird_ref arg);
+static struct val builtin_print(struct owl_ref arg);
+static struct val builtin_println(struct owl_ref arg);
+static struct val builtin_isspace(struct owl_ref arg);
+static struct val builtin_isdigit(struct owl_ref arg);
+static struct val builtin_todigit(struct owl_ref arg);
+static struct val builtin_read_input_length(struct owl_ref arg);
 
-static enum control_flow eval_stmt_list(struct bluebird_ref stmt_list_ref,
+static enum control_flow eval_stmt_list(struct owl_ref stmt_list_ref,
  struct val *return_val);
-static enum control_flow eval_stmt(struct bluebird_ref stmt_ref,
+static enum control_flow eval_stmt(struct owl_ref stmt_ref,
  struct val *return_val);
-static struct val eval_expr(struct bluebird_ref expr_ref);
+static struct val eval_expr(struct owl_ref expr_ref);
 
 static int val_snprint(char *s, int len, struct val value);
 static bool val_equal(struct val a, struct val b);
@@ -108,8 +108,8 @@ static const struct val false_val = { .type = TYPE_FALSE };
 static struct val number_val(double number);
 static struct val string_val(const char *string, size_t len);
 
-static struct val string_for_identifier(struct bluebird_ref ident_ref);
-static double eval_number(struct bluebird_ref number_expr);
+static struct val string_for_identifier(struct owl_ref ident_ref);
+static double eval_number(struct owl_ref number_expr);
 
 int main(int argc, char *argv[])
 {
@@ -122,8 +122,8 @@ int main(int argc, char *argv[])
         file = stdin;
     else
         file = fopen(argv[1], "r");
-    struct bluebird_tree *tree = bluebird_tree_create_from_file(file);
-    struct parsed_program program = bluebird_tree_get_parsed_program(tree);
+    struct owl_tree *tree = owl_tree_create_from_file(file);
+    struct parsed_program program = owl_tree_get_parsed_program(tree);
     tables = calloc(1, sizeof(struct table));
     tables[0].mark = MARK_FREE;
     environment = alloc_env_table();
@@ -152,11 +152,11 @@ int main(int argc, char *argv[])
     exit(-1);
 }
 
-static enum control_flow eval_stmt_list(struct bluebird_ref stmt_list,
+static enum control_flow eval_stmt_list(struct owl_ref stmt_list,
  struct val *return_val)
 {
     struct parsed_stmt_list stmts = parsed_stmt_list_get(stmt_list);
-    for (; !stmts.stmt.empty; stmts.stmt = bluebird_next(stmts.stmt)) {
+    for (; !stmts.stmt.empty; stmts.stmt = owl_next(stmts.stmt)) {
         table_id saved_root = stack_root;
         enum control_flow flow = eval_stmt(stmts.stmt, return_val);
         stack_root = saved_root;
@@ -166,7 +166,7 @@ static enum control_flow eval_stmt_list(struct bluebird_ref stmt_list,
     return NORMAL;
 }
 
-static enum control_flow eval_stmt(struct bluebird_ref stmt_ref,
+static enum control_flow eval_stmt(struct owl_ref stmt_ref,
  struct val *return_val)
 {
     struct parsed_stmt stmt = parsed_stmt_get(stmt_ref);
@@ -176,11 +176,11 @@ static enum control_flow eval_stmt(struct bluebird_ref stmt_ref,
         f.closure.environment_table = environment;
         uint32_t i = 0;
         for (; i < number_of_functions; ++i) {
-            if (bluebird_refs_equal(stmt_ref, functions[i]))
+            if (owl_refs_equal(stmt_ref, functions[i]))
                 break;
         }
         if (i >= number_of_functions) {
-            functions = realloc(functions, (i+1)*sizeof(struct bluebird_ref));
+            functions = realloc(functions, (i+1)*sizeof(struct owl_ref));
             number_of_functions = i + 1;
             functions[i] = stmt_ref;
         }
@@ -228,8 +228,8 @@ static enum control_flow eval_stmt(struct bluebird_ref stmt_ref,
                 table_pop(&environment);
                 break;
             }
-            stmt.expr = bluebird_next(stmt.expr);
-            stmt.stmt_list = bluebird_next(stmt.stmt_list);
+            stmt.expr = owl_next(stmt.expr);
+            stmt.stmt_list = owl_next(stmt.stmt_list);
         }
         if (!stmt.expr.empty) {
             // We exited the loop early, so don't look for an 'else' clause.
@@ -292,7 +292,7 @@ static enum control_flow eval_stmt(struct bluebird_ref stmt_ref,
     return NORMAL;
 }
 
-static struct val eval_expr(struct bluebird_ref expr_ref)
+static struct val eval_expr(struct owl_ref expr_ref)
 {
     struct parsed_expr expr = parsed_expr_get(expr_ref);
     switch (expr.type) {
@@ -336,7 +336,7 @@ static struct val eval_expr(struct bluebird_ref expr_ref)
                 index_key++;
             }
             table_set(table, key, eval_expr(entry.expr));
-            expr.table_entry = bluebird_next(expr.table_entry);
+            expr.table_entry = owl_next(expr.table_entry);
         }
         return (struct val){ .type = TYPE_TABLE, .table = table };
     }
@@ -355,16 +355,16 @@ static struct val eval_expr(struct bluebird_ref expr_ref)
          (struct val){ .type = TYPE_TABLE, .table = environment });
         struct parsed_stmt function =
          parsed_stmt_get(functions[f.closure.function_index]);
-        struct bluebird_ref param =
+        struct owl_ref param =
          parsed_parameter_list_get(function.parameter_list).identifier;
-        struct bluebird_ref arg = expr.expr;
-        for (; !param.empty; param = bluebird_next(param)) {
+        struct owl_ref arg = expr.expr;
+        for (; !param.empty; param = owl_next(param)) {
             if (arg.empty) {
                 fprintf(stderr, "error: not enough arguments\n");
                 exit(-1);
             }
             table_set(local, string_for_identifier(param), eval_expr(arg));
-            arg = bluebird_next(arg);
+            arg = owl_next(arg);
         }
         if (!arg.empty) {
             fprintf(stderr, "error: too many arguments\n");
@@ -691,13 +691,13 @@ static struct val string_val(const char *string, size_t len)
     return (struct val){ .type = TYPE_STRING, .table = i };
 }
 
-static struct val string_for_identifier(struct bluebird_ref ident_ref)
+static struct val string_for_identifier(struct owl_ref ident_ref)
 {
     struct parsed_identifier ident = parsed_identifier_get(ident_ref);
     return string_val(ident.identifier, ident.length);
 }
 
-static double eval_number(struct bluebird_ref number_expr)
+static double eval_number(struct owl_ref number_expr)
 {
     struct val a = eval_expr(number_expr);
     if (a.type != TYPE_NUMBER) {
@@ -707,22 +707,22 @@ static double eval_number(struct bluebird_ref number_expr)
     return a.number;
 }
 
-static struct val builtin_print(struct bluebird_ref arg)
+static struct val builtin_print(struct owl_ref arg)
 {
-    for (; !arg.empty; arg = bluebird_next(arg))
+    for (; !arg.empty; arg = owl_next(arg))
         val_print(stdout, eval_expr(arg));
     return false_val;
 }
 
-static struct val builtin_println(struct bluebird_ref arg)
+static struct val builtin_println(struct owl_ref arg)
 {
-    for (; !arg.empty; arg = bluebird_next(arg))
+    for (; !arg.empty; arg = owl_next(arg))
         val_print(stdout, eval_expr(arg));
     printf("\n");
     return false_val;
 }
 
-static struct val builtin_isspace(struct bluebird_ref arg)
+static struct val builtin_isspace(struct owl_ref arg)
 {
     if (arg.empty)
         return false_val;
@@ -734,7 +734,7 @@ static struct val builtin_isspace(struct bluebird_ref arg)
      true_val : false_val;
 }
 
-static struct val builtin_isdigit(struct bluebird_ref arg)
+static struct val builtin_isdigit(struct owl_ref arg)
 {
     if (arg.empty)
         return false_val;
@@ -745,7 +745,7 @@ static struct val builtin_isdigit(struct bluebird_ref arg)
     return (c >= '0' && c <= '9') ? true_val : false_val;
 }
 
-static struct val builtin_todigit(struct bluebird_ref arg)
+static struct val builtin_todigit(struct owl_ref arg)
 {
     if (arg.empty)
         return number_val(0);
@@ -759,7 +759,7 @@ static struct val builtin_todigit(struct bluebird_ref arg)
         return number_val(0);
 }
 
-static struct val builtin_read_input_length(struct bluebird_ref arg)
+static struct val builtin_read_input_length(struct owl_ref arg)
 {
     if (arg.empty)
         return false_val;

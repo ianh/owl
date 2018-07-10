@@ -1,6 +1,6 @@
 # grammar reference
 
-A bluebird grammar is made up of rules of the form `rule-name = ...`.  The first rule (or *root rule*) is matched against the input—the other rules can be used in patterns (described below) within the root rule or other rules.
+An Owl grammar is made up of rules of the form `rule-name = ...`.  The first rule (or *root rule*) is matched against the input—the other rules can be used in patterns (described below) within the root rule or other rules.
 
 ## patterns
 
@@ -87,7 +87,7 @@ rule-name =
     ...
 ```
 
-An operator group begins with the `.operators` keyword, followed by the operator group's *fixity* (and *associativity*, for infix operators).  Groups are listed in decreasing order of precedence—groups closer to the top bind more tightly.
+An operator group begins with the `.operators` keyword and the operator group's *fixity* (and *associativity*, for infix operators).  Groups are listed in decreasing order of precedence—groups closer to the top bind more tightly.
 
 Each operator in the group has the form `pattern : op-name`.
 
@@ -102,7 +102,7 @@ An operator matches token sequences based on the fixity of its group.  In the fo
 | `.operators infix flat` | `next (op next)*` |
 | `.operators infix nonassoc` | `next op next` |
 
-Note that the `infix left`, `infix right`, and `infix flat` groups match the same token sequences, but the resulting parse trees will be different.
+Note that the `infix left`, `infix right`, and `infix flat` groups match the same token sequences.  The resulting parse trees will be different, however:
 
 *`infix left` tree:*
 
@@ -158,30 +158,30 @@ line-comment-token '//'
 
 ## versioning
 
-The bluebird grammar format may change in the future.  To allow future versions to interpret older grammars as they were originally written, bluebird matches its current version against a version specified at the beginning of your grammar file:
+The Owl grammar format may change in the future.  To allow future versions to interpret older grammars as they were originally written, Owl matches its current version against a version specified at the beginning of your grammar file:
 
 ```
-#using bluebird.v1
+#using owl.v1
 ```
 
-If the version is older, bluebird may attempt to interpret the grammar in the same way that older version did.  If the version is newer, bluebird will exit with an error.  If no version is specified, bluebird will assume you're OK with the current version.
+If the version is older, Owl may attempt to interpret the grammar in the same way that older version did.  If the version is newer, Owl will exit with an error.  If no version is specified, Owl will assume you're OK with the current version.
 
-To see the current version string for your installation, run `bluebird --version`:
-
-```
-$ bluebird --version
-bluebird.v1
-```
-
-## grammar.bb
-
-Here's the file bluebird uses to generate its own parser—you can read it both as an example of a grammar and as the definition of the grammar syntax itself.
+To see the current version string for your installation, run `owl --version`:
 
 ```
-#using bluebird.v1
+$ owl --version
+owl.v1
+```
 
-# This is the grammar for bluebird itself.
-# Compile with `bluebird -c grammar.bb -o 1-parse.h`.
+## grammar.owl
+
+Here's the file Owl uses to generate its own parser—you can read it both as an example of a grammar and as the definition of the grammar syntax itself.
+
+```
+#using owl.v1
+
+# This is the grammar for Owl itself.
+# Compile with `owl -c grammar.owl -o 1-parse.h`.
 
 grammar = (rule | comment-token)*
 rule = identifier '=' body

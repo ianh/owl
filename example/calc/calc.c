@@ -1,4 +1,4 @@
-#define BLUEBIRD_PARSER_IMPLEMENTATION
+#define OWL_PARSER_IMPLEMENTATION
 #include "parser.h"
 
 #include <readline/history.h>
@@ -12,7 +12,7 @@ struct binding {
     double value;
 };
 static struct binding *bindings;
-static double eval(struct bluebird_ref ref);
+static double eval(struct owl_ref ref);
 static struct binding *lookup(struct parsed_identifier id);
 
 int main()
@@ -23,13 +23,13 @@ int main()
             break;
         if (*s)
             add_history(s);
-        struct bluebird_tree *tree = bluebird_tree_create_from_string(s);
-        if (bluebird_tree_get_error(tree, NULL) != ERROR_NONE) {
+        struct owl_tree *tree = owl_tree_create_from_string(s);
+        if (owl_tree_get_error(tree, NULL) != ERROR_NONE) {
             printf("parse error.\n");
-            bluebird_tree_destroy(tree);
+            owl_tree_destroy(tree);
             continue;
         }
-        struct parsed_command cmd = bluebird_tree_get_parsed_command(tree);
+        struct parsed_command cmd = owl_tree_get_parsed_command(tree);
         double n = eval(cmd.expression);
         if (cmd.type == PARSED_ASSIGN) {
             struct parsed_identifier id = parsed_identifier_get(cmd.identifier);
@@ -46,12 +46,12 @@ int main()
             b->value = n;
         }
         printf("%g\n", n);
-        bluebird_tree_destroy(tree);
+        owl_tree_destroy(tree);
     }
     return 0;
 }
 
-static double eval(struct bluebird_ref ref)
+static double eval(struct owl_ref ref)
 {
     struct parsed_expression expr = parsed_expression_get(ref);
     switch (expr.type) {

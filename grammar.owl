@@ -1,7 +1,7 @@
-#using bluebird.v1
+#using owl.v1
 
-# This is the grammar for bluebird itself.
-# Compile with `bluebird -c grammar.bb -o 1-parse.h`.
+# This is the grammar for Owl itself.
+# Compile with `owl -c grammar.owl -o 1-parse.h`.
 
 grammar = (rule | comment-token)*
 rule = identifier '=' body

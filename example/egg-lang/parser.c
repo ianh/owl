@@ -1,2 +1,2 @@
-#define BLUEBIRD_PARSER_IMPLEMENTATION
+#define OWL_PARSER_IMPLEMENTATION
 #include "parser.h"

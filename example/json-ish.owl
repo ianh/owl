@@ -1,6 +1,6 @@
-#!using bluebird.v1
+#!using owl.v1
 
-# This is "json-ish" because bluebird's built-in tokenizer doesn't interpret
+# This is "json-ish" because Owl's built-in tokenizer doesn't interpret
 # string escape sequences the way JSON does.
 
 value =

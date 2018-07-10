@@ -98,7 +98,7 @@ struct interpret_context {
 
     struct state_array nfa_stack;
 
-    struct bluebird_default_tokenizer *tokenizer;
+    struct owl_default_tokenizer *tokenizer;
     struct construct_state construct_state;
     struct interpret_node *tokens;
 
@@ -167,9 +167,9 @@ struct interpret_node {
 };
 
 static void fill_run_states(struct interpret_context *ctx,
- struct bluebird_token_run *run);
+ struct owl_token_run *run);
 static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
- struct bluebird_token_run *run);
+ struct owl_token_run *run);
 
 static symbol_id token_symbol(struct combined_grammar *grammar, const char *s);
 static bool follow_transition(struct automaton *a, state_id *state,
@@ -504,7 +504,7 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
     struct combined_grammar *combined = interpreter->combined;
     struct deterministic_grammar *deterministic = interpreter->deterministic;
 
-    struct bluebird_token_run *token_run = 0;
+    struct owl_token_run *token_run = 0;
     struct tokenizer_info info = {
         .identifier_symbol = token_symbol(combined, "identifier"),
         .number_symbol = token_symbol(combined, "number"),
@@ -512,7 +512,7 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
         .allow_dashes_in_identifiers =
          SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(combined),
     };
-    struct bluebird_default_tokenizer tokenizer = {
+    struct owl_default_tokenizer tokenizer = {
         .text = text,
         .info = &info,
     };
@@ -528,7 +528,7 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
      sizeof(struct saved_state));
     context.stack[0].state = deterministic->automaton.start_state;
     context.stack[0].automaton = &deterministic->automaton;
-    while (bluebird_default_tokenizer_advance(&tokenizer, &token_run))
+    while (owl_default_tokenizer_advance(&tokenizer, &token_run))
         fill_run_states(&context, token_run);
     if (text[tokenizer.offset] != '\0') {
         estimate_next_token_range(&tokenizer, &error.ranges[0].start,
@@ -653,7 +653,7 @@ static void fill_bracket_transitions_for_symbols(struct interpret_context *ctx)
 }
 
 static void fill_run_states(struct interpret_context *ctx,
- struct bluebird_token_run *run)
+ struct owl_token_run *run)
 {
     fill_bracket_transitions_for_symbols(ctx);
     struct saved_state *top = &ctx->stack[ctx->stack_depth - 1];
@@ -725,7 +725,7 @@ unexpected_token:
 }
 
 static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
- struct bluebird_token_run *run)
+ struct owl_token_run *run)
 {
     fill_bracket_transitions_for_symbols(ctx);
     ctx->construct_state.info = ctx;
@@ -749,7 +749,7 @@ static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
                 push_action_offsets(ctx, end, end - len);
             whitespace = end - offset - len;
         }
-        struct bluebird_token_run *old = run;
+        struct owl_token_run *old = run;
         run = run->prev;
         free(old);
     }
