@@ -685,7 +685,7 @@ void generate(struct generator *gen)
     output_line(out, "    struct fill_run_state *stack;");
     output_line(out, "    uint32_t top_index;");
     output_line(out, "    uint32_t capacity;");
-    output_line(out, "    bool error;");
+    output_line(out, "    int error;");
     output_line(out, "};");
     output_line(out, "static void continuation_stack_push(struct fill_run_state **top) {");
     output_line(out, "    struct fill_run_continuation *cont = (*top)->cont;");
@@ -762,7 +762,7 @@ void generate(struct generator *gen)
             set_unsigned_number_substitution(out, "state-transition-symbol",
              s.transition_symbol);
             output_line(out, "    if (top->cont->top_index == 0) {");
-            output_line(out, "        top->cont->error = true;");
+            output_line(out, "        top->cont->error = 1;");
             output_line(out, "        return;");
             output_line(out, "    }");
             output_line(out, "    top->cont->top_index--;");
@@ -809,7 +809,7 @@ void generate(struct generator *gen)
             output_line(out, ");");
             output_line(out, "        return;");
         } else
-            output_line(out, " top->cont->error = true; return;");
+            output_line(out, " top->cont->error = 1; return;");
         bitset_destroy(&reachability_mask);
         output_line(out, "    }");
         output_line(out, "}");
@@ -841,6 +841,8 @@ void generate(struct generator *gen)
     }
     output_line(out, "    run->states[token_index] = %%first-bracket-state-id;");
     output_line(out, "    state_func_%%first-bracket-state-id(run, top, token_index);");
+    output_line(out, "    if (top->cont->error == -1)");
+    output_line(out, "        top->cont->error = 1;");
     output_line(out, "}");
     output_line(out, "static bool fill_run_states(struct owl_token_run *run, struct fill_run_continuation *cont, uint16_t *failing_index);");
     output_line(out, "static size_t build_parse_tree(struct owl_default_tokenizer *, struct owl_token_run *, struct owl_tree *);");
@@ -970,7 +972,7 @@ void generate(struct generator *gen)
     output_line(out, "        run->states[token_index] = top->state;");
     output_line(out, "        state_funcs[top->state](run, top, token_index);");
     output_line(out, "        if (cont->error) {");
-    output_line(out, "            *failing_index = token_index;");
+    output_line(out, "            *failing_index = token_index - (cont->error > 0 ? 0 : 1);");
     output_line(out, "            return false;");
     output_line(out, "        }");
     output_line(out, "        token_index++;");
@@ -1256,7 +1258,7 @@ static void generate_reachability_mask_check(struct generator *gen,
         output_string(out, "!(%%mask-bits & top->reachability_mask[%%mask-index])");
     }
     output_line(out, ") {");
-    output_line(out, "        top->cont->error = true;");
+    output_line(out, "        top->cont->error = -1;");
     output_line(out, "        return;");
     output_line(out, "    }");
 }

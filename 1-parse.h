@@ -1631,7 +1631,7 @@ struct fill_run_continuation {
     struct fill_run_state *stack;
     uint32_t top_index;
     uint32_t capacity;
-    bool error;
+    int error;
 };
 static void continuation_stack_push(struct fill_run_state **top) {
     struct fill_run_continuation *cont = (*top)->cont;
@@ -1654,70 +1654,70 @@ static void bracket_entry_state(struct owl_token_run *run, struct fill_run_state
 static void (*state_funcs[92])(struct owl_token_run *, struct fill_run_state *, uint16_t);
 static void state_func_70(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(0 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
     switch (token) {
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_2(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 0: top->state = 3; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_14(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 1: top->state = 17; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_30(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 1: top->state = 33; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_53(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 1: top->state = 56; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_15(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 16; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_17(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 18; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_8(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 19; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_82(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(1 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     if (top->cont->top_index == 0) {
-        top->cont->error = true;
+        top->cont->error = 1;
         return;
     }
     top->cont->top_index--;
@@ -1729,11 +1729,11 @@ static void state_func_82(struct owl_token_run *run, struct fill_run_state *top,
 }
 static void state_func_72(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(2 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     if (top->cont->top_index == 0) {
-        top->cont->error = true;
+        top->cont->error = 1;
         return;
     }
     top->cont->top_index--;
@@ -1747,119 +1747,119 @@ static void state_func_31(struct owl_token_run *run, struct fill_run_state *top,
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 32; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_33(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 34; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_46(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 51; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_54(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 55; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_56(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 57; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_1(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 23: top->state = 58; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_87(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(1 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 1: top->state = 90; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_88(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(1 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 89; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_90(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(1 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 91; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_73(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(2 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 1: top->state = 76; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_74(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(2 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 75; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_76(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(2 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 21: top->state = 77; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_61(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(2 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 23: top->state = 62; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_58(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
@@ -1867,19 +1867,19 @@ static void state_func_58(struct owl_token_run *run, struct fill_run_state *top,
     switch (token) {
     case 20: top->state = 1; return;
     case 21: top->state = 2; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_59(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(3 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 12: top->state = 60; return;
     case 14: top->state = 61; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_20(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
@@ -1888,7 +1888,7 @@ static void state_func_20(struct owl_token_run *run, struct fill_run_state *top,
     case 3: top->state = 35; return;
     case 4: top->state = 36; return;
     case 5: top->state = 37; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_37(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
@@ -1898,7 +1898,7 @@ static void state_func_37(struct owl_token_run *run, struct fill_run_state *top,
     case 7: top->state = 39; return;
     case 8: top->state = 40; return;
     case 9: top->state = 41; return;
-    default: top->cont->error = true; return;
+    default: top->cont->error = 1; return;
     }
 }
 static void state_func_3(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
@@ -1939,7 +1939,7 @@ static void state_func_50(struct owl_token_run *run, struct fill_run_state *top,
 }
 static void state_func_86(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(1 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
@@ -1955,7 +1955,7 @@ static void state_func_86(struct owl_token_run *run, struct fill_run_state *top,
 }
 static void state_func_62(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(2 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
@@ -1999,7 +1999,7 @@ static void state_func_51(struct owl_token_run *run, struct fill_run_state *top,
 }
 static void state_func_67(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(2 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
@@ -2053,7 +2053,7 @@ static void state_func_44(struct owl_token_run *run, struct fill_run_state *top,
 }
 static void state_func_84(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(1 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
@@ -2074,7 +2074,7 @@ static void state_func_84(struct owl_token_run *run, struct fill_run_state *top,
 }
 static void state_func_71(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(2 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
@@ -2113,7 +2113,7 @@ static void state_func_16(struct owl_token_run *run, struct fill_run_state *top,
 }
 static void state_func_77(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(2 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
@@ -2173,7 +2173,7 @@ static void state_func_57(struct owl_token_run *run, struct fill_run_state *top,
 }
 static void state_func_91(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     if (!(1 & top->reachability_mask[0])) {
-        top->cont->error = true;
+        top->cont->error = -1;
         return;
     }
     uint32_t token = run->tokens[token_index];
@@ -2304,6 +2304,8 @@ static void bracket_entry_state(struct owl_token_run *run, struct fill_run_state
     top->reachability_mask[0] = mask0;
     run->states[token_index] = 59;
     state_func_59(run, top, token_index);
+    if (top->cont->error == -1)
+        top->cont->error = 1;
 }
 static bool fill_run_states(struct owl_token_run *run, struct fill_run_continuation *cont, uint16_t *failing_index);
 static size_t build_parse_tree(struct owl_default_tokenizer *, struct owl_token_run *, struct owl_tree *);
@@ -2429,7 +2431,7 @@ static bool fill_run_states(struct owl_token_run *run, struct fill_run_continuat
         run->states[token_index] = top->state;
         state_funcs[top->state](run, top, token_index);
         if (cont->error) {
-            *failing_index = token_index;
+            *failing_index = token_index - (cont->error > 0 ? 0 : 1);
             return false;
         }
         token_index++;
