@@ -29,8 +29,9 @@
 // - write a blog post or something about how the old parser worked?
 
 static FILE *output_file = 0;
-static struct terminal_info get_terminal_info(int fileno, bool force_color);
+static struct terminal_info get_terminal_info(int fileno);
 static long terminal_columns(int fileno);
+static bool force_terminal_colors = false;
 static int terminal_colors(int fileno);
 static FILE *fopen_or_error(const char *filename, const char *mode);
 static char *read_string(FILE *file);
@@ -48,7 +49,6 @@ int main(int argc, char *argv[])
     const char *output_filename = 0;
     char *grammar_string = 0;
     bool compile = false;
-    bool color_output = false;
     enum {
         NO_PARAMETER,
         INPUT_FILE_PARAMETER,
@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
              !strcmp(long_name, "compile"))
                 compile = true;
             else if (!strcmp(short_name, "C") || !strcmp(long_name, "color"))
-                color_output = true;
+                force_terminal_colors = true;
             else if (long_name[0] || short_name[0]) {
                 errorf("unknown option: %s%s", long_name[0] ? "--" : "-",
                  long_name[0] ? long_name : short_name);
@@ -237,7 +237,7 @@ int main(int argc, char *argv[])
         struct interpreter interpreter = {
             .grammar = &grammar,
             .combined = &combined,
-            .terminal_info = get_terminal_info(STDERR_FILENO, color_output),
+            .terminal_info = get_terminal_info(STDERR_FILENO),
         };
         output_ambiguity(&interpreter, &ambiguity, stderr);
         return 3;
@@ -264,8 +264,7 @@ int main(int argc, char *argv[])
             .grammar = &grammar,
             .combined = &combined,
             .deterministic = &deterministic,
-            .terminal_info = get_terminal_info(output_fileno,
-             color_output),
+            .terminal_info = get_terminal_info(output_fileno),
         };
         error_in_string = input_string;
         interpret(&interpreter, input_string, output_file);
@@ -399,14 +398,14 @@ static const char *colors_256[] = {
     "\033[38;5;97m",
 };
 
-static struct terminal_info get_terminal_info(int fileno, bool force_color)
+static struct terminal_info get_terminal_info(int fileno)
 {
     struct terminal_info info = {0};
     info.columns = terminal_columns(fileno);
     if (info.columns <= 0)
         info.columns = 80;
     int colors = terminal_colors(fileno);
-    if (colors >= 256 || force_color) {
+    if (colors >= 256) {
         info.reset = "\033[0m";
         info.line_indicator = "\033[90m";
         info.row_colors = colors_256;
@@ -441,6 +440,8 @@ static long terminal_columns(int fileno)
 
 static int terminal_colors(int fileno)
 {
+    if (force_terminal_colors)
+        return 256;
     if (fileno < 0 || !isatty(fileno))
         return 1;
     // Try some different names that "ncurses" goes by on various platforms.
