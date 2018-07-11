@@ -259,7 +259,8 @@ int main(int argc, char *argv[])
         if (input_filename)
             input_file = fopen_or_error(input_filename, "r");
         char *input_string = read_string(input_file);
-        fclose(input_file);
+        if (input_filename)
+            fclose(input_file);
         struct interpreter interpreter = {
             .grammar = &grammar,
             .combined = &combined,
@@ -271,7 +272,8 @@ int main(int argc, char *argv[])
         free(input_string);
     }
 
-    fclose(output_file);
+    if (output_filename)
+        fclose(output_file);
     deterministic_grammar_destroy(&deterministic);
     combined_grammar_destroy(&combined);
     grammar_destroy(&grammar);
