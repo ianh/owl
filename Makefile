@@ -12,14 +12,11 @@ CFLAGS?=-O3 -g -pedantic -Wall -Wno-missing-braces -Wno-overlength-strings
 LDFLAGS?=
 LDLIBS?=$(LDLIBS_$(LIBDL))
 
-owl: 1-parse.o *.c *.h
-	$(CC) $(CFLAGS) -std=c11 $(LDFLAGS) -o owl 1-parse.o *.c $(LDLIBS)
-
-1-parse.o: 1-parse.h
-	$(CC) $(CFLAGS) -std=c11 -c -x c -DOWL_PARSER_IMPLEMENTATION -o 1-parse.o 1-parse.h
+owl: *.c *.h
+	$(CC) $(CFLAGS) -std=c11 $(LDFLAGS) -o owl *.c $(LDLIBS)
 
 install: owl
 	$(INSTALL) -m 557 owl $(PREFIX)/bin/owl
 
 clean:
-	rm owl 1-parse.o
+	rm owl
