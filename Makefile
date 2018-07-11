@@ -8,12 +8,13 @@ LDLIBS_=-ldl
 
 INSTALL?=/usr/bin/install
 PREFIX?=/usr/local
-CFLAGS?=-O3 -g -pedantic -Wall -Wno-missing-braces -Wno-overlength-strings
+CFLAGS?=-O3 -g
+CFLAGS+=-std=c11 -pedantic -Wall -Wno-missing-braces -Wno-overlength-strings
 LDFLAGS?=
 LDLIBS?=$(LDLIBS_$(LIBDL))
 
 owl: *.c *.h
-	$(CC) $(CFLAGS) -std=c11 $(LDFLAGS) -o owl *.c $(LDLIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ *.c $(LDLIBS)
 
 install: owl
 	$(INSTALL) -m 557 owl $(PREFIX)/bin/owl
