@@ -190,8 +190,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
             automaton_mark_accepting_state(&automaton, end);
         }
 
-        // The bracket symbols for each rule are local to that rule.  Rename
-        // them so they're globally unique across all automata.
+        // The bracket symbols for each rule are local to that rule's automata.
+        // Rename them so they're globally unique across all automata.
         bracket_symbols_for_rule[i] =
          calloc(rule->number_of_brackets, sizeof(symbol_id));
         for (uint32_t j = 0; j < rule->number_of_brackets; ++j) {

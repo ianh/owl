@@ -171,7 +171,7 @@ int main(int argc, char *argv[])
 
             fprintf(stderr, "\n  Owl's grammar format may change between "
              "versions.  Add the string\n\n");
-            fprintf(stderr, "  #using owl.v1\n\n");
+            fprintf(stderr, "  #using %s\n\n", version_string);
             fprintf(stderr, "  to the top of your grammar file to lock in "
              "this version.\n\n");
         }
