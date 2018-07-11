@@ -391,6 +391,9 @@ static void append_string(char **string, uint32_t *length, uint32_t *bytes,
  const char *append, size_t append_length)
 {
     uint32_t index = *length;
+    if (append_length > UINT32_MAX ||
+     *length + (uint32_t)append_length < *length)
+        abort();
     *length += (uint32_t)append_length;
     *string = grow_array(*string, bytes, *length);
     memcpy(*string + index, append, append_length);
@@ -667,10 +670,8 @@ static void fill_run_states(struct interpret_context *ctx,
             symbol = s.transition_symbol;
             run->tokens[i] = symbol;
             ctx->stack_depth--;
-            if (ctx->stack_depth < 1) {
-                fprintf(stderr, "internal error (underflow)\n");
+            if (ctx->stack_depth < 1)
                 abort();
-            }
             top = &ctx->stack[ctx->stack_depth - 1];
         } else if (follow_transition(top->automaton, &top->state, symbol)) {
             // This is just a normal token.
@@ -691,6 +692,8 @@ static void fill_run_states(struct interpret_context *ctx,
                     bitset_add(&reachability, k);
             }
             // TODO: if nothing is reachable, give up?
+            if (ctx->stack_depth == UINT32_MAX)
+                abort();
             ctx->stack = grow_array(ctx->stack, &ctx->stack_allocated_bytes,
              sizeof(struct saved_state) * ++ctx->stack_depth);
             top = &ctx->stack[ctx->stack_depth - 1];
@@ -845,6 +848,8 @@ static void follow_transition_reversed(struct interpret_context *ctx,
 
 static void push_action_offset(struct interpret_context *ctx, size_t offset)
 {
+    if (ctx->next_action_offset == UINT32_MAX)
+        abort();
     uint32_t action_offset = ctx->next_action_offset++;
     ctx->offset_table = grow_array(ctx->offset_table,
      &ctx->offset_table_allocated_bytes,

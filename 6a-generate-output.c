@@ -91,10 +91,7 @@ void output_string_length(struct generator_output *output, const char *string,
                 break;
             }
             case STRING:
-                if (s->value_length > UINT32_MAX)
-                    abort();
-                format = grow_array(format, &format_bytes,
-                 (uint32_t)s->value_length);
+                format = grow_array(format, &format_bytes, s->value_length);
                 memcpy(format, s->value, s->value_length);
                 apply_transform(format, s->value_length, s->transform);
                 output->output(format, s->value_length);
@@ -179,6 +176,8 @@ static uint32_t create_substitution(struct generator_output *output,
     }
     if (index >= output->number_of_substitutions) {
         output->number_of_substitutions = index + 1;
+        if (index == UINT32_MAX)
+            abort();
         output->substitutions = grow_array(output->substitutions,
          &output->substitutions_allocated_bytes,
          output->number_of_substitutions * sizeof(struct substitution));

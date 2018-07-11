@@ -50,6 +50,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
              result->number_of_tokens, token.string, token.length, token.type,
              &token.range);
             if (index >= result->number_of_tokens) {
+                if (index == UINT32_MAX)
+                    abort();
                 result->number_of_tokens = index + 1;
                 result->tokens = grow_array(result->tokens,
                  &tokens_allocated_bytes,
@@ -75,6 +77,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
         if (!rule->is_token)
             continue;
         symbol_id symbol = result->number_of_tokens++;
+        if (symbol == UINT32_MAX)
+            abort();
         result->tokens = grow_array(result->tokens, &tokens_allocated_bytes,
          sizeof(struct token) * result->number_of_tokens);
         result->tokens[symbol].string = rule->name;

@@ -20,7 +20,7 @@ static inline void state_array_push(struct state_array *a, state_id state)
         abort();
     uint32_t i = a->number_of_states++;
     a->states = grow_array(a->states, &a->states_allocated_bytes,
-     a->number_of_states * sizeof(state_id));
+     sizeof(state_id) * a->number_of_states);
     a->states[i] = state;
 }
 
@@ -28,7 +28,7 @@ static inline void state_array_push_array(struct state_array *a,
  struct state_array *b)
 {
     a->states = grow_array(a->states, &a->states_allocated_bytes,
-     (a->number_of_states + b->number_of_states) * sizeof(state_id));
+     sizeof(state_id) * (a->number_of_states + b->number_of_states));
     memcpy(a->states + a->number_of_states, b->states,
      b->number_of_states * sizeof(state_id));
     a->number_of_states += b->number_of_states;

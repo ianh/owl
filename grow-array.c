@@ -4,8 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-void *grow_array_using_realloc(void *a, uint32_t *size, uint32_t target_size)
+void *grow_array_using_realloc(void *a, uint32_t *size, size_t target_size)
 {
+    if (target_size > UINT32_MAX)
+        abort();
     uint32_t n = *size;
     while (target_size > n) {
         uint32_t m = (n + 1) * 3 / 2;

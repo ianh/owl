@@ -495,7 +495,7 @@ static char *read_string(FILE *file)
     uint32_t len = 0;
     uint32_t offset = 0;
     while (true) {
-        string = grow_array(string, &len, len + 256);
+        string = grow_array(string, &len, (size_t)len + 256);
         uint32_t n = (uint32_t)fread(string + offset, 1, len - offset, file);
         if (n < len - offset) {
             string[offset + n] = '\0';

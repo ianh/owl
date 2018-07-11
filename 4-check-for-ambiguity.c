@@ -584,9 +584,11 @@ static void follow_state_pair_transition(struct path_node node, state_id a,
     if (a != pair.a)
         node.flags |= SWAPPED_PATH;
     uint32_t i = worklist->number_of_items++;
+    if (i == UINT32_MAX)
+        abort();
     worklist->items = grow_array(worklist->items,
      &worklist->items_allocated_bytes,
-     worklist->number_of_items * sizeof(struct work_item));
+     sizeof(struct work_item) * worklist->number_of_items);
     // Setting i = (i-1)/2 moves up the binary min-heap.
     for(; i > 0 && weight < worklist->items[(i-1)/2].weight; i = (i-1)/2)
         worklist->items[i] = worklist->items[(i-1)/2];

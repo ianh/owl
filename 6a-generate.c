@@ -232,6 +232,8 @@ void generate(struct generator *gen)
         struct rule *rule = &gen->grammar->rules[i];
         for (uint32_t j = 0; j < rule->number_of_choices; ++j) {
             uint32_t k = choice_index++;
+            if (k == UINT32_MAX)
+                abort();
             choices = grow_array(choices, &choices_allocated_bytes,
              choice_index * sizeof(struct choice *));
             choices[k] = &rule->choices[j];
@@ -1358,6 +1360,8 @@ static void generate_action_table(struct generator *gen,
                  map->entries[j + length].target_nfa_state)
                     break;
             }
+            if (number_of_groups == UINT32_MAX)
+                abort();
             groups = grow_array(groups, &groups_allocated_bytes,
              (number_of_groups + 1) * sizeof(struct action_table_bucket_group));
             groups[number_of_groups++] = (struct action_table_bucket_group){

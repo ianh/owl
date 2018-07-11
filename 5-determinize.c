@@ -211,8 +211,10 @@ static void determinize_automaton(struct context context)
                     if (transition.action == 0)
                         continue;
                     uint32_t k = number_of_actions++;
+                    if (k == UINT32_MAX)
+                        abort();
                     actions = grow_array(actions, &actions_allocated_bytes,
-                     number_of_actions * sizeof(uint16_t));
+                     sizeof(uint16_t) * number_of_actions);
                     actions[k] = transition.action;
                 }
             }
@@ -257,6 +259,8 @@ static void determinize_automaton(struct context context)
         if (context.out_transitions) {
             struct bracket_transitions *ts = context.out_transitions;
             uint32_t j = ts->number_of_transitions++;
+            if (j == UINT32_MAX)
+                abort();
             ts->transitions = grow_array(ts->transitions,
              &ts->transitions_allocated_bytes, ts->number_of_transitions *
              sizeof(struct bracket_transition));
@@ -381,8 +385,10 @@ static void add_action_map_entry(struct action_map *map,
  struct action_map_entry entry)
 {
     uint32_t index = map->number_of_entries++;
+    if (index == UINT32_MAX)
+        abort();
     map->entries = grow_array(map->entries, &map->entries_allocated_bytes,
-     map->number_of_entries * sizeof(struct action_map_entry));
+     sizeof(struct action_map_entry) * map->number_of_entries);
     map->entries[index] = entry;
 }
 
@@ -429,6 +435,8 @@ static state_id deterministic_state_for_subset(struct subset_table *table,
         // This is a brand new state: insert it into the worklist so we can
         // continue to add its successor states.
         uint32_t i = worklist->number_of_subsets++;
+        if (i == UINT32_MAX)
+            abort();
         worklist->subsets = grow_array(worklist->subsets,
          &worklist->subsets_allocated_bytes,
          worklist->number_of_subsets * sizeof(struct state_array *));
@@ -547,8 +555,8 @@ void determinize(struct combined_grammar *grammar,
     uint32_t result_actions_allocated_bytes = 0;
     result->number_of_actions = 1;
     result->actions = grow_array(result->actions,
-     &result_actions_allocated_bytes, result->number_of_actions *
-     sizeof(uint16_t));
+     &result_actions_allocated_bytes, sizeof(uint16_t) *
+     result->number_of_actions);
     result->actions[0] = 0;
     for (uint32_t i = 0; i < number_of_entries; ++i) {
         if (i > 0 && compare_entry_actions(&entries[i], &entries[i - 1]) == 0)
@@ -559,12 +567,14 @@ void determinize(struct combined_grammar *grammar,
             uint32_t n = 0;
             for (; a[n]; n++);
             n++; // Include terminating zero.
+            if (n == 0 || result->number_of_actions + n < n)
+                abort();
             result->number_of_actions += n;
             result->actions = grow_array(result->actions,
-             &result_actions_allocated_bytes, result->number_of_actions *
-             sizeof(uint16_t));
+             &result_actions_allocated_bytes, sizeof(uint16_t) *
+             result->number_of_actions);
             memcpy(result->actions + action_indexes[i], entries[i]->actions,
-             n * sizeof(uint16_t));
+             sizeof(uint16_t) * n);
         } else
             action_indexes[i] = 0;
     }

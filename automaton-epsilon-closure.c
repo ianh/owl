@@ -87,11 +87,11 @@ static bool closure_entry_add(struct state_table *table,
         state_array_push(&closure->reachable, state);
         closure->action_indexes = grow_array(closure->action_indexes,
          &closure->action_indexes_allocated_bytes,
-         closure->reachable.number_of_states * sizeof(uint32_t));
+         sizeof(uint32_t) * closure->reachable.number_of_states);
         closure->ambiguous_action_indexes =
          grow_array(closure->ambiguous_action_indexes,
           &closure->ambiguous_action_indexes_allocated_bytes,
-          closure->reachable.number_of_states * sizeof(uint32_t));
+          sizeof(uint32_t) * closure->reachable.number_of_states);
         closure->action_indexes[*state_index] = UINT32_MAX;
         closure->ambiguous_action_indexes[*state_index] = UINT32_MAX;
     }
@@ -153,10 +153,12 @@ static uint32_t append_to_action_path(struct state_table *table,
 
 static void closure_action_add(struct epsilon_closure *closure, uint16_t action)
 {
+    if (closure->number_of_actions == UINT32_MAX)
+        abort();
     uint32_t index = closure->number_of_actions++;
     closure->actions = grow_array(closure->actions,
      &closure->actions_allocated_bytes,
-     closure->number_of_actions * sizeof(uint16_t));
+     sizeof(uint16_t) * closure->number_of_actions);
     closure->actions[index] = action;
 }
 

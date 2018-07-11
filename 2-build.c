@@ -279,6 +279,8 @@ void build(struct grammar *grammar, struct owl_tree *tree)
          grammar->number_of_comment_tokens, s.string, s.length,
          TOKEN_START_LINE_COMMENT, &s.range);
         if (token_index >= grammar->number_of_comment_tokens) {
+            if (token_index == UINT32_MAX)
+                abort();
             grammar->number_of_comment_tokens = token_index + 1;
             grammar->comment_tokens = grow_array(grammar->comment_tokens,
              &grammar->comment_tokens_allocated_bytes,
@@ -414,10 +416,12 @@ static void build_body_expression(struct context *ctx,
                 break;
         }
         if (i >= slot->number_of_choice_sets) {
+            if (i == UINT32_MAX)
+                abort();
             slot->number_of_choice_sets = i + 1;
             slot->choice_sets = grow_array(slot->choice_sets,
              &slot->choice_sets_allocated_bytes,
-             slot->number_of_choice_sets * sizeof(struct slot_choice_set));
+             sizeof(struct slot_choice_set) * slot->number_of_choice_sets);
             slot->choice_sets[i].choices = bitset_move(&choices);
             slot->choice_sets[i].symbol = ctx->next_symbol++;
         } else
@@ -434,6 +438,8 @@ static void build_body_expression(struct context *ctx,
         build_body_expression(ctx, automaton, expr.expr, b);
         break;
     case PARSED_BRACKETED: {
+        if (rule->number_of_brackets == UINT32_MAX)
+            abort();
         uint32_t bracket_index = rule->number_of_brackets++;
         rule->brackets = grow_array(rule->brackets,
          &rule->brackets_allocated_bytes,
@@ -541,7 +547,7 @@ static uint32_t add_slot(struct context *ctx, struct rule *rule,
         }
         rule->number_of_slots = slot_index + 1;
         rule->slots = grow_array(rule->slots, &rule->slots_allocated_bytes,
-         rule->number_of_slots * sizeof(struct slot));
+         sizeof(struct slot) * rule->number_of_slots);
         struct slot *slot = &rule->slots[slot_index];
         slot->name = slot_name;
         slot->name_length = slot_name_length;
@@ -550,7 +556,7 @@ static uint32_t add_slot(struct context *ctx, struct rule *rule,
         slot->number_of_choice_sets = 1;
         slot->choice_sets = grow_array(slot->choice_sets,
          &slot->choice_sets_allocated_bytes,
-         slot->number_of_choice_sets * sizeof(struct slot_choice_set));
+         sizeof(struct slot_choice_set) * slot->number_of_choice_sets);
         slot->choice_sets[0].symbol = symbol;
         slot->choice_sets[0].choices = bitset_create_empty(ctx->grammar->
          rules[referenced_rule_index].number_of_choices);
@@ -612,6 +618,8 @@ static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
      rule->number_of_keyword_tokens, keyword.string, keyword.length, type,
      &keyword.range);
     if (token_index >= rule->number_of_keyword_tokens) {
+        if (token_index == UINT32_MAX)
+            abort();
         rule->number_of_keyword_tokens = token_index + 1;
         rule->keyword_tokens = grow_array(rule->keyword_tokens,
          &rule->keyword_tokens_allocated_bytes,
@@ -631,6 +639,8 @@ static uint32_t add_rule(struct context *ctx, const char *name, size_t len)
     if (find_rule(ctx, name, len) < ctx->grammar->number_of_rules)
         return UINT32_MAX;
     uint32_t index = ctx->grammar->number_of_rules++;
+    if (index == UINT32_MAX)
+        abort();
     ctx->grammar->rules = grow_array(ctx->grammar->rules,
      &ctx->grammar->rules_allocated_bytes,
      sizeof(struct rule) * ctx->grammar->number_of_rules);
