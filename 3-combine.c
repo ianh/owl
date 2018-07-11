@@ -106,8 +106,6 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
             // matched.
             state_id start = automaton_create_state(&automaton);
             state_id end = automaton_create_state(&automaton);
-            automaton_set_start_state(&automaton, start);
-            automaton_mark_accepting_state(&automaton, end);
             uint32_t j = 0;
             for (; j < rule->first_operator_choice; ++j) {
                 // Embed each choice into the automaton, tracking it as an
@@ -151,16 +149,12 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                     state_id rhs_end = automaton_create_state(&automaton);
                     state_id rhs_start = embed(&automaton, &automaton, rhs_end,
                      SYMBOL_EPSILON, 0);
-                    // Clear out the old accepting state--it's about to be
-                    // replaced by the new one we just added.
-                    automaton.states[end].accepting = false;
                     // Allow the automaton to skip past the nonassoc operator.
                     automaton_add_transition(&automaton, end, rhs_end,
                      SYMBOL_EPSILON);
                     from_state = end;
                     to_state = rhs_start;
                     end = rhs_end;
-                    automaton_mark_accepting_state(&automaton, end);
                 } else {
                     // Infix operators are a transition from the end state back
                     // to the start state.
@@ -180,8 +174,20 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                     automaton_add_transition_with_action(&automaton, from_state,
                      op_start, SYMBOL_EPSILON,
                      CONSTRUCT_ACTION(ACTION_BEGIN_OPERATOR, 0));
+
+                    // Add a nesting level to match precedence properly.
+                    state_id next_start = automaton_create_state(&automaton);
+                    state_id next_end = automaton_create_state(&automaton);
+                    automaton_add_transition(&automaton, next_start, start,
+                     SYMBOL_EPSILON);
+                    automaton_add_transition(&automaton, end, next_end,
+                     SYMBOL_EPSILON);
+                    start = next_start;
+                    end = next_end;
                 }
             }
+            automaton_set_start_state(&automaton, start);
+            automaton_mark_accepting_state(&automaton, end);
         }
 
         // The bracket symbols for each rule are local to that rule.  Rename
