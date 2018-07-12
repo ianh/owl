@@ -86,7 +86,7 @@ void build(struct grammar *grammar, struct owl_tree *tree)
         grammar->rules[index].name_range = name.range;
     }
     if (grammar->number_of_rules == 0) {
-        errorf("am owl grammar needs at least one rule of the form "
+        errorf("an owl grammar needs at least one rule of the form "
          "'rule_name = ...'");
         exit_with_error();
     }
