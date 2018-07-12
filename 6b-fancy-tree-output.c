@@ -259,8 +259,8 @@ static bool advance_label(struct line *line, struct document *document,
             }
         }
         end_offset = offset_at(line, l.start) + l.length;
-        if (line->rows_of_offsets[l.start - r.start] == 0 ||
-         row < line->rows_of_offsets[l.start - r.start])
+        if (line->rows_of_offsets[l.start - r.start] == 0 || (row > 0 &&
+         row < line->rows_of_offsets[l.start - r.start]))
             line->rows_of_offsets[l.start - r.start] = row;
     } else
         end_offset = line->offsets[0] + 1;
