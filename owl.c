@@ -43,6 +43,8 @@ static const char *version_string = "owl.v1";
 
 int main(int argc, char *argv[])
 {
+    memset(&error, 0, sizeof(error));
+
     // Parse arguments.
     bool needs_help = false;
     const char *input_filename = 0;
@@ -283,7 +285,7 @@ int main(int argc, char *argv[])
 }
 
 static int compare_source_ranges(const void *aa, const void *bb);
-struct error error = {0};
+struct error error;
 
 void print_error(void)
 {
@@ -423,12 +425,12 @@ static struct terminal_info get_terminal_info(int fileno)
 
 static long terminal_columns(int fileno)
 {
-    if (fileno < 0 || !isatty(fileno))
-        return -1;
 #ifdef TIOCGWINSZ
-    struct winsize winsize = {0};
-    if (!ioctl(fileno, TIOCGWINSZ, (char *)&winsize))
-        return (long)winsize.ws_col;
+    if (fileno >= 0 && isatty(fileno)) {
+        struct winsize winsize = {0};
+        if (!ioctl(fileno, TIOCGWINSZ, (char *)&winsize))
+            return (long)winsize.ws_col;
+    }
 #endif
     char *env = getenv("COLUMNS");
     if (!env || *env == '\0')
