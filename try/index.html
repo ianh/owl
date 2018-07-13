@@ -1,0 +1,441 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Try Owl</title>
+        <style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+html {
+    height: 100%;
+}
+body {
+    color: #eee;
+    background-color: #111;
+    font-family: monospace;
+    font-size: 16px;
+    display: grid;
+    height: 100%;
+    grid-template-columns: 50% 50%;
+    grid-template-rows: 62% 38%;
+}
+textarea {
+    display: block;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    border: 0;
+    resize: none;
+    background-color: inherit;
+    padding: 1em;
+}
+pre {
+    overflow: visible;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 1em;
+}
+#out, #out-measure {
+    grid-column: 2;
+    grid-row: 1 / 4;
+}
+#out-measure {
+    visibility: hidden;
+}
+#out-measure-pre {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+#grammar {
+    color: transparent;
+    overflow: hidden;
+    background-color: transparent;
+    caret-color: #eee;
+}
+textarea:focus {
+    outline: 0;
+}
+#grammar-text-container {
+    pointer-events: none;
+    overflow: visible;
+}
+#grammar-text > a {
+    pointer-events: auto;
+    color: #ccc;
+}
+#grammar-text > a:hover {
+    color: white;
+}
+#grammar-text-container, #grammar {
+    white-space: pre;
+    overflow-wrap: normal;
+    grid-column: 1;
+    grid-row: 1;
+}
+#grammar-container {
+    display: grid;
+    height: 100%;
+    grid-template-rows: 1fr;
+    grid-template-columns: 1fr;
+}
+#grammar-scroll-container {
+    grid-column: 1;
+    grid-row: 1;
+    background-color: #333;
+    overflow: auto;
+}
+#input {
+    background-color: #222;
+    grid-column: 1;
+    grid-row: 2 / 4;
+}
+        </style>
+        <script src="256-colors.js"></script>
+        <script src="tour.js"></script>
+        <script>
+var owl = false;
+var CSI = new Uint8Array(256);
+var CSIOffset = 0;
+var inESC = false;
+var inCSI = false;
+var format = [];
+function output(ch)
+{
+    if (ch == 0x1b)
+        inESC = true;
+    else if (inESC && ch == 0x5b)
+        inCSI = true;
+    else if (inCSI) {
+        CSI[CSIOffset++] = ch;
+        if (ch >= 0x40 && ch < 0x7f) {
+            applyCSI();
+            inESC = false;
+            inCSI = false;
+            CSIOffset = 0;
+        }
+    } else {
+        inESC = false;
+        format.push({type: "char", code: ch});
+    }
+}
+function applyCSI()
+{
+    var i = 0;
+    var attrs = new Uint8Array(256);
+    var attrsOffset = 0;
+    for (; i < CSIOffset; ++i) {
+        var n = 0;
+        for (; i < CSIOffset; ++i) {
+            if (CSI[i] < 0x30 || CSI[i] > 0x39) // '0'-'9'
+                break;
+            n *= 10;
+            n += CSI[i] - 0x30;
+        }
+        attrs[attrsOffset++] = n;
+        if (CSI[i] == 0x3b) // ';'
+            continue;
+        else if (CSI[i] == 0x6d) { // 'm'
+            var j = 0;
+            for (; j < attrsOffset; ++j) {
+                if (attrs[j] == 0)
+                    format.push({type: "clear-style"});
+                else if (attrs[j] >= 30 && attrs[j] <= 37)
+                    format.push({type: "style", code: attrs[j] - 30})
+                else if (attrs[j] >= 90 && attrs[j] <= 97)
+                    format.push({type: "style", code: attrs[j] - 82})
+                else if (attrs[j] == 38) {
+                    if (j + 2 >= attrsOffset)
+                        break;
+                    if (attrs[j + 1] != 5)
+                        break;
+                    format.push({type: "style", code: attrs[j + 2]})
+                    j += 2;
+                } else
+                    break;
+            }
+            if (j != attrsOffset)
+                break;
+            return;
+        } else
+            break;
+    }
+    console.warn("Unrecognized CSI", CSI.slice(0, CSIOffset));
+}
+var columns = 80;
+var recreateTimer = false;
+function update()
+{
+    if (!document.getElementById("grammar"))
+        return;
+    var grammarText = document.getElementById("grammar").value;
+    // Null-terminate the string so we have a chance to highlight identifier keywords...
+    grammarText += String.fromCharCode(0);
+
+    // Apply syntax highlighting to the grammar text.
+    // It would be cool if this highlighting were grammar-directed somehow,
+    // but that's a whole other project...
+    format = [];
+    var stringCode = 0;
+    var backslash = false;
+    var lastIdentifierIndex = -1;
+    var inIdentifier = false;
+    var inComment = false;
+    var inCommentLink = false;
+    var inCommentHashLink = false;
+    var nextIdentifierStyle = -1;
+    var identifierText = "";
+    for (var i = 0; i < grammarText.length; ++i) {
+        //palette:
+        // 68 (blue)
+        // 214 (yellow-orange)
+        // 113 (green)
+        // 168 (red)
+        // 97 (purple)
+        var code = grammarText.charCodeAt(i);
+        function startsIdentifier(c) {
+            return (c >= 0x41 && c <= 0x5a) ||
+             (c >= 0x61 && c <= 0x7a) || c == 0x5f;
+        }
+        function continuesIdentifier(c) {
+            return (c >= 0x30 && c <= 0x39) || c == 0x2d;
+        }
+        var stillInIdentifier = false;
+        var style = -1;
+        if (stringCode > 0) {
+            if (!backslash && code == stringCode)
+                stringCode = 0;
+            else if (backslash)
+                backslash = false;
+            else if (code == 0x5c)
+                backslash = true;
+            style = 113;
+        } else if (inComment) {
+            style = 248;
+            if (inCommentLink) {
+                style = -2;
+                if (code == 0x3e || code == 0x0a || code == 0x0d) // > or newline
+                    inCommentLink = false
+            } else if (code == 0x23) { // #
+                inCommentHashLink = true;
+                var linkTarget = "#";
+                var j = i + 1;
+                for (; j < grammarText.length; ++j) {
+                    var c = grammarText.charCodeAt(j);
+                    if (!startsIdentifier(c) && !continuesIdentifier(c))
+                        break;
+                    linkTarget += grammarText[j];
+                }
+                format.push({type:"link", target:linkTarget});
+                style = -2;
+            } else if (code == 0x3c && grammarText.charCodeAt(i+1) != 0x20) { // <
+                inCommentLink = true;
+                var linkTarget = "";
+                var j = i + 1;
+                for (; j < grammarText.length; ++j) {
+                    var c = grammarText.charCodeAt(j);
+                    if (c == 0x3e || c == 0x0a || c == 0x0d) // > or newline
+                        break;
+                    linkTarget += grammarText[j];
+                }
+                format.push({type:"link", target:linkTarget});
+                style = -2;
+            } else if (inCommentHashLink) {
+                if (!startsIdentifier(code) && !continuesIdentifier(code))
+                    inCommentHashLink = false
+                else
+                    style = -2;
+            }
+            if (code == 0x0a || code == 0x0d) // newline
+                inComment = false;
+        } else if (code == 0x23) { // #
+            inComment = true;
+            style = 248;
+        } else if (code == 0x22 || code == 0x27) { // ' or "
+            stringCode = code;
+            style = 113;
+        } else if (startsIdentifier(code) || code == 0x2e) { // 2e is . for .operators
+            if (!inIdentifier) {
+                lastIdentifierIndex = format.length;
+                format.push({type:"style", code:nextIdentifierStyle});
+                identifierText = "";
+            }
+            stillInIdentifier = true;
+            nextIdentifierStyle = false;
+        } else if (continuesIdentifier(code) && inIdentifier)
+            stillInIdentifier = true;
+        else if (code == 0x3d) { // =
+            if (lastIdentifierIndex >= 0)
+                format[lastIdentifierIndex].code = 168;
+            style = 68;
+        } else if (code == 0x3a || code == 0x5c) { // : or backslash
+            nextIdentifierStyle = 68;
+            style = 68;
+        } else if ((code > 0x20 && code < 0x30 && code != 0x2d) ||
+         (code > 0x39 && code < 0x40) || (code > 0x5a && code < 0x61) ||
+         (code > 0x7a && code < 0x7f)) // something that looks like a symbol
+            style = 68;
+        if (inIdentifier && !stillInIdentifier) {
+            // match against identifier keywords
+            if (identifierText == ".operators")
+                format[lastIdentifierIndex].code = 97;
+            else if (identifierText == "postfix" || identifierText == "prefix" ||
+             identifierText == "infix" || identifierText == "flat" ||
+             identifierText == "left" || identifierText == "right" ||
+             identifierText == "nonassoc")
+                format[lastIdentifierIndex].code = 97;
+        }
+        inIdentifier = stillInIdentifier;
+        if (!inIdentifier)
+            format.push({type:"style", code:style});
+        else
+            identifierText += grammarText[i];
+        format.push({type:"char", code:code});
+    }
+    formatOutput(document.getElementById("grammar-text"));
+
+    updateOutput();
+
+    // Recreate the "Owl" module periodically to clear out memory.
+    if (recreateTimer)
+        window.clearTimeout(recreateTimer);
+    recreateTimer = window.setTimeout(createOwl, 2000);
+}
+function updateOutput()
+{
+    if (!owl)
+        return;
+    if (!document.getElementById("grammar"))
+        return;
+    owl.FS.writeFile("grammar-file", document.getElementById("grammar").value);
+    owl.FS.writeFile("input-file", document.getElementById("input").value);
+    format = [];
+    owl.ENV.COLUMNS = ""+columns;
+    owl.callMain(["-C", "grammar-file", "-i", "input-file"]);
+    formatOutput(document.getElementById("out"));
+}
+function createOwl()
+{
+    owl = false;
+    var _owl = Owl({
+        preRun: function () {
+            _owl.FS.init(null, output, output);
+        },
+        onRuntimeInitialized: function () {
+            owl = _owl;
+            updateOutput();
+        },
+        noInitialRun: true
+    });
+}
+function formatOutput(elem)
+{
+    elem.textContent = "";
+    var currentStyle = -1;
+    var nextStyle = -1;
+    var text = "";
+    var linkTarget = "";
+    for (var i = 0; i < format.length; ++i) {
+        if (format[i].type == "char") {
+            if (nextStyle != currentStyle) {
+                appendStyledText(elem, text, currentStyle, linkTarget);
+                currentStyle = nextStyle;
+                text = "";
+            }
+            text += String.fromCharCode(format[i].code);
+        } else if (format[i].type == "style")
+            nextStyle = format[i].code;
+        else if (format[i].type == "clear-style")
+            nextStyle = -1;
+        else if (format[i].type == "link") {
+            appendStyledText(elem, text, currentStyle, linkTarget);
+            currentStyle = nextStyle;
+            text = "";
+            linkTarget = format[i].target;
+        }
+    }
+    appendStyledText(elem, text, currentStyle, linkTarget);
+}
+function appendStyledText(elem, text, styleCode, linkTarget)
+{
+    if (!text.length)
+        return;
+    if (styleCode == -1) {
+        elem.appendChild(document.createTextNode(text));
+    } else if (styleCode == -2) {
+        var a = document.createElement("a");
+        a.href = linkTarget;
+        if (linkTarget[0] !== '#') {
+            a.target = "_blank";
+            a.rel = "noopener";
+        }
+        a.appendChild(document.createTextNode(text));
+        elem.appendChild(a);
+    } else {
+        var e = document.createElement("span");
+        e.appendChild(document.createTextNode(text));
+        e.style.color = terminalColors[styleCode];
+        elem.appendChild(e);
+    }
+}
+function loadHash()
+{
+    var name = location.hash.slice(1);
+    if (name === "")
+        name = "start";
+    var entry = tour[name];
+    if (entry !== undefined) {
+        document.getElementById("grammar").value = entry.grammar;
+        document.getElementById("input").value = entry.input;
+        update();
+    }
+}
+function updateColumns()
+{
+    columns = 1;
+    var m = document.getElementById("out-measure-pre");
+    m.textContent = ".";
+    var mh = m.offsetHeight;
+    var n = 200;
+    while (n > 0) {
+        var i = columns + (n/2)|0;
+        m.textContent = ".".repeat(i);
+        if (m.offsetHeight > mh)
+            n = (n/2)|0;
+        else {
+            columns = i;
+            n = n - (n/2)|0;
+        }
+    }
+    update();
+}
+        </script>
+        <script src="owl.js"></script>
+    </head>
+    <body>
+        <div id="grammar-scroll-container">
+            <div id="grammar-container">
+                <textarea spellcheck=false oninput="update()" wrap="off" id="grammar">
+plus = number '+' number</textarea>
+                <pre id="grammar-text-container"><span id="grammar-text"></span><br></pre>
+            </div>
+        </div>
+        <textarea spellcheck=false oninput="update()" id="input">
+1 + 2</textarea>
+        <div id="out-measure"><pre id="out-measure-pre"></pre></div>
+        <pre id="out"></pre>
+    </body>
+    <script>
+window.onhashchange = loadHash;
+loadHash();
+createOwl();
+var resizeUpdate = false;
+window.onresize = function () {
+    if (resizeUpdate)
+        window.clearTimeout(resizeUpdate);
+    resizeUpdate = window.setTimeout(updateColumns, 200);
+};
+updateColumns();
+    </script>
+</html>
