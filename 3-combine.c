@@ -151,8 +151,12 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                     // operand (if it isn't): that means we have to duplicate
                     // all the states here by embedding the automaton in itself.
                     state_id rhs_end = automaton_create_state(&automaton);
+                    // We have to mark the state as accepting so embed works
+                    // properly.
+                    automaton_mark_accepting_state(&automaton, end);
                     state_id rhs_start = embed(&automaton, &automaton, rhs_end,
                      SYMBOL_EPSILON, 0);
+                    automaton.states[end].accepting = false;
                     // Allow the automaton to skip past the nonassoc operator.
                     automaton_add_transition(&automaton, end, rhs_end,
                      SYMBOL_EPSILON);
