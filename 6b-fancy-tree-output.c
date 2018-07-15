@@ -71,8 +71,10 @@ void output_document(FILE *file, struct document *document,
 {
     struct line line = {0};
     struct line next_line = {0};
+    struct line last_fit_line = {0};
     init_line(&line, document);
     init_line(&next_line, document);
+    init_line(&last_fit_line, document);
     line.terminal_info = terminal_info;
     next_line.terminal_info = terminal_info;
     line.color_offset = document->color_offset;
@@ -86,6 +88,7 @@ void output_document(FILE *file, struct document *document,
             break;
         }
         if (!can_break_line) {
+            copy_line(&next_line, &last_fit_line, document);
             can_break_line = true;
             continue;
         }
@@ -103,17 +106,20 @@ void output_document(FILE *file, struct document *document,
             continue;
         }
 
-        // FIXME: We may unnecessarily break lines here if the ".." causes a
-        // break that wouldn't have otherwise happened.
         size_t end = next_line.end_offset;
         if (last_token) {
             size_t offset = offset_at(&next_line, last_token->end);
             if (offset < BEFORE_START && offset + ELLIPSIS_LENGTH > end)
                 end = offset + ELLIPSIS_LENGTH;
         }
-        if (end + LINE_MARKER_LENGTH <= columns)
+        if (end + LINE_MARKER_LENGTH <= columns) {
+            copy_line(&next_line, &last_fit_line, document);
+            continue;
+        }
+        if (next_line.end_offset + LINE_MARKER_LENGTH <= columns)
             continue;
         // Break a line in the middle.
+        copy_line(&last_fit_line, &line, document);
         size_t offset = offset_at(&line, line.offset_range.end - 1);
         if (offset < BEFORE_START && offset + ELLIPSIS_LENGTH > line.end_offset)
             line.end_offset = offset + ELLIPSIS_LENGTH;
@@ -130,6 +136,7 @@ void output_document(FILE *file, struct document *document,
     }
     destroy_line(&line);
     destroy_line(&next_line);
+    destroy_line(&last_fit_line);
 }
 
 static void output_line(FILE *file, struct line *line,
