@@ -4,7 +4,11 @@ An Owl grammar is made up of rules of the form `rule-name = ...`.  The first rul
 
 ## patterns
 
-A *pattern* matches sequences of tokens. It's made up of *atomic patterns*, which match individual tokens:
+A *pattern* matches sequences of tokens.
+
+The simplest kind of rule is a single pattern: `rule-name = pattern`.
+
+Each pattern is made up of *atomic patterns*, which match individual tokens:
 
 | atomic pattern | what it matches |
 | --- | --- |
@@ -14,7 +18,7 @@ A *pattern* matches sequences of tokens. It's made up of *atomic patterns*, whic
 | `number` | A number begins with a digit (0-9) or a decimal point (`.`) followed by a digit.  Once the beginning of the number is matched, the rest of the number is read using `strtod()`.  Note that `number` doesn't match a leading `-` to avoid ambiguity with the `-` operator: you should add negation at a higher level in your grammar. |
 | `identifier` | An identifier begins with a letter or an underscore `_`, then continues with letters, underscores, and digits (0-9).  Dashes are also allowed as long as you don't have a `-` keyword anywhere in your grammar. |
 
-The input text is decomposed into tokens based on all the atomic patterns that appear in the grammar.  At each point, the longest token which matches the input text is chosen.  In case of ties between keywords and other tokens, the keyword is chosen.
+Owl decomposes the input text into tokens based on all the atomic patterns that appear in the grammar.  At each point, the longest token which matches the input text is chosen.  In case of ties between keywords and other tokens, the keyword is chosen.
 
 The space, tab, carriage return, and newline characters are considered *whitespace*.  Whitespace can be used to separate tokens but is otherwise ignored.
 
@@ -47,7 +51,7 @@ Guard brackets enclose a pattern in begin and end keywords:
 
 The keywords that begin and end a guard bracket are called the *begin keyword* and the *end keyword*.  A keyword used in a normal pattern can't be used as a begin or end keyword.  A begin keyword also can't be used as an end keyword (or vice versa).
 
-The simplest kind of rule represents a single pattern: `rule-name = pattern`.
+This restriction limits Owl to parsing *visibly push-down* languages, which it can more easily check for ambiguity.
 
 ## named choices
 
