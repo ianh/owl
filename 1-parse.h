@@ -2383,7 +2383,7 @@ struct owl_tree *owl_tree_create_from_file(FILE *file) {
     size_t off = 0;
     while (true) {
         len = len * 3 / 2;
-        char *s = realloc(str, len * 3 / 2);
+        char *s = realloc(str, len);
         if (!s) {
             free(str);
             return 0;

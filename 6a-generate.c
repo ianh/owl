@@ -926,7 +926,7 @@ void generate(struct generator *gen)
     output_line(out, "    size_t off = 0;");
     output_line(out, "    while (true) {");
     output_line(out, "        len = len * 3 / 2;");
-    output_line(out, "        char *s = realloc(str, len * 3 / 2);");
+    output_line(out, "        char *s = realloc(str, len);");
     output_line(out, "        if (!s) {");
     output_line(out, "            free(str);");
     output_line(out, "            return 0;");
