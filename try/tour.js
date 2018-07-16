@@ -1,27 +1,25 @@
 tour = {
 "start":{"grammar":
-`# Welcome to Owl.
-# <https://github.com/ianh/owl>
-
-# Type a grammar here, with rules like
+`# This is the box where the grammar goes.
 
 plus = number '+' number
 
 # Owl matches the first rule against the
-# input in the box below.
+# input (123 + 456) in the box below.
 
 # A copy of the Owl tool runs in your
 # browser each time the grammar or input
 # changes.  Its output is shown in the box
 # on the right.
 
-# Try modifying the numbers below to see
-# how the output changes.
+# Try modifying the numbers below to
+# see how the output changes.
 
-# If you want to learn more, check out the
-# repository at <https://github.com/ianh/owl>
-# or take a #tour.
+# If you want to learn more,
+# check out the repository at
+# <https://github.com/ianh/owl>.
 
+# Or take a #tour!
 `,"input": 
 `123 + 456
 `},
@@ -35,41 +33,32 @@ plus = number '+' number
 # of small examples which show off various
 # features of Owl.
 
-# Here's a grammar for arrays of numbers:
+# Here's a grammar for arrays:
 
 input = array*
-array = '[' ((number ',')* number)? ']'
+array = '[' (identifier ',')* identifier ']'
 
-# To match repetitions, this grammar uses *
-# (which matches its operand any number of
-# times).  The ? operator (which matches
-# either its operand or nothing) is used
-# to support empty arrays.
-
-# If you've used regular expressions, this
-# syntax should be very familiar!
+# To match repetitions, this grammar uses *,
+# which matches its operand any number of
+# times -- like a regular expression.  Owl
+# grammars also support ?, +, and |.
 `,"input":
-`[]
-[2]
-[1, 213]
-[32984, 23423423, 10981038, 2, 7, 1231239]
+`[red, orange, yellow, green, blue, purple]
+[up, down, left, right]
+[good, evil]
+[x, y, z]
 `},
 "nested":{"grammar":
 `# PREV < #tour A Grammar for Arrays
 # NEXT > #ambiguity Detecting Ambiguity
 
-# Instead of numbers, this array contains
-# other arrays:
+# This array contains other arrays:
 
 input = array*
 array = [ '[' ((array ',')* array)? ']' ]
 
 # Note the use of guard brackets [ ... ]
-# around the pattern -- whenever a rule
-# refers to itself (or any earlier rule),
-# the reference has to appear inside these
-# brackets, enclosed by an explicit
-# start ('[') and end (']') token.
+# which allow the rule to refer to itself.
 `,"input":
 `[]
 [[]]
@@ -81,16 +70,13 @@ array = [ '[' ((array ',')* array)? ']' ]
 `# PREV < #nested Arrays of Arrays
 # NEXT > #named Named Choices
 
-# Why have this restriction on self-
-# referential rules?  These more limited
-# grammars are easier to analyze.
-# In particular, Owl can reliably find
-# *ambiguities*, where one input can
-# produce two different parse trees:
+# If a single input can produce two different
+# parse trees, Owl will report it as an
+# ambiguity.
 
 a = three+ | five+
-three = '.' '.' '.'
-five = '.' '.' '.' '.' '.'
+three = ('.'|'o') ('.'|'o') ('.'|'o')
+five = 'o' '.' '.' '.' '.'
 
 # Here we use Owl's ambiguity checker to
 # find the least common multiple of three
@@ -121,7 +107,7 @@ light blue
 `},
 "expr":{"grammar":
 `# PREV < #named Named Choices
-# NEXT > #call Function Calls
+# NEXT > #complex Complex Operators
 
 # Owl's ".operators" keyword can be used to
 # match mathematical expressions.
@@ -129,9 +115,12 @@ light blue
 input = expr\\:negate*
 expr =
     number : num
+    identifier : var
     [ '(' expr ')' ] : parens
   .operators prefix
     '-' : negate
+  .operators infix left
+    '^' : pow
   .operators infix flat
     '*' : times
     '/' : divided-by
@@ -155,76 +144,93 @@ expr =
 `,"input":
 `1
 2 + 2
-1 + 2 / (3 + 4) * 5
+x + v*t + 1/2*a*t^2
 `},
-"call":{"grammar":
+"complex":{"grammar":
 `# PREV < #expr Operators & Expressions
 # NEXT > #stmt An If Statement
+
+# Operators can match complex patterns as
+# well as individual tokens.
 
 input = expr*
 expr =
     identifier : ident
   .operators postfix
     [ '(' ((expr ',')* expr)? ')' ] : call
+  .operators infix right
+    [ '?' expr ':' ] : ternary
 
-# Operators can match complex patterns.
 # This grammar matches the arguments of a
-# procedure call as a postfix operator.
+# procedure call as a postfix operator.  A
+# C-like ternary operator is provided using
+# "infix".
 `,"input":
-`f()
-g(f(x), y)
-h(x)(y)(z)
+`fire_the_missiles()
+add(exp(x), y)
+light_intensity_at(x)(y)(z)
+out_of_space ? allocate() : p
 `},
 "stmt":{"grammar":
-`# PREV < #call Function Calls
-# NEXT > #if If as an Operator
+`# PREV < #complex Complex Operators
+# NEXT > #json A Grammar for JSON
 
-# The next few grammars will explore
-# different ways to write an "if" statement.
+# Here's an "if" statement which supports
+# optional "else if" and "else" clauses:
 
 input = stmt*
 stmt =
-    [ 'if' expr 'then' stmt*
-     ('elseif' expr 'then' stmt*)*
-     ('else' stmt*)? 'end' ] : if-else
-    expr : expr
-expr = identifier
-
-# This approach uses an explicit 'end'
-# keyword to delimit the end of the
-# statement.  You can also use braces if
-# you want.
+    'if' expr [ '{' stmt* '}' ]
+     ('else' 'if' expr [ '{' stmt* '}' ])*
+     ('else' [ '{' stmt* '}' ])? : if-else
+    expr '.' : expr
+expr = identifier+
 `,"input":
-`if x then
-  do-a
-elseif y then
-  do-b
-else
-  if z then do-c end
-  do-d
-end
+`if input is ready {
+  dequeue the input.
+  process the input.
+} else if we reached the end of the input {
+  validate work.
+  if work is complete and valid {
+    finish successfully.
+  } else {
+    return error.
+  }
+} else {
+  wait for more input.
+}
 `},
-"if":{"grammar":
+"json":{"grammar":
 `# PREV < #stmt An If Statement
-# NEXT > #ternary Ternary Operators
+# NEXT > #end End of Tour
 
-# Another way to define "if" is as a prefix
-# operator.
+# A grammar for JSON.
 
-input = expr*
-expr =
-    identifier : ident
-  .operators prefix
-    [ 'if' expr 'then' ] : if
-  .operators infix right
-    'else' : else
+input = value*
+value =
+ [ '{' (string ':' value
+  (',' string ':' value)*)? '}' ] : object
+ [ '[' (value (',' value)*)? ']' ] : array
+ string : string
+ number : pos-number
+ '-' number : neg-number
+ 'true' : true
+ 'false' : false
+ 'null' : null
 
-# In this grammar, "a else b" is also a
-# valid expression.
+# (It's actually not quite JSON, since
+# Owl doesn't handle string escapes in the
+# same way).
+
 `,"input":
-`if x then a
-if y then b else c
-p else q
+`{
+  "name": "Jane",
+  "posts":[{
+    "title": "The uses of sidewalks",
+    "visible": true,
+    "text": "..."
+  }]
+}
 `},
 "ternary":{"grammar":
 `# PREV < #if If as an Operator
@@ -250,14 +256,14 @@ expr =
 if x then y else z
 `},
 "end":{"grammar":
-`# PREV < #ternary Ternary Operators
+`# PREV < #json A Grammar for JSON
 
 # You've reached the end of the tour!
 # Check out <https://github.com/ianh/owl>
 # for more information. Or go back to the
 # #start.
 
-# Here's Owl's grammar parsing itself:
+# Here's Owl's own grammar parsing itself:
 
 grammar = (rule | comment-token)*
 rule = identifier '=' body
@@ -320,20 +326,4 @@ expr =
   '|' : choice
 comment-token = 'line-comment-token' string
 line-comment-token '#'
-`},
-"table-of-contents":{"grammar":
-`
-this = 'Table of Contents'
-
-# #start Start Page
-# #tour A Grammar for Arrays
-# #nested Arrays of Arrays
-# #ambiguity Detecting Ambiguity
-# #named Named Choices
-# #expr Operators & Expressions
-# #call Function Calls
-# #stmt An If Statement
-# #if If as an Operator
-# #ternary Ternary Operators
-# #end End of Tour
-`,"input":"Table of Contents"}};
+`}};
