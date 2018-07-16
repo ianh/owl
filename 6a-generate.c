@@ -1600,7 +1600,7 @@ retry:
 //            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
             set_bit_range(bytes, action_range, bucket->action_index);
 //            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
-            if (bucket->push_nfa_state) {
+            if (bucket->dfa_symbol >= gen->combined->number_of_tokens) {
                 set_bit_range(bytes, push_nfa_state_range, nfa_states[bucket->push_nfa_state]);
 //                fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
             }
