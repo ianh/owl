@@ -1304,6 +1304,101 @@ static int compare_action_table_bucket_groups(const void *aa, const void *bb)
  ((((((0xf2579761 ^ (target_nfa_state)) * 0xf2579761) ^ (dfa_state)) * \
  0xf2579761) ^ (dfa_symbol)) * 0xf2579761)
 
+static uint32_t log2u(uint32_t n)
+{
+    uint32_t b = 0;
+    for (; n > 0; n >>= 1, b++);
+    return b;
+}
+
+struct bit_range {
+    uint8_t start_byte;
+    uint8_t start_bit;
+    uint8_t end_byte;
+    uint8_t end_bit;
+};
+
+// sB=0 sb=2
+// eB=2 eb=1
+// 00111111 1
+
+static struct bit_range next_bit_range(struct bit_range r, uint8_t bits)
+{
+    struct bit_range s;
+    s.start_byte = r.end_byte;
+    s.start_bit = r.end_bit;
+    if (r.end_bit == 8) {
+        s.start_byte++;
+        s.start_bit = 0;
+    }
+    uint8_t end_bit = 8 * s.start_byte + s.start_bit + bits;
+    if (end_bit == 0)
+        abort();
+    s.end_byte = (end_bit - 1) / 8;
+    s.end_bit = (end_bit + 7) % 8 + 1;
+    return s;
+}
+
+static void set_bit_range(uint8_t *bytes, struct bit_range r, uint32_t val)
+{
+//    fprintf(stderr, "%u %u - %u %u -> %x\n", r.start_byte, r.start_bit, r.end_byte, r.end_bit, val);
+    for (uint8_t i = r.start_byte; i <= r.end_byte; ++i) {
+        int32_t offset = 8 * (int32_t)(i - r.start_byte) - r.start_bit;
+        int32_t end = 8 * (int32_t)(i - r.end_byte + 1) - r.end_bit;
+        uint32_t v = offset < 0 ? val << -offset : val >> offset;
+        if (end > 0)
+            v &= 0xff >> end;
+        bytes[i] |= v;
+    }
+}
+
+static void encode_bit_range(struct generator_output *out, struct bit_range r,
+ const char *variable)
+{
+    set_literal_substitution(out, "bits-variable", variable);
+    for (uint8_t i = r.start_byte; i <= r.end_byte; ++i) {
+        int32_t offset = 8 * (int32_t)(i - r.start_byte) - r.start_bit;
+        int32_t end = 8 * (int32_t)(i - r.end_byte + 1) - r.end_bit;
+        set_unsigned_number_substitution(out, "byte-index", i);
+        output_string(out, "    key.bytes[%%byte-index] |= ");
+        if (offset < 0) {
+            set_unsigned_number_substitution(out, "shift-amount", -offset);
+            output_string(out, "(%%bits-variable << %%shift-amount)");
+        } else {
+            set_unsigned_number_substitution(out, "shift-amount", offset);
+            output_string(out, "(%%bits-variable >> %%shift-amount)");
+        }
+        uint32_t mask = 0xff;
+        if (end > 0)
+            mask >>= end;
+        set_unsigned_number_substitution(out, "mask", mask);
+        output_line(out, " & %%mask;");
+    }
+}
+
+static void decode_bit_range(struct generator_output *out, struct bit_range r,
+ const char *variable)
+{
+    set_literal_substitution(out, "bits-variable", variable);
+    for (uint8_t i = r.start_byte; i <= r.end_byte; ++i) {
+        int32_t offset = 8 * (int32_t)(i - r.start_byte) - r.start_bit;
+        int32_t end = 8 * (int32_t)(i - r.end_byte + 1) - r.end_bit;
+        set_unsigned_number_substitution(out, "byte-index", i);
+        uint8_t mask = 0xff;
+        if (end > 0)
+            mask >>= end;
+        set_unsigned_number_substitution(out, "mask", mask);
+        output_string(out, "    %%bits-variable |= ((uint32_t)bytes[%%byte-index] & %%mask)");
+        if (offset < 0) {
+            set_unsigned_number_substitution(out, "shift-amount", -offset);
+            output_line(out, " >> %%shift-amount;");
+        } else {
+            set_unsigned_number_substitution(out, "shift-amount", offset);
+            output_line(out, " << %%shift-amount;");
+        }
+    }
+}
+
 static void generate_action_table(struct generator *gen,
  struct generator_output *out)
 {
@@ -1409,12 +1504,11 @@ static void generate_action_table(struct generator *gen,
             if (nfa_state == UINT32_MAX)
                 abort();
             uint32_t j = 0;
-            uint32_t adjusted_state = nfa_state - max_nfa_state;
             for (; j < group.length; ++j) {
                 struct action_table_bucket *bucket = &buckets[group.index + j];
-                uint32_t k1 = ACTION_TABLE_ENTRY_HASH_1(adjusted_state,
+                uint32_t k1 = ACTION_TABLE_ENTRY_HASH_1(nfa_state,
                  bucket->dfa_state, bucket->dfa_symbol) & table_mask;
-                uint32_t k2 = ACTION_TABLE_ENTRY_HASH_2(adjusted_state,
+                uint32_t k2 = ACTION_TABLE_ENTRY_HASH_2(nfa_state,
                  bucket->dfa_state, bucket->dfa_symbol) & table_mask;
                 uint32_t k = bucket_sizes[k1] <= bucket_sizes[k2] ? k1 : k2;
                 bucket->table_index = k;
@@ -1423,7 +1517,7 @@ static void generate_action_table(struct generator *gen,
                 if (bucket_sizes[k]++ >= bucket_limit)
                     goto retry;
             }
-            nfa_states[buckets[group.index].target_nfa_state] = adjusted_state;
+            nfa_states[buckets[group.index].target_nfa_state] = nfa_state;
             nfa_state++;
             saved_nfa_state = nfa_state;
             break;
@@ -1454,42 +1548,66 @@ retry:
             output_line(out, "");
     }
     output_line(out, "};");
-    output_line(out, "struct action_table_entry {");
-    output_line(out, "    %%state-type target_nfa_state;");
-    output_line(out, "    %%state-type dfa_state;");
-    output_line(out, "    %%token-type dfa_symbol;");
-    output_line(out, "    %%state-type nfa_state;");
-    output_line(out, "    uint32_t actions;");
-    output_line(out, "    %%state-type push_nfa_state;");
-    output_line(out, "};");
-#define ACTION_TABLE_ENTRY_FLAG_PUSH 1
-#define ACTION_TABLE_ENTRY_FLAG_POP 2
+    uint32_t nfa_state_bits = log2u(nfa_state);
+    uint32_t dfa_state_bits = log2u(d->automaton.number_of_states +
+     d->bracket_automaton.number_of_states + 1);
+    uint32_t dfa_symbol_bits;
+    if (d->automaton.number_of_symbols > d->bracket_automaton.number_of_symbols)
+        dfa_symbol_bits = log2u(d->automaton.number_of_symbols + 1);
+    else
+        dfa_symbol_bits = log2u(d->bracket_automaton.number_of_symbols + 1);
+    uint32_t action_bits = log2u(d->number_of_actions);
+    uint32_t key_bits = nfa_state_bits + dfa_state_bits + dfa_symbol_bits;
+    uint32_t key_bytes = (key_bits + 7) / 8;
+    uint32_t value_bits = nfa_state_bits * 2 + action_bits;
+    uint32_t value_bytes = (value_bits + 7) / 8;
+    struct bit_range target_nfa_state_range = next_bit_range((struct bit_range){0}, nfa_state_bits);
+    struct bit_range dfa_state_range = next_bit_range(target_nfa_state_range, dfa_state_bits);
+    struct bit_range dfa_symbol_range = next_bit_range(dfa_state_range, dfa_symbol_bits);
+    struct bit_range nfa_state_range = next_bit_range((struct bit_range){.end_byte=key_bytes}, nfa_state_bits);
+    struct bit_range action_range = next_bit_range(nfa_state_range, action_bits);
+    struct bit_range push_nfa_state_range = next_bit_range(action_range, nfa_state_bits);
+//#define printthething(s) fprintf(stderr, #s " = %u %u - %u %u\n", s.start_byte, s.start_bit, s.end_byte, s.end_bit)
+//    printthething(target_nfa_state_range);
+//    printthething(dfa_state_range);
+//    printthething(dfa_symbol_range);
+//    printthething(nfa_state_range);
+//    printthething(action_range);
+//    printthething(push_nfa_state_range);
+    set_unsigned_number_substitution(out, "entry-bytes", key_bytes + value_bytes);
     set_unsigned_number_substitution(out, "table-size", table_size);
     set_unsigned_number_substitution(out, "bucket-limit", bucket_limit);
-    output_line(out, "static const struct action_table_entry action_table[%%table-size][%%bucket-limit] = {");
+    output_line(out, "static const uint8_t action_table[%%table-size][%%bucket-limit][%%entry-bytes] = {");
     const int entries_per_line = 6;
     int next_newline = entries_per_line;
+    uint8_t *bytes = malloc(key_bytes + value_bytes);
     for (uint32_t i = 0; i < table_size; ++i) {
         output_string(out, "{");
         struct action_table_bucket *bucket = table_buckets[i];
         if (!bucket)
             output_string(out, "0");
         for (; bucket; bucket = bucket->next) {
-            set_unsigned_number_substitution(out, "target-nfa-state",
-             nfa_states[bucket->target_nfa_state]);
-            set_unsigned_number_substitution(out, "dfa-state",
-             bucket->dfa_state);
-            set_unsigned_number_substitution(out, "dfa-symbol",
-             bucket->dfa_symbol);
-            set_unsigned_number_substitution(out, "nfa-state",
-             nfa_states[bucket->nfa_state]);
-            set_unsigned_number_substitution(out, "actions",
-             bucket->action_index);
-            output_string(out, "{%%target-nfa-state,%%dfa-state,%%dfa-symbol,%%nfa-state,%%actions");
-            if (bucket->dfa_symbol >= gen->combined->number_of_tokens) {
-                set_unsigned_number_substitution(out, "push-nfa-state",
-                 nfa_states[bucket->push_nfa_state]);
-                output_string(out, ",%%push-nfa-state");
+            output_string(out, "{");
+            memset(bytes, 0, key_bytes + value_bytes);
+//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
+            set_bit_range(bytes, target_nfa_state_range, nfa_states[bucket->target_nfa_state]);
+//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
+            set_bit_range(bytes, dfa_state_range, bucket->dfa_state);
+//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
+            set_bit_range(bytes, dfa_symbol_range, bucket->dfa_symbol);
+//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
+            set_bit_range(bytes, nfa_state_range, nfa_states[bucket->nfa_state]);
+//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
+            set_bit_range(bytes, action_range, bucket->action_index);
+//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
+            if (bucket->push_nfa_state) {
+                set_bit_range(bytes, push_nfa_state_range, nfa_states[bucket->push_nfa_state]);
+//                fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
+            }
+//            fprintf(stderr, "\n");
+            for (uint32_t i = 0; i < key_bytes + value_bytes; ++i) {
+                set_unsigned_number_substitution(out, "byte", bytes[i]);
+                output_string(out, "%%byte,");
             }
             output_string(out, "},");
             if (--next_newline == 0 && bucket->next) {
@@ -1503,9 +1621,34 @@ retry:
             next_newline = entries_per_line;
         }
     }
+    free(bytes);
     output_line(out, "};");
     output_line(out, "");
-    output_line(out, "static const struct action_table_entry *action_table_lookup(%%state-type nfa_state, %%state-type dfa_state, %%token-type token) {");
+    set_unsigned_number_substitution(out, "key-bytes", key_bytes);
+    output_line(out, "struct action_table_key {");
+    output_line(out, "    uint8_t bytes[%%key-bytes];");
+    output_line(out, "};");
+    output_line(out, "static inline struct action_table_key encode_key(%%state-type target_nfa_state, %%state-type dfa_state, %%token-type dfa_symbol) {");
+    output_line(out, "    struct action_table_key key = {0};");
+    encode_bit_range(out, target_nfa_state_range, "target_nfa_state");
+    encode_bit_range(out, dfa_state_range, "dfa_state");
+    encode_bit_range(out, dfa_symbol_range, "dfa_symbol");
+    output_line(out, "    return key;");
+    output_line(out, "}");
+    output_line(out, "struct action_table_entry {");
+    output_line(out, "    %%state-type nfa_state;");
+    output_line(out, "    uint32_t actions;");
+    output_line(out, "    %%state-type push_nfa_state;");
+    output_line(out, "};");
+    output_line(out, "static struct action_table_entry decode_entry(const uint8_t *bytes) {");
+    output_line(out, "    struct action_table_entry entry = {0};");
+    decode_bit_range(out, nfa_state_range, "entry.nfa_state");
+    decode_bit_range(out, action_range, "entry.actions");
+    decode_bit_range(out, push_nfa_state_range, "entry.push_nfa_state");
+//    output_line(out, "    printf(\"decoding: %u %u %u\\n\", entry.nfa_state, entry.actions, entry.push_nfa_state);");
+    output_line(out, "    return entry;");
+    output_line(out, "}");
+    output_line(out, "static struct action_table_entry action_table_lookup(%%state-type nfa_state, %%state-type dfa_state, %%token-type token) {");
 #define STRINGIFY(...) EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__)
     set_literal_substitution(out, "action-table-entry-hash-1",
      STRINGIFY(ACTION_TABLE_ENTRY_HASH_1(nfa_state, dfa_state, token)));
@@ -1514,21 +1657,22 @@ retry:
     set_unsigned_number_substitution(out, "action-table-mask", table_mask);
     output_line(out, "    uint32_t index1 = %%action-table-entry-hash-1 & %%action-table-mask;");
     output_line(out, "    uint32_t index2 = %%action-table-entry-hash-2 & %%action-table-mask;");
+    output_line(out, "    struct action_table_key key = encode_key(nfa_state, dfa_state, token);");
     output_line(out, "    uint32_t j = 0;");
-    output_line(out, "    const struct action_table_entry *entry = 0;");
-//    output_line(out, "    printf(\"Searching for: %u,%u,%u\\n\", nfa_state, dfa_state, token);");
+    output_line(out, "    const uint8_t *entry = 0;");
+//    output_line(out, "    printf(\"Searching for: %u,%u,%u -> %u %u %u %u\\n\", nfa_state, dfa_state, token, key.bytes[0], key.bytes[1], key.bytes[2], key.bytes[3]);");
     output_line(out, "    for (; j < %%bucket-limit; ++j) {");
-    output_line(out, "        entry = &action_table[index1][j];");
-    output_line(out, "        if (entry->target_nfa_state == nfa_state && entry->dfa_state == dfa_state && entry->dfa_symbol == token)");
+    output_line(out, "        entry = action_table[index1][j];");
+    output_line(out, "        if (!memcmp(key.bytes, entry, sizeof(key.bytes)))");
     output_line(out, "            break;");
-    output_line(out, "        entry = &action_table[index2][j];");
-    output_line(out, "        if (entry->target_nfa_state == nfa_state && entry->dfa_state == dfa_state && entry->dfa_symbol == token)");
+    output_line(out, "        entry = action_table[index2][j];");
+    output_line(out, "        if (!memcmp(key.bytes, entry, sizeof(key.bytes)))");
     output_line(out, "            break;");
     output_line(out, "    }");
 //    output_line(out, "    printf(\"Found: %u,%u\\n\", entry->nfa_state, entry->actions);");
     output_line(out, "    if (j >= %%bucket-limit)");
-    output_line(out, "        return 0;");
-    output_line(out, "    return entry;");
+    output_line(out, "        abort();");
+    output_line(out, "    return decode_entry(entry);");
     output_line(out, "}");
     output_line(out, "static void apply_actions(struct construct_state *state, uint32_t index, size_t start, size_t end) {");
     output_line(out, "    size_t offset = end;");
@@ -1559,12 +1703,10 @@ retry:
     output_line(out, "        for (uint16_t i = n - 1; i < n; i--) {");
     output_line(out, "            size_t end = offset;");
     output_line(out, "            size_t len = 0;");
-    output_line(out, "            const struct action_table_entry *entry = action_table_lookup(nfa_state, run->states[i], run->tokens[i]);");
-    output_line(out, "            if (!entry)");
-    output_line(out, "                abort();");
+    output_line(out, "            struct action_table_entry entry = action_table_lookup(nfa_state, run->states[i], run->tokens[i]);");
     set_unsigned_number_substitution(out, "number-of-tokens",
      gen->combined->number_of_tokens);
-    output_line(out, "            if (entry->dfa_symbol < %%number-of-tokens)");
+    output_line(out, "            if (run->tokens[i] < %%number-of-tokens)");
     output_line(out, "                len = decode_token_length(run, &length_offset, &offset);");
     output_line(out, "            else {");
     output_line(out, "                if (stack_depth >= stack_capacity) {");
@@ -1577,28 +1719,26 @@ retry:
     output_line(out, "                    state_stack = new_stack;");
     output_line(out, "                    stack_capacity = new_capacity;");
     output_line(out, "                }");
-    output_line(out, "                state_stack[stack_depth++] = entry->push_nfa_state;");
+    output_line(out, "                state_stack[stack_depth++] = entry.push_nfa_state;");
     output_line(out, "            }");
-    output_line(out, "            apply_actions(&construct_state, entry->actions, end, end + whitespace);");
+    output_line(out, "            apply_actions(&construct_state, entry.actions, end, end + whitespace);");
     set_unsigned_number_substitution(out, "bracket-start-state",
      gen->deterministic->bracket_automaton.start_state +
      gen->deterministic->automaton.number_of_states);
-    output_line(out, "            if (entry->dfa_state == %%bracket-start-state) {");
+    output_line(out, "            if (run->states[i] == %%bracket-start-state) {");
     output_line(out, "                if (stack_depth == 0)");
     output_line(out, "                    abort();");
     output_line(out, "                nfa_state = state_stack[--stack_depth];");
     output_line(out, "            } else");
-    output_line(out, "                nfa_state = entry->nfa_state;");
+    output_line(out, "                nfa_state = entry.nfa_state;");
     output_line(out, "            whitespace = end - offset - len;");
     output_line(out, "        }");
     output_line(out, "        struct owl_token_run *old = run;");
     output_line(out, "        run = run->prev;");
     output_line(out, "        free(old);");
     output_line(out, "    }");
-    output_line(out, "    const struct action_table_entry *entry = action_table_lookup(nfa_state, UINT32_MAX, UINT32_MAX);");
-    output_line(out, "    if (!entry)");
-    output_line(out, "        abort();");
-    output_line(out, "    apply_actions(&construct_state, entry->actions, offset, offset + whitespace);");
+    output_line(out, "    struct action_table_entry entry = action_table_lookup(nfa_state, UINT32_MAX, UINT32_MAX);");
+    output_line(out, "    apply_actions(&construct_state, entry.actions, offset, offset + whitespace);");
     // TODO: Free all remaining token runs here (or in the caller?).
     output_line(out, "    free(state_stack);");
     output_line(out, "    return construct_finish(&construct_state, offset);");
