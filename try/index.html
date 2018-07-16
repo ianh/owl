@@ -313,6 +313,7 @@ function updateOutput()
     format = [];
     owl.ENV.COLUMNS = ""+columns;
     owl.callMain(["-C", "grammar-file", "-i", "input-file"]);
+    owl._fflush(0);
     formatOutput(document.getElementById("out"));
 }
 function createOwl()

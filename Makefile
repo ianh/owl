@@ -10,7 +10,7 @@ INSTALL?=/usr/bin/install
 PREFIX?=/usr/local
 CFLAGS?=-O3 -g
 CFLAGS+=-std=c11 -pedantic -Wall -Wno-missing-braces -Wno-overlength-strings
-EMFLAGS+=-s EXPORTED_FUNCTIONS='["_main"]' -s ABORTING_MALLOC=0 -s MODULARIZE=1 -s EXPORT_NAME=Owl -s EXTRA_EXPORTED_RUNTIME_METHODS='["FS","ENV"]'
+EMFLAGS+=-s EXPORTED_FUNCTIONS='["_main","_fflush"]' -s ABORTING_MALLOC=0 -s MODULARIZE=1 -s EXPORT_NAME=Owl -s EXTRA_EXPORTED_RUNTIME_METHODS='["FS","ENV"]'
 LDFLAGS?=
 LDLIBS?=$(LDLIBS_$(LIBDL))
 
