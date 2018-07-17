@@ -359,11 +359,11 @@ void generate(struct generator *gen)
     output_line(out, "    uint64_t result = 0;");
     output_line(out, "    int shift_amount = 0;");
     output_line(out, "    while ((parse_tree[i] & 0x80) != 0 && shift_amount < 64) {");
-    output_line(out, "        result |= (parse_tree[i] & 0x7f) << shift_amount;");
+    output_line(out, "        result |= ((uint64_t)parse_tree[i] & 0x7f) << shift_amount;");
     output_line(out, "        shift_amount += 7;");
     output_line(out, "        i++;");
     output_line(out, "    }");
-    output_line(out, "    result |= (parse_tree[i] & 0x7f) << shift_amount;");
+    output_line(out, "    result |= ((uint64_t)parse_tree[i] & 0x7f) << shift_amount;");
     output_line(out, "    i++;");
     output_line(out, "    *offset = i;");
     output_line(out, "    return result;");
