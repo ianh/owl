@@ -364,24 +364,6 @@ void generate(struct generator *gen)
     output_line(out, "}");
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
-        if (!rule->is_token)
-            continue;
-        set_substitution(out, "rule", rule->name, rule->name_length,
-         LOWERCASE_WITH_UNDERSCORES);
-        output_string(out, "static void add_%%rule_token(struct owl_tree *tree, size_t start, size_t end");
-        generate_fields_for_token_rule(out, rule, ", %%type%%field_param");
-        output_line(out, ") {");
-        output_line(out, "    size_t offset = tree->next_offset;");
-        output_line(out, "    write_tree(tree, offset - tree->next_%%rule_token_offset);");
-        output_line(out, "    write_tree(tree, start);");
-        output_line(out, "    write_tree(tree, end - start);");
-        generate_fields_for_token_rule(out, rule, "    union { %%type field; uint64_t val; } %%field_union = { .field = %%field_param };\n");
-        generate_fields_for_token_rule(out, rule, "    write_tree(tree, %%field_union.val);\n");
-        output_line(out, "    tree->next_%%rule_token_offset = offset;");
-        output_line(out, "}");
-    }
-    for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
         set_unsigned_number_substitution(out, "rule-index", i);
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
@@ -404,14 +386,29 @@ void generate(struct generator *gen)
             output_line(out, "    read_tree(&token_offset, ref._tree);");
             output_line(out, "    size_t start_location = read_tree(&token_offset, ref._tree);");
             output_line(out, "    size_t end_location = start_location + read_tree(&token_offset, ref._tree);");
-            generate_fields_for_token_rule(out, rule, "    union { %%type field; uint64_t val; } %%field_union = { .val = read_tree(&token_offset, ref._tree) };\n");
+            if (rule_is_named(rule, "string")) {
+                output_line(out, "    size_t string_offset = read_tree(&token_offset, ref._tree);");
+                output_line(out, "    const char *string = string_offset ?");
+                output_line(out, "     (const char *)ref._tree->parse_tree + string_offset : ref._tree->string + start_location + 1;");
+                output_line(out, "    size_t string_length = string_offset ?");
+                output_line(out, "     read_tree(&token_offset, ref._tree) : end_location - start_location - 2;");
+            }
         } else {
             output_line(out, "    size_t start_location = read_tree(&offset, ref._tree);");
             output_line(out, "    size_t end_location = start_location + read_tree(&offset, ref._tree);");
         }
         output_line(out, "    struct parsed_%%rule result = {");
-        if (rule->is_token)
-            generate_fields_for_token_rule(out, rule, "        .%%field = %%field_union.field,\n");
+        if (rule->is_token) {
+            if (rule_is_named(rule, "identifier")) {
+                output_line(out, "        .identifier = ref._tree->string + start_location,");
+                output_line(out, "        .length = end_location - start_location,");
+            } else if (rule_is_named(rule, "number")) {
+                output_line(out, "        .number = (union { double n; uint64_t v; }){ .v = read_tree(&offset, ref._tree) }.n,");
+            } else if (rule_is_named(rule, "string")) {
+                output_line(out, "        .string = string,");
+                output_line(out, "        .length = string_length,");
+            }
+        }
         output_line(out, "        .range.start = start_location,");
         output_line(out, "        .range.end = end_location,");
         if (rule->number_of_choices > 0)
@@ -628,25 +625,40 @@ void generate(struct generator *gen)
         struct rule *rule = &gen->grammar->rules[i];
         if (!rule->is_token)
             continue;
+        set_substitution(out, "rule", rule->name, rule->name_length,
+         LOWERCASE_WITH_UNDERSCORES);
         if (rule_is_named(rule, "identifier")) {
+            set_literal_substitution(out, "write-identifier-token", "write_identifier_token");
             output_line(out, "static void write_identifier_token(size_t offset, size_t length, void *info) {");
             output_line(out, "    struct owl_tree *tree = info;");
-            output_line(out, "    add_identifier_token(tree, offset, offset + length, tree->string + offset, length);");
-            output_line(out, "}");
-            set_literal_substitution(out, "write-identifier-token", "write_identifier_token");
         } else if (rule_is_named(rule, "number")) {
+            set_literal_substitution(out, "write-number-token", "write_number_token");
             output_line(out, "static void write_number_token(size_t offset, size_t length, double number, void *info) {");
             output_line(out, "    struct owl_tree *tree = info;");
-            output_line(out, "    add_number_token(tree, offset, offset + length, number);");
-            output_line(out, "}");
-            set_literal_substitution(out, "write-number-token", "write_number_token");
         } else if (rule_is_named(rule, "string")) {
+            set_literal_substitution(out, "write-string-token", "write_string_token");
             output_line(out, "static void write_string_token(size_t offset, size_t length, const char *string, size_t string_length, bool has_escapes, void *info) {");
             output_line(out, "    struct owl_tree *tree = info;");
-            output_line(out, "    add_string_token(tree, offset, offset + length, string, string_length, has_escapes);");
-            output_line(out, "}");
-            set_literal_substitution(out, "write-string-token", "write_string_token");
+            output_line(out, "    size_t string_offset = has_escapes ? (uint8_t *)string - tree->parse_tree : 0;");
         }
+        output_line(out, "    size_t token_offset = tree->next_offset;");
+        output_line(out, "    write_tree(tree, token_offset - tree->next_%%rule_token_offset);");
+        output_line(out, "    write_tree(tree, offset);");
+        output_line(out, "    write_tree(tree, length);");
+        if (rule_is_named(rule, "identifier")) {
+            // We don't need to do anything else.
+        } else if (rule_is_named(rule, "number")) {
+            output_line(out, "    union { double n; uint64_t v; } u = { .n = number };");
+            output_line(out, "    write_tree(tree, u.v);");
+        } else if (rule_is_named(rule, "string")) {
+            output_line(out, "    if (string_offset) {");
+            output_line(out, "        write_tree(tree, string_offset);");
+            output_line(out, "        write_tree(tree, string_length);");
+            output_line(out, "    } else");
+            output_line(out, "        write_tree(tree, 0);");
+        }
+        output_line(out, "    tree->next_%%rule_token_offset = token_offset;");
+        output_line(out, "}");
     }
     output_line(out, "static void *allocate_string_contents(size_t size, void *info) {");
     output_line(out, "    struct owl_tree *tree = info;");
@@ -1087,9 +1099,6 @@ static void generate_fields_for_token_rule(struct generator_output *out,
         output_string(out, string);
         set_literal_substitution(out, "type", "size_t ");
         set_literal_substitution(out, "field", "length");
-        output_string(out, string);
-        set_literal_substitution(out, "type", "bool ");
-        set_literal_substitution(out, "field", "has_escapes");
         output_string(out, string);
     } else
         abort();
