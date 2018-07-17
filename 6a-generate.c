@@ -372,7 +372,7 @@ void generate(struct generator *gen)
         generate_fields_for_token_rule(out, rule, ", %%type%%field_param");
         output_line(out, ") {");
         output_line(out, "    size_t offset = tree->next_offset;");
-        output_line(out, "    write_tree(tree, tree->next_%%rule_token_offset);");
+        output_line(out, "    write_tree(tree, offset - tree->next_%%rule_token_offset);");
         output_line(out, "    write_tree(tree, start);");
         output_line(out, "    write_tree(tree, end - start);");
         generate_fields_for_token_rule(out, rule, "    union { %%type field; uint64_t val; } %%field_union = { .field = %%field_param };\n");
@@ -488,7 +488,7 @@ void generate(struct generator *gen)
         output_line(out, "        if (offset == 0)");
         output_line(out, "            abort();");
         output_line(out, "        write_tree(tree, offset);");
-        output_line(out, "        tree->next_%%rule_token_offset = read_tree(&offset, tree);");
+        output_line(out, "        tree->next_%%rule_token_offset = offset - read_tree(&offset, tree);");
         output_line(out, "        break;");
         output_line(out, "    }");
     }
