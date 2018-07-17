@@ -180,7 +180,6 @@ struct parsed_string {
     struct source_range range;
     const char *string;
     size_t length;
-    bool has_escapes;
 };
 
 struct parsed_grammar parsed_grammar_get(struct owl_ref);
@@ -214,76 +213,10 @@ struct owl_tree {
     enum owl_error error;
     struct source_range error_range;
     size_t root_offset;
-    struct {
-        const char *identifier;
-        size_t length;
-        struct source_range range;
-    } *identifier_tokens;
-    size_t number_of_identifier_tokens;
-    size_t used_identifier_tokens;
-    size_t identifier_tokens_capacity;
-    struct {
-        double number;
-        struct source_range range;
-    } *number_tokens;
-    size_t number_of_number_tokens;
-    size_t used_number_tokens;
-    size_t number_tokens_capacity;
-    struct {
-        const char *string;
-        size_t length;
-        bool has_escapes;
-        struct source_range range;
-    } *string_tokens;
-    size_t number_of_string_tokens;
-    size_t used_string_tokens;
-    size_t string_tokens_capacity;
+    size_t next_identifier_token_offset;
+    size_t next_number_token_offset;
+    size_t next_string_token_offset;
 };
-static void add_identifier_token(struct owl_tree *tree, size_t start, size_t end, const char *identifier_param, size_t length_param) {
-    size_t index = tree->number_of_identifier_tokens++;
-    if (tree->number_of_identifier_tokens > tree->identifier_tokens_capacity) {
-        size_t capacity = (tree->identifier_tokens_capacity + 1) * 3 / 2;
-        void *tokens = realloc(tree->identifier_tokens, sizeof(tree->identifier_tokens[0]) * capacity);
-        if (!tokens)
-            abort();
-        tree->identifier_tokens_capacity = capacity;
-        tree->identifier_tokens = tokens;
-    }
-    tree->identifier_tokens[index].range.start = start;
-    tree->identifier_tokens[index].range.end = end;
-    tree->identifier_tokens[index].identifier = identifier_param;
-    tree->identifier_tokens[index].length = length_param;
-}
-static void add_number_token(struct owl_tree *tree, size_t start, size_t end, double number_param) {
-    size_t index = tree->number_of_number_tokens++;
-    if (tree->number_of_number_tokens > tree->number_tokens_capacity) {
-        size_t capacity = (tree->number_tokens_capacity + 1) * 3 / 2;
-        void *tokens = realloc(tree->number_tokens, sizeof(tree->number_tokens[0]) * capacity);
-        if (!tokens)
-            abort();
-        tree->number_tokens_capacity = capacity;
-        tree->number_tokens = tokens;
-    }
-    tree->number_tokens[index].range.start = start;
-    tree->number_tokens[index].range.end = end;
-    tree->number_tokens[index].number = number_param;
-}
-static void add_string_token(struct owl_tree *tree, size_t start, size_t end, const char *string_param, size_t length_param, bool has_escapes_param) {
-    size_t index = tree->number_of_string_tokens++;
-    if (tree->number_of_string_tokens > tree->string_tokens_capacity) {
-        size_t capacity = (tree->string_tokens_capacity + 1) * 3 / 2;
-        void *tokens = realloc(tree->string_tokens, sizeof(tree->string_tokens[0]) * capacity);
-        if (!tokens)
-            abort();
-        tree->string_tokens_capacity = capacity;
-        tree->string_tokens = tokens;
-    }
-    tree->string_tokens[index].range.start = start;
-    tree->string_tokens[index].range.end = end;
-    tree->string_tokens[index].string = string_param;
-    tree->string_tokens[index].length = length_param;
-    tree->string_tokens[index].has_escapes = has_escapes_param;
-}
 // Reserve 10 bytes for each entry (the maximum encoded size of a 64-bit value).
 #define RESERVATION_AMOUNT 10
 static inline uint64_t read_tree(size_t *offset, struct owl_tree *tree) {
@@ -295,11 +228,11 @@ static inline uint64_t read_tree(size_t *offset, struct owl_tree *tree) {
     uint64_t result = 0;
     int shift_amount = 0;
     while ((parse_tree[i] & 0x80) != 0 && shift_amount < 64) {
-        result |= (parse_tree[i] & 0x7f) << shift_amount;
+        result |= ((uint64_t)parse_tree[i] & 0x7f) << shift_amount;
         shift_amount += 7;
         i++;
     }
-    result |= (parse_tree[i] & 0x7f) << shift_amount;
+    result |= ((uint64_t)parse_tree[i] & 0x7f) << shift_amount;
     i++;
     *offset = i;
     return result;
@@ -579,11 +512,15 @@ struct parsed_identifier parsed_identifier_get(struct owl_ref ref) {
     }
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
-    size_t token_index = read_tree(&offset, ref._tree);
+    size_t token_offset = read_tree(&offset, ref._tree);
+    read_tree(&token_offset, ref._tree);
+    size_t start_location = read_tree(&token_offset, ref._tree);
+    size_t end_location = start_location + read_tree(&token_offset, ref._tree);
     struct parsed_identifier result = {
-        .identifier = ref._tree->identifier_tokens[token_index].identifier,
-        .length = ref._tree->identifier_tokens[token_index].length,
-        .range = ref._tree->identifier_tokens[token_index].range,
+        .identifier = ref._tree->string + start_location,
+        .length = end_location - start_location,
+        .range.start = start_location,
+        .range.end = end_location,
     };
     return result;
 }
@@ -595,10 +532,14 @@ struct parsed_number parsed_number_get(struct owl_ref ref) {
     }
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
-    size_t token_index = read_tree(&offset, ref._tree);
+    size_t token_offset = read_tree(&offset, ref._tree);
+    read_tree(&token_offset, ref._tree);
+    size_t start_location = read_tree(&token_offset, ref._tree);
+    size_t end_location = start_location + read_tree(&token_offset, ref._tree);
     struct parsed_number result = {
-        .number = ref._tree->number_tokens[token_index].number,
-        .range = ref._tree->number_tokens[token_index].range,
+        .number = (union { double n; uint64_t v; }){ .v = read_tree(&offset, ref._tree) }.n,
+        .range.start = start_location,
+        .range.end = end_location,
     };
     return result;
 }
@@ -610,19 +551,27 @@ struct parsed_string parsed_string_get(struct owl_ref ref) {
     }
     size_t offset = ref._offset;
     read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
-    size_t token_index = read_tree(&offset, ref._tree);
+    size_t token_offset = read_tree(&offset, ref._tree);
+    read_tree(&token_offset, ref._tree);
+    size_t start_location = read_tree(&token_offset, ref._tree);
+    size_t end_location = start_location + read_tree(&token_offset, ref._tree);
+    size_t string_offset = read_tree(&token_offset, ref._tree);
+    const char *string = string_offset ?
+     (const char *)ref._tree->parse_tree + string_offset : ref._tree->string + start_location + 1;
+    size_t string_length = string_offset ?
+     read_tree(&token_offset, ref._tree) : end_location - start_location - 2;
     struct parsed_string result = {
-        .string = ref._tree->string_tokens[token_index].string,
-        .length = ref._tree->string_tokens[token_index].length,
-        .has_escapes = ref._tree->string_tokens[token_index].has_escapes,
-        .range = ref._tree->string_tokens[token_index].range,
+        .string = string,
+        .length = string_length,
+        .range.start = start_location,
+        .range.end = end_location,
     };
     return result;
 }
 static size_t finish_node(uint32_t rule, uint32_t choice, size_t next_sibling, size_t *slots, size_t start_location, size_t end_location, void *info) {
     struct owl_tree *tree = info;
     size_t offset = tree->next_offset;
-    write_tree(tree, next_sibling);
+    write_tree(tree, next_sibling ? offset - next_sibling : 0);
     write_tree(tree, start_location);
     write_tree(tree, end_location - start_location);
     switch (rule) {
@@ -736,30 +685,30 @@ static size_t finish_node(uint32_t rule, uint32_t choice, size_t next_sibling, s
 static size_t finish_token(uint32_t rule, size_t next_sibling, void *info) {
     struct owl_tree *tree = info;
     size_t offset = tree->next_offset;
-    write_tree(tree, next_sibling);
+    write_tree(tree, next_sibling ? offset - next_sibling : 0);
     switch (rule) {
     case 9: {
-        tree->used_identifier_tokens++;
-        if (tree->used_identifier_tokens > tree->number_of_identifier_tokens)
+        size_t offset = tree->next_identifier_token_offset;
+        if (offset == 0)
             abort();
-        size_t token_index = tree->number_of_identifier_tokens - tree->used_identifier_tokens;
-        write_tree(tree, token_index);
+        write_tree(tree, offset);
+        tree->next_identifier_token_offset = offset - read_tree(&offset, tree);
         break;
     }
     case 10: {
-        tree->used_number_tokens++;
-        if (tree->used_number_tokens > tree->number_of_number_tokens)
+        size_t offset = tree->next_number_token_offset;
+        if (offset == 0)
             abort();
-        size_t token_index = tree->number_of_number_tokens - tree->used_number_tokens;
-        write_tree(tree, token_index);
+        write_tree(tree, offset);
+        tree->next_number_token_offset = offset - read_tree(&offset, tree);
         break;
     }
     case 11: {
-        tree->used_string_tokens++;
-        if (tree->used_string_tokens > tree->number_of_string_tokens)
+        size_t offset = tree->next_string_token_offset;
+        if (offset == 0)
             abort();
-        size_t token_index = tree->number_of_string_tokens - tree->used_string_tokens;
-        write_tree(tree, token_index);
+        write_tree(tree, offset);
+        tree->next_string_token_offset = offset - read_tree(&offset, tree);
         break;
     }
     default:
@@ -1023,12 +972,13 @@ void owl_tree_print(struct owl_tree *tree) {
 }
 struct owl_ref owl_next(struct owl_ref ref) {
     if (ref.empty) return ref;
-    size_t offset = read_tree(&ref._offset, ref._tree);
+    size_t offset = ref._offset;
+    size_t delta = read_tree(&ref._offset, ref._tree);
     return (struct owl_ref){
         ._tree = ref._tree,
-        ._offset = offset,
+        ._offset = offset - delta,
         ._type = ref._type,
-        .empty = offset == 0,
+        .empty = delta == 0,
     };
 }
 bool owl_refs_equal(struct owl_ref a, struct owl_ref b) {
@@ -1051,15 +1001,43 @@ struct parsed_grammar owl_tree_get_parsed_grammar(struct owl_tree *tree) {
 static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *text, void *info);
 static void write_identifier_token(size_t offset, size_t length, void *info) {
     struct owl_tree *tree = info;
-    add_identifier_token(tree, offset, offset + length, tree->string + offset, length);
+    size_t token_offset = tree->next_offset;
+    write_tree(tree, token_offset - tree->next_identifier_token_offset);
+    write_tree(tree, offset);
+    write_tree(tree, length);
+    tree->next_identifier_token_offset = token_offset;
 }
 static void write_number_token(size_t offset, size_t length, double number, void *info) {
     struct owl_tree *tree = info;
-    add_number_token(tree, offset, offset + length, number);
+    size_t token_offset = tree->next_offset;
+    write_tree(tree, token_offset - tree->next_number_token_offset);
+    write_tree(tree, offset);
+    write_tree(tree, length);
+    union { double n; uint64_t v; } u = { .n = number };
+    write_tree(tree, u.v);
+    tree->next_number_token_offset = token_offset;
 }
 static void write_string_token(size_t offset, size_t length, const char *string, size_t string_length, bool has_escapes, void *info) {
     struct owl_tree *tree = info;
-    add_string_token(tree, offset, offset + length, string, string_length, has_escapes);
+    size_t string_offset = has_escapes ? (uint8_t *)string - tree->parse_tree : 0;
+    size_t token_offset = tree->next_offset;
+    write_tree(tree, token_offset - tree->next_string_token_offset);
+    write_tree(tree, offset);
+    write_tree(tree, length);
+    if (string_offset) {
+        write_tree(tree, string_offset);
+        write_tree(tree, string_length);
+    } else
+        write_tree(tree, 0);
+    tree->next_string_token_offset = token_offset;
+}
+static void *allocate_string_contents(size_t size, void *info) {
+    struct owl_tree *tree = info;
+    if (tree->next_offset + size > tree->parse_tree_size)
+        grow_tree(tree, tree->next_offset + size);
+    void *p = tree->parse_tree + tree->next_offset;
+    tree->next_offset += size;
+    return p;
 }
 struct owl_token_run {
     struct owl_token_run *prev;
@@ -1239,7 +1217,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
                         i++;
                     }
                 }
-                char *unescaped = malloc(string_length);
+                char *unescaped = allocate_string_contents(string_length, tokenizer->info);
                 size_t j = 0;
                 for (size_t i = 0;
                 i < content_length;
@@ -2414,13 +2392,6 @@ void owl_tree_destroy(struct owl_tree *tree) {
     if (tree->owns_string)
         free((void *)tree->string);
     free(tree->parse_tree);
-    free(tree->identifier_tokens);
-    free(tree->number_tokens);
-    for (uint32_t i = 0; i < tree->number_of_string_tokens; ++i) {
-        if (tree->string_tokens[i].has_escapes)
-            free((void *)tree->string_tokens[i].string);
-    }
-    free(tree->string_tokens);
     free(tree);
 }
 static bool fill_run_states(struct owl_token_run *run, struct fill_run_continuation *cont, uint16_t *failing_index) {
