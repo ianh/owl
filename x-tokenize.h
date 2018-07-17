@@ -32,6 +32,10 @@
 #define WRITE_STRING_TOKEN(...)
 #endif
 
+#ifndef ALLOCATE_STRING
+#define ALLOCATE_STRING(n, info) malloc(n)
+#endif
+
 #ifndef ALLOW_DASHES_IN_IDENTIFIERS
 #define ALLOW_DASHES_IN_IDENTIFIERS(...) false
 #endif
@@ -271,7 +275,8 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
                         i++;
                     }
                 }
-                char *unescaped = malloc(string_length);
+                char *unescaped = ALLOCATE_STRING(string_length,
+                 tokenizer->info);
                 size_t j = 0;
                 for (size_t i = 0; i < content_length; ++i) {
                     if (text[content_offset + i] == '\\')

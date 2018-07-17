@@ -7,6 +7,7 @@
 #define WRITE_NUMBER_TOKEN %%write-number-token
 #define WRITE_IDENTIFIER_TOKEN %%write-identifier-token
 #define WRITE_STRING_TOKEN %%write-string-token
+#define ALLOCATE_STRING allocate_string_contents
 #define ALLOW_DASHES_IN_IDENTIFIERS(...) %%allow-dashes-in-identifiers
 #define IDENTIFIER_TOKEN %%identifier-token
 #define NUMBER_TOKEN %%number-token
@@ -309,39 +310,9 @@ void generate(struct generator *gen)
             continue;
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
-        output_line(out, "    struct {");
-        generate_fields_for_token_rule(out, rule, "        %%type%%field;\n");
-        // FIXME: This isn't very memory-efficient.
-        output_line(out, "        struct source_range range;");
-        output_line(out, "    } *%%rule_tokens;");
-        output_line(out, "    size_t number_of_%%rule_tokens;");
-        output_line(out, "    size_t used_%%rule_tokens;");
-        output_line(out, "    size_t %%rule_tokens_capacity;");
+        output_line(out, "    size_t next_%%rule_token_offset;");
     }
     output_line(out, "};");
-    for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
-        if (!rule->is_token)
-            continue;
-        set_substitution(out, "rule", rule->name, rule->name_length,
-         LOWERCASE_WITH_UNDERSCORES);
-        output_string(out, "static void add_%%rule_token(struct owl_tree *tree, size_t start, size_t end");
-        generate_fields_for_token_rule(out, rule, ", %%type%%field_param");
-        output_line(out, ") {");
-        output_line(out, "    size_t index = tree->number_of_%%rule_tokens++;");
-        output_line(out, "    if (tree->number_of_%%rule_tokens > tree->%%rule_tokens_capacity) {");
-        output_line(out, "        size_t capacity = (tree->%%rule_tokens_capacity + 1) * 3 / 2;");
-        output_line(out, "        void *tokens = realloc(tree->%%rule_tokens, sizeof(tree->%%rule_tokens[0]) * capacity);");
-        output_line(out, "        if (!tokens)");
-        output_line(out, "            abort();");
-        output_line(out, "        tree->%%rule_tokens_capacity = capacity;");
-        output_line(out, "        tree->%%rule_tokens = tokens;");
-        output_line(out, "    }");
-        output_line(out, "    tree->%%rule_tokens[index].range.start = start;");
-        output_line(out, "    tree->%%rule_tokens[index].range.end = end;");
-        generate_fields_for_token_rule(out, rule, "    tree->%%rule_tokens[index].%%field = %%field_param;\n");
-        output_line(out, "}");
-    }
 
     set_literal_substitution(out, "token-type", "uint32_t");
     set_literal_substitution(out, "state-type", "uint32_t");
@@ -393,6 +364,24 @@ void generate(struct generator *gen)
     output_line(out, "}");
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
+        if (!rule->is_token)
+            continue;
+        set_substitution(out, "rule", rule->name, rule->name_length,
+         LOWERCASE_WITH_UNDERSCORES);
+        output_string(out, "static void add_%%rule_token(struct owl_tree *tree, size_t start, size_t end");
+        generate_fields_for_token_rule(out, rule, ", %%type%%field_param");
+        output_line(out, ") {");
+        output_line(out, "    size_t offset = tree->next_offset;");
+        output_line(out, "    write_tree(tree, tree->next_%%rule_token_offset);");
+        output_line(out, "    write_tree(tree, start);");
+        output_line(out, "    write_tree(tree, end - start);");
+        generate_fields_for_token_rule(out, rule, "    union { %%type field; uint64_t val; } %%field_union = { .field = %%field_param };\n");
+        generate_fields_for_token_rule(out, rule, "    write_tree(tree, %%field_union.val);\n");
+        output_line(out, "    tree->next_%%rule_token_offset = offset;");
+        output_line(out, "}");
+    }
+    for (uint32_t i = 0; i < n; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
         set_unsigned_number_substitution(out, "rule-index", i);
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
@@ -410,20 +399,21 @@ void generate(struct generator *gen)
         output_line(out, "    }");
         output_line(out, "    size_t offset = ref._offset;");
         output_line(out, "    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.");
-        if (rule->is_token)
-            output_line(out, "    size_t token_index = read_tree(&offset, ref._tree);");
-        else {
+        if (rule->is_token) {
+            output_line(out, "    size_t token_offset = read_tree(&offset, ref._tree);");
+            output_line(out, "    read_tree(&token_offset, ref._tree);");
+            output_line(out, "    size_t start_location = read_tree(&token_offset, ref._tree);");
+            output_line(out, "    size_t end_location = start_location + read_tree(&token_offset, ref._tree);");
+            generate_fields_for_token_rule(out, rule, "    union { %%type field; uint64_t val; } %%field_union = { .val = read_tree(&token_offset, ref._tree) };\n");
+        } else {
             output_line(out, "    size_t start_location = read_tree(&offset, ref._tree);");
             output_line(out, "    size_t end_location = start_location + read_tree(&offset, ref._tree);");
         }
         output_line(out, "    struct parsed_%%rule result = {");
-        if (rule->is_token) {
-            generate_fields_for_token_rule(out, rule, "        .%%field = ref._tree->%%rule_tokens[token_index].%%field,\n");
-            output_line(out, "        .range = ref._tree->%%rule_tokens[token_index].range,");
-        } else {
-            output_line(out, "        .range.start = start_location,");
-            output_line(out, "        .range.end = end_location,");
-        }
+        if (rule->is_token)
+            generate_fields_for_token_rule(out, rule, "        .%%field = %%field_union.field,\n");
+        output_line(out, "        .range.start = start_location,");
+        output_line(out, "        .range.end = end_location,");
         if (rule->number_of_choices > 0)
             output_line(out, "        .type = read_tree(&offset, ref._tree),");
         output_line(out, "    };");
@@ -494,11 +484,11 @@ void generate(struct generator *gen)
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
         output_line(out, "    case %%rule-index: {");
-        output_line(out, "        tree->used_%%rule_tokens++;");
-        output_line(out, "        if (tree->used_%%rule_tokens > tree->number_of_%%rule_tokens)");
+        output_line(out, "        size_t offset = tree->next_%%rule_token_offset;");
+        output_line(out, "        if (offset == 0)");
         output_line(out, "            abort();");
-        output_line(out, "        size_t token_index = tree->number_of_%%rule_tokens - tree->used_%%rule_tokens;");
-        output_line(out, "        write_tree(tree, token_index);");
+        output_line(out, "        write_tree(tree, offset);");
+        output_line(out, "        tree->next_%%rule_token_offset = read_tree(&offset, tree);");
         output_line(out, "        break;");
         output_line(out, "    }");
     }
@@ -658,6 +648,14 @@ void generate(struct generator *gen)
             set_literal_substitution(out, "write-string-token", "write_string_token");
         }
     }
+    output_line(out, "static void *allocate_string_contents(size_t size, void *info) {");
+    output_line(out, "    struct owl_tree *tree = info;");
+    output_line(out, "    if (tree->next_offset + size > tree->parse_tree_size)");
+    output_line(out, "        grow_tree(tree, tree->next_offset + size);");
+    output_line(out, "    void *p = tree->parse_tree + tree->next_offset;");
+    output_line(out, "    tree->next_offset += size;");
+    output_line(out, "    return p;");
+    output_line(out, "}");
     if (SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(gen->combined))
         set_literal_substitution(out, "allow-dashes-in-identifiers", "true");
     else
@@ -957,13 +955,6 @@ void generate(struct generator *gen)
     output_line(out, "    if (tree->owns_string)");
     output_line(out, "        free((void *)tree->string);");
     output_line(out, "    free(tree->parse_tree);");
-    output_line(out, "    free(tree->identifier_tokens);");
-    output_line(out, "    free(tree->number_tokens);");
-    output_line(out, "    for (uint32_t i = 0; i < tree->number_of_string_tokens; ++i) {");
-    output_line(out, "        if (tree->string_tokens[i].has_escapes)");
-    output_line(out, "            free((void *)tree->string_tokens[i].string);");
-    output_line(out, "    }");
-    output_line(out, "    free(tree->string_tokens);");
     output_line(out, "    free(tree);");
     output_line(out, "}");
     output_line(out, "static bool fill_run_states(struct owl_token_run *run, struct fill_run_continuation *cont, uint16_t *failing_index) {");
