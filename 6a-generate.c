@@ -432,7 +432,7 @@ void generate(struct generator *gen)
      "size_t next_sibling, size_t *slots, size_t start_location, size_t end_location, void *info) {");
     output_line(out, "    struct owl_tree *tree = info;");
     output_line(out, "    size_t offset = tree->next_offset;");
-    output_line(out, "    write_tree(tree, next_sibling);");
+    output_line(out, "    write_tree(tree, next_sibling ? offset - next_sibling : 0);");
     output_line(out, "    write_tree(tree, start_location);");
     output_line(out, "    write_tree(tree, end_location - start_location);");
     output_line(out, "    switch (rule) {");
@@ -471,7 +471,7 @@ void generate(struct generator *gen)
     output_line(out, "    struct owl_tree *tree = info;");
 //    output_line(out, "    printf(\"finishing token (%lu): %u\\n\", tree->next_id, rule);");
     output_line(out, "    size_t offset = tree->next_offset;");
-    output_line(out, "    write_tree(tree, next_sibling);");
+    output_line(out, "    write_tree(tree, next_sibling ? offset - next_sibling : 0);");
     output_line(out, "    switch (rule) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
@@ -575,12 +575,13 @@ void generate(struct generator *gen)
 
     output_line(out, "struct owl_ref owl_next(struct owl_ref ref) {");
     output_line(out, "    if (ref.empty) return ref;");
-    output_line(out, "    size_t offset = read_tree(&ref._offset, ref._tree);");
+    output_line(out, "    size_t offset = ref._offset;");
+    output_line(out, "    size_t delta = read_tree(&ref._offset, ref._tree);");
     output_line(out, "    return (struct owl_ref){");
     output_line(out, "        ._tree = ref._tree,");
-    output_line(out, "        ._offset = offset,");
+    output_line(out, "        ._offset = offset - delta,");
     output_line(out, "        ._type = ref._type,");
-    output_line(out, "        .empty = offset == 0,");
+    output_line(out, "        .empty = delta == 0,");
     output_line(out, "    };");
     output_line(out, "}");
 
