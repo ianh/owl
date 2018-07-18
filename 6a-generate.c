@@ -24,7 +24,7 @@
 #define ROOT_RULE(...) %%root-rule-index
 #define FIXITY_ASSOCIATIVITY_PRECEDENCE_LOOKUP(fixity_associativity, precedence, rule, choice, context) \
  do { \
-     int local; \
+     int local = 0; \
      fixity_associativity_precedence_lookup(&local, &precedence, rule, choice, context); \
      fixity_associativity = local; \
  } while (0)

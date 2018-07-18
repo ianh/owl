@@ -407,8 +407,8 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
         node->end_location = offset;
         node->rule = expr->rule;
-        enum construct_fixity_associativity fixity_associativity;
-        int precedence;
+        enum construct_fixity_associativity fixity_associativity = 0;
+        int precedence = 0;
         FIXITY_ASSOCIATIVITY_PRECEDENCE_LOOKUP(fixity_associativity, precedence,
          expr->rule, CONSTRUCT_ACTION_GET_CHOICE(action), s->info);
         node->fixity_associativity = fixity_associativity;
