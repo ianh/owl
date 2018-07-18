@@ -250,29 +250,6 @@ value =
   }]
 }
 `},
-"ternary":{"grammar":
-`# PREV < #if If as an Operator
-# NEXT > #end End of Tour
-
-# You can also write "if" as a ternary
-# operator, either using the classic C
-# ternary syntax or 'if'/'then'/'else'
-# keywords.
-
-input = expr*
-expr =
-    identifier : ident
-  .operators prefix
-    [ 'if' expr 'then' expr 'else' ] : if
-  .operators infix right
-    [ '?' expr ':' ] : ternary
-
-# With this approach, you always need to
-# write an else clause.
-`,"input":
-`x ? y : z
-if x then y else z
-`},
 "end":{"grammar":
 `# PREV < #json A Grammar for JSON
 
@@ -344,4 +321,17 @@ expr =
   '|' : choice
 comment-token = 'line-comment-token' string
 line-comment-token '#'
+`},
+"arith":{"grammar":
+`input = expr*
+expr =
+    number : num
+    [ '(' expr ')' ] : parens
+  .operators prefix
+    '-' : negate
+  .operators infix left
+    '+' : plus
+    '-' : minus
+`,"input":
+`1 - 2 - 3 - 4
 `}};
