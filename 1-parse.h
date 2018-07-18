@@ -747,7 +747,6 @@ static void parsed_operator_print(struct owl_tree *tree, struct owl_ref ref, con
 static void parsed_expr_print(struct owl_tree *tree, struct owl_ref ref, const char *slot_name, int indent);
 static void parsed_comment_token_print(struct owl_tree *tree, struct owl_ref ref, const char *slot_name, int indent);
 static void parsed_identifier_print(struct owl_tree *tree, struct owl_ref ref, const char *slot_name, int indent);
-static void parsed_number_print(struct owl_tree *tree, struct owl_ref ref, const char *slot_name, int indent);
 static void parsed_string_print(struct owl_tree *tree, struct owl_ref ref, const char *slot_name, int indent);
 static void parsed_grammar_print(struct owl_tree *tree, struct owl_ref ref, const char *slot_name, int indent) {
     while (!ref.empty) {
@@ -937,18 +936,6 @@ static void parsed_identifier_print(struct owl_tree *tree, struct owl_ref ref, c
         if (strcmp("identifier", slot_name))
             printf("@%s", slot_name);
         printf(" - %.*s", (int)it.length, it.identifier);
-        printf(" (%zu - %zu)\n", it.range.start, it.range.end);
-        ref = owl_next(ref);
-    }
-}
-static void parsed_number_print(struct owl_tree *tree, struct owl_ref ref, const char *slot_name, int indent) {
-    while (!ref.empty) {
-        struct parsed_number it = parsed_number_get(ref);
-        for (int i = 0; i < indent; ++i) printf("  ");
-        printf("number");
-        if (strcmp("number", slot_name))
-            printf("@%s", slot_name);
-        printf(" - %f", it.number);
         printf(" (%zu - %zu)\n", it.range.start, it.range.end);
         ref = owl_next(ref);
     }

@@ -513,13 +513,26 @@ void generate(struct generator *gen)
     output_line(out, "    }");
     output_line(out, "    exit(-1);");
     output_line(out, "}");
+    // Only generate print functions that will actually be called (mostly to
+    // avoid compiler warnings).
+    struct bitset printable_rules = bitset_create_empty(n);
+    bitset_add(&printable_rules, gen->grammar->root_rule);
     for (uint32_t i = 0; i < n; ++i) {
+        struct rule *rule = &gen->grammar->rules[i];
+        for (uint32_t j = 0; j < rule->number_of_slots; ++j)
+            bitset_add(&printable_rules, rule->slots[j].rule_index);
+    }
+    for (uint32_t i = 0; i < n; ++i) {
+        if (!bitset_contains(&printable_rules, i))
+            continue;
         struct rule *rule = &gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
         output_line(out, "static void parsed_%%rule_print(struct owl_tree *tree, struct owl_ref ref, const char *slot_name, int indent);");
     }
     for (uint32_t i = 0; i < n; ++i) {
+        if (!bitset_contains(&printable_rules, i))
+            continue;
         struct rule *rule = &gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
@@ -565,6 +578,7 @@ void generate(struct generator *gen)
         output_line(out, "    }");
         output_line(out, "}");
     }
+    bitset_destroy(&printable_rules);
     output_line(out, "void owl_tree_print(struct owl_tree *tree) {");
     output_line(out, "    check_for_error(tree);");
     output_line(out, "    parsed_%%root-rule_print(tree, owl_tree_root_ref(tree), \"%%root-rule\", 0);");
