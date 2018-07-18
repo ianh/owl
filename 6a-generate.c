@@ -13,6 +13,7 @@
 #define NUMBER_TOKEN %%number-token
 #define STRING_TOKEN %%string-token
 #define BRACKET_TRANSITION_TOKEN %%bracket-transition-token
+#define COMMENT_TOKEN %%comment-token
 #define TOKENIZE_BODY(...) static const char *tokenizer_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
 #include "x-tokenize.h"
 #define FINISHED_NODE_T size_t
@@ -608,6 +609,7 @@ void generate(struct generator *gen)
     set_unsigned_number_substitution(out, "number-token", 0xffffffff);
     set_unsigned_number_substitution(out, "string-token", 0xffffffff);
     set_unsigned_number_substitution(out, "bracket-transition-token", 0xffffffff);
+    set_unsigned_number_substitution(out, "comment-token", 0xffffffff);
     output_line(out, "#define IGNORE_TOKEN_WRITE(...)");
     set_literal_substitution(out, "write-identifier-token", "IGNORE_TOKEN_WRITE");
     set_literal_substitution(out, "write-number-token", "IGNORE_TOKEN_WRITE");
@@ -1113,7 +1115,6 @@ struct generated_token {
 static void generate_keyword(struct generator_output *out, struct token keyword,
  size_t indentation)
 {
-    set_unsigned_number_substitution(out, "token-index", keyword.symbol);
     if (keyword.length > UINT32_MAX)
         abort();
     set_unsigned_number_substitution(out, "token-length",
@@ -1124,7 +1125,12 @@ static void generate_keyword(struct generator_output *out, struct token keyword,
     else
         output_line(out, "*end_token = false;");
     output_indentation(out, indentation);
-    output_line(out, "*token = %%token-index;");
+    if (keyword.type == TOKEN_START_LINE_COMMENT)
+        output_line(out, "*token = %%comment-token;");
+    else {
+        set_unsigned_number_substitution(out, "token-index", keyword.symbol);
+        output_line(out, "*token = %%token-index;");
+    }
     output_indentation(out, indentation);
     output_line(out, "return %%token-length;");
 }

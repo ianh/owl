@@ -289,7 +289,6 @@ void build(struct grammar *grammar, struct owl_tree *tree)
                 .string = s.string,
                 .length = s.length,
                 .type = TOKEN_START_LINE_COMMENT,
-                .symbol = SYMBOL_EPSILON,
                 .range = s.range
             };
         } else {

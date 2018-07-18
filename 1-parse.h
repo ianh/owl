@@ -1137,7 +1137,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
         size_t token_length = read_keyword_token(&token, &end_token, text + offset, tokenizer->info);
         if (token_length > 0) {
             is_token = true;
-            if (token == 0xffffffff) comment = true;
+            if (token == 4294967295U) comment = true;
         }
         double number = 0;
         if (char_is_numeric(c) || (c == '.' && char_is_numeric(text[offset + 1]))) {
@@ -1189,7 +1189,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
             }
             continue;
         }
-        else if (!is_token || token == 0xffffffff) {
+        else if (!is_token || token == 4294967295U) {
             tokenizer->offset = offset;
             tokenizer->whitespace = whitespace;
             free(run);

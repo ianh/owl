@@ -46,7 +46,8 @@
   TOKEN_DONT_CARE, 0) >= (combined)->number_of_keyword_tokens)
 
 #if !defined(IDENTIFIER_TOKEN) || !defined(NUMBER_TOKEN) || \
- !defined(STRING_TOKEN) || !defined(BRACKET_TRANSITION_TOKEN)
+ !defined(STRING_TOKEN) || !defined(BRACKET_TRANSITION_TOKEN) || \
+ !defined(COMMENT_TOKEN)
 #error The built-in tokenizer needs definitions of basic tokens to work.
 #endif
 
@@ -191,7 +192,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
          text + offset, tokenizer->info);
         if (token_length > 0) {
             is_token = true;
-            if (token == 0xffffffff)
+            if (token == COMMENT_TOKEN)
                 comment = true;
         }
         double number = 0;
@@ -248,7 +249,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
                 offset++;
             }
             continue;
-        } else if (!is_token || token == 0xffffffff) {
+        } else if (!is_token || token == COMMENT_TOKEN) {
             tokenizer->offset = offset;
             tokenizer->whitespace = whitespace;
             free(run);

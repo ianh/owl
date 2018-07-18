@@ -19,6 +19,7 @@
 #define NUMBER_TOKEN (((struct tokenizer_info *)tokenizer->info)->number_symbol)
 #define STRING_TOKEN (((struct tokenizer_info *)tokenizer->info)->string_symbol)
 #define BRACKET_TRANSITION_TOKEN 0xffffffff
+#define COMMENT_TOKEN 0xffffffff
 
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
  const char *text, void *info);
@@ -888,7 +889,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token,
         if (token.length > max_len && !strncmp((const char *)text, token.string,
          token.length)) {
             max_len = token.length;
-            symbol = SYMBOL_EPSILON;
+            symbol = COMMENT_TOKEN;
             end = false;
         }
     }
