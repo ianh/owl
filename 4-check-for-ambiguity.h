@@ -5,11 +5,16 @@
 
 // STEP 4 - CHECK FOR AMBIGUITY
 
+// In step 4, we look for a sequence of tokens which can cause two different
+// parse trees to be created.  If we find one, we return it as a
+// `struct ambiguity`.
+
 struct ambiguity_path {
     uint16_t *actions;
     uint32_t number_of_actions;
 
-    // These are the offsets into the tokens list corresponding to each action.
+    // These are the offsets into the `tokens` array corresponding to each
+    // action.
     uint32_t *offsets;
 };
 

@@ -5,6 +5,14 @@
 
 // STEP 3 - COMBINE
 
+// In this step, we combine all the automata from step 2 into just two: the
+// automaton and the bracket_automaton.  The automaton is where parsing begins;
+// the bracket_automaton is entered when a start token appears (and exited when
+// an end token appears).
+
+// Step 3 also annotates these automata with parse tree actions.  The actions
+// along a path through the automata are interpreted to construct a parse tree.
+
 struct combined_grammar {
     struct automaton automaton;
     struct automaton bracket_automaton;

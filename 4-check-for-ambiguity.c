@@ -27,12 +27,13 @@ enum epsilon_state {
     ALLOW_EPSILON_SUCCESSORS,
     DISALLOW_EPSILON_SUCCESSORS,
 };
-// The `epsilon_state` field implements the "epsilon filtering" technique from
-//  . , simplified a little bit because we follow an entire path at once.
-//   \.
-//    Allauzen, C., Mohri, M., & Rastogi, A. (2011). General Algorithms for
-//    Testing the Ambiguity of Finite Automata and the Double-Tape Ambiguity of
-//    Finite-State Transducers. Int. J. Found. Comput. Sci., 22, 883-904.
+// The `epsilon_state` field implements the "epsilon filtering" technique by
+// Allauzen et al. (2011), simplified a little bit because we follow an entire
+// path at once.
+//
+//  Allauzen, C., Mohri, M., & Rastogi, A. (2011). General Algorithms for
+//  Testing the Ambiguity of Finite Automata and the Double-Tape Ambiguity of
+//  Finite-State Transducers. Int. J. Found. Comput. Sci., 22, 883-904.
 struct state_pair {
     state_id b;
     state_id a:31;
