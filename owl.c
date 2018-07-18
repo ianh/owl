@@ -289,24 +289,45 @@ struct error error;
 
 void print_error(void)
 {
-    // TODO: Line breaking, if there's time.
     int colors = terminal_colors(STDERR_FILENO);
+    long columns = terminal_columns(STDERR_FILENO);
+    const char *level;
     if (error.level == WARNING) {
         if (colors >= 256)
             fputs("\033[38;5;97m", stderr);
         else if (colors >= 8)
             fputs("\033[5;31m", stderr);
-        fputs("warning:", stderr);
+        level = "warning: ";
     } else {
         if (colors >= 256)
             fputs("\033[38;5;168m", stderr);
         else if (colors >= 8)
             fputs("\033[1;31m", stderr);
-        fputs("error:", stderr);
+        level = "error: ";
     }
+    fputs(level, stderr);
     if (colors >= 8)
         fputs("\033[0m", stderr);
-    fprintf(stderr, " %s\n", error.text);
+    size_t offset = strlen(level);
+    size_t line_offset = 0;
+    size_t wrap_offset = 0;
+    size_t i = 0;
+    for (i = 0; error.text[i]; ++i) {
+        if (i + offset - line_offset >= columns) {
+            if (error.text[i] == ' ' || 3*(i - wrap_offset) >= columns)
+                wrap_offset = i;
+            fwrite(error.text + line_offset, 1, wrap_offset - line_offset,
+             stderr);
+            fputs("\n", stderr);
+            line_offset = wrap_offset;
+            i = wrap_offset;
+            offset = 0;
+        }
+        if (error.text[i] == ' ')
+            wrap_offset = i + 1;
+    }
+    fwrite(error.text + line_offset, 1, i + offset - line_offset, stderr);
+    fputs("\n", stderr);
     qsort(error.ranges, MAX_ERROR_RANGES, sizeof(struct source_range),
      compare_source_ranges);
     if (error.ranges[0].end == 0)
@@ -319,12 +340,20 @@ void print_error(void)
     for (size_t i = 0; range < MAX_ERROR_RANGES; ++i) {
         if (error.ranges[range].end == 0)
             break;
-        if (error_in_string[i] == '\0' || error_in_string[i] == '\n') {
+        bool eol = error_in_string[i] == '\0' || error_in_string[i] == '\n';
+        if (eol || (line_marked && i - line_start + 2 >= columns)) {
             if (line_marked) {
                 fputs("  ", stderr);
+                bool ellipsis = false;
+                if (i - line_start + 2 > columns) {
+                    line_start = i + 5 - columns;
+                    fputs("...", stderr);
+                    ellipsis = true;
+                }
                 fwrite(error_in_string + line_start, 1, i - line_start, stderr);
                 fputs("\n  ", stderr);
-                int max_range = range;
+                if (ellipsis)
+                    fputs("   ", stderr);
                 if (colors >= 256)
                     fputs("\033[38;5;113m", stderr);
                 else if (colors >= 8)
@@ -339,8 +368,6 @@ void print_error(void)
                         if (j < error.ranges[k].start)
                             continue;
                         marked = true;
-                        if (k > max_range)
-                            max_range = k;
                     }
                     if (marked)
                         fputs("~", stderr);
@@ -350,7 +377,8 @@ void print_error(void)
                 if (colors >= 8)
                     fputs("\033[0m", stderr);
                 fputs("\n", stderr);
-                range = max_range + 1;
+                while (i >= error.ranges[range].end && range < MAX_ERROR_RANGES)
+                    range++;
                 line_marked = false;
                 last_line_marked = true;
             } else if (last_line_marked) {
@@ -362,7 +390,10 @@ void print_error(void)
             }
             if (error_in_string[i] == '\0')
                 break;
-            line_start = i + 1;
+            if (eol)
+                line_start = i + 1;
+            else
+                line_start = i;
         }
         if (i >= error.ranges[range].start)
             line_marked = true;
