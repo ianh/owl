@@ -384,7 +384,7 @@ static void build_body_expression(struct context *ctx,
          rule_index, expr.range, "could refer to two different rules");
 
         // Collect exceptions (if applicable) and find the proper choice set.
-        struct bitset choices =
+        struct bitset excluded =
          bitset_create_empty(referent->number_of_choices);
         while (!expr.exception.empty) {
             struct parsed_identifier exception =
@@ -394,7 +394,7 @@ static void build_body_expression(struct context *ctx,
                 if (exception.length == referent->choices[i].name_length &&
                  !memcmp(exception.identifier, referent->choices[i].name,
                  exception.length)) {
-                     bitset_add(&choices, i);
+                     bitset_add(&excluded, i);
                      found = true;
                      break;
                 }
@@ -407,11 +407,11 @@ static void build_body_expression(struct context *ctx,
             }
             expr.exception = owl_next(expr.exception);
         }
-        bitset_complement(&choices);
         struct slot *slot = &rule->slots[slot_index];
         uint32_t i = 0;
         for (; i < slot->number_of_choice_sets; ++i) {
-            if (bitset_compare(&choices, &slot->choice_sets[i].choices) == 0)
+            if (bitset_compare(&excluded,
+             &slot->choice_sets[i].excluded_choices) == 0)
                 break;
         }
         if (i >= slot->number_of_choice_sets) {
@@ -421,10 +421,10 @@ static void build_body_expression(struct context *ctx,
             slot->choice_sets = grow_array(slot->choice_sets,
              &slot->choice_sets_allocated_bytes,
              sizeof(struct slot_choice_set) * slot->number_of_choice_sets);
-            slot->choice_sets[i].choices = bitset_move(&choices);
+            slot->choice_sets[i].excluded_choices = bitset_move(&excluded);
             slot->choice_sets[i].symbol = ctx->next_symbol++;
         } else
-            bitset_destroy(&choices);
+            bitset_destroy(&excluded);
         automaton_add_transition(automaton, b.entry, b.exit,
          rule->slots[slot_index].choice_sets[i].symbol);
         break;
@@ -557,9 +557,8 @@ static uint32_t add_slot(struct context *ctx, struct rule *rule,
          &slot->choice_sets_allocated_bytes,
          sizeof(struct slot_choice_set) * slot->number_of_choice_sets);
         slot->choice_sets[0].symbol = symbol;
-        slot->choice_sets[0].choices = bitset_create_empty(ctx->grammar->
-         rules[referenced_rule_index].number_of_choices);
-        bitset_complement(&slot->choice_sets[0].choices);
+        slot->choice_sets[0].excluded_choices = bitset_create_empty(ctx->
+         grammar->rules[referenced_rule_index].number_of_choices);
     }
     return slot_index;
 }
@@ -688,7 +687,7 @@ void grammar_destroy(struct grammar *grammar)
         free(r.brackets);
         for (uint32_t j = 0; j < r.number_of_slots; ++j) {
             for (uint32_t k = 0; k < r.slots[j].number_of_choice_sets; ++k)
-                bitset_destroy(&r.slots[j].choice_sets[k].choices);
+                bitset_destroy(&r.slots[j].choice_sets[k].excluded_choices);
             free(r.slots[j].choice_sets);
         }
         free(r.slots);

@@ -153,8 +153,8 @@ struct slot_choice_set {
     // in the containing rule -- we'll substitute out these symbols in step 3.
     symbol_id symbol;
 
-    // The choices allowed in this set.
-    struct bitset choices;
+    // The choices excluded in this set.
+    struct bitset excluded_choices;
 };
 struct slot {
     // Unless you use the '@' operator to rename it, a slot will have the same

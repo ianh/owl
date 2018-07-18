@@ -23,12 +23,6 @@ void bitset_destroy(struct bitset *set)
     free(set->bit_groups);
 }
 
-void bitset_complement(struct bitset *set)
-{
-    for (uint32_t i = 0; i < set->number_of_bit_groups; ++i)
-        set->bit_groups[i] ^= 0xffffffffffffffffULL;
-}
-
 void bitset_union(struct bitset *set, struct bitset *other)
 {
     if (set->number_of_elements != other->number_of_elements)
@@ -69,15 +63,6 @@ bool bitset_is_empty(struct bitset *set)
 {
     for (uint32_t i = 0; i < set->number_of_bit_groups; ++i) {
         if (set->bit_groups[i] != 0)
-            return false;
-    }
-    return true;
-}
-
-bool bitset_is_full(struct bitset *set)
-{
-    for (uint32_t i = 0; i < set->number_of_bit_groups; ++i) {
-        if (set->bit_groups[i] + 1 != 0)
             return false;
     }
     return true;

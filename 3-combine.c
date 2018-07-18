@@ -374,10 +374,11 @@ static void substitute_slots(struct grammar *grammar, struct rule *rule,
                     }
                     struct automaton *r = &automaton_for_rule[slot->rule_index];
                     struct automaton choice_removed = {0};
-                    if (!bitset_is_full(&slot->choice_sets[l].choices)) {
+                    struct slot_choice_set *choice_set = &slot->choice_sets[l];
+                    if (!bitset_is_empty(&choice_set->excluded_choices)) {
                         automaton_copy(r, &choice_removed);
                         remove_choice_actions(&choice_removed,
-                         &slot->choice_sets[l].choices);
+                         &choice_set->excluded_choices);
                         r = &choice_removed;
                     }
                     state_id start = embed(a, r,
@@ -479,7 +480,7 @@ static void remove_choice_actions(struct automaton *a, struct bitset *choices)
             default:
                 continue;
             }
-            if (!bitset_contains(choices,
+            if (bitset_contains(choices,
              CONSTRUCT_ACTION_GET_CHOICE(s.transitions[j].action))) {
                 // Remove this transition by making it a self-transition.
                 s.transitions[j].action = 0;
