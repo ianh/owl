@@ -230,8 +230,8 @@ struct parsed_set_index {
 To keep the types of the references consistent, Owl makes sure each field name can only refer to one kind of rule.
 
 ```
-# very bad and NOT allowed
-bad-plus = identifier@bad-name '+' expr@bad-name
+# This isn't allowed:
+# bad-plus = identifier@bad-name '+' expr@bad-name
 ```
 
 ### getting the root match
