@@ -11,23 +11,6 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#define DEBUG_OUTPUT 0
-
-// TODO:
-// - error messages that include line/column/visuals
-// - clean up memory leaks
-// - check if all the input is properly validated
-// - properly lay out / comment source files
-// - perf optimization?
-// - testing!
-//  - add code to generate random words in the grammar together with the
-//    expected parse tree and verify that they match when parsed
-//  - test long tokens (over 256 bytes)
-//  - test whitespace at beginning/end of string
-
-// ASIDE:
-// - write a blog post or something about how the old parser worked?
-
 static FILE *output_file = 0;
 static struct terminal_info get_terminal_info(int fileno);
 static long terminal_columns(int fileno);
@@ -214,9 +197,6 @@ int main(int argc, char *argv[])
     default:
         break;
     }
-#if DEBUG_OUTPUT
-    owl_tree_print(tree);
-#endif
 
     struct grammar grammar = {0};
     build(&grammar, tree);

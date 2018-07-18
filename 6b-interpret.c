@@ -617,15 +617,6 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
     free(context.bracket_transition_for_symbol);
 }
 
-// on enter bracket:
-// - find all valid successors that have bracket transitions
-// - fill in a bitset based on those transitions
-// - push this bitset onto a stack
-// on leave bracket:
-// - pop the stack
-// on normal transition:
-// - check that the successor state is valid
-
 static bool valid_state(struct interpret_context *ctx, struct saved_state *s,
  state_id state)
 {
