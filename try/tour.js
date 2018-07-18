@@ -1,19 +1,37 @@
 tour = {
 "start":{"grammar":
-`# This is the box where the grammar goes.
+`# Welcome to Owl's interpreter mode!
 
-plus = number '+' number
+# Here's a simple grammar for smiley faces:
 
-# Owl matches the first rule against the
-# input (123 + 456) in the box below.
+face = eyes nose mouth
+eyes =
+  ':' : normal
+  ';' : winking
+nose =
+  '' : none
+  '-' : straight
+  '^' : pointy
+  '*' : clown
+mouth =
+  ')' : smile
+  '(' : frown
+  'D' : open-smile
+
+# Feel free to modify it or replace it with
+# your own grammar.
+
+# Owl matches the first rule of the grammar
+# against the input in the box below.
 
 # A copy of the Owl tool runs in your
 # browser each time the grammar or input
 # changes.  Its output is shown in the box
 # on the right.
 
-# Try modifying the numbers below to
-# see how the output changes.
+# Try modifying the face below or adding
+# new parts to the grammar to see how the
+# output changes.
 
 # If you want to learn more,
 # check out the repository at
@@ -21,7 +39,7 @@ plus = number '+' number
 
 # Or take a #tour!
 `,"input": 
-`123 + 456
+`:^)
 `},
 "tour":{"grammar":
 `# PREV < #start Start Page
