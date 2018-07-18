@@ -319,7 +319,6 @@ void generate(struct generator *gen)
     set_literal_substitution(out, "state-type", "uint32_t");
 
     // Code for reading and writing packed parse trees.
-    // TODO: Delta encoding instead of absolute numbers.
     output_line(out, "// Reserve 10 bytes for each entry (the maximum encoded size of a 64-bit value).");
     output_line(out, "#define RESERVATION_AMOUNT 10");
     output_line(out, "static inline uint64_t read_tree(size_t *offset, struct owl_tree *tree) {");
@@ -457,7 +456,6 @@ void generate(struct generator *gen)
         }
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
             set_unsigned_number_substitution(out, "slot-index", j);
-//            output_line(out, "        printf(\"slot %%slot-index = %lu\\n\", slots[%%slot-index]);");
             output_line(out, "        write_tree(tree, slots[%%slot-index]);");
         }
         output_line(out, "        break;");
@@ -470,7 +468,6 @@ void generate(struct generator *gen)
     output_line(out, "}");
     output_line(out, "static size_t finish_token(uint32_t rule, size_t next_sibling, void *info) {");
     output_line(out, "    struct owl_tree *tree = info;");
-//    output_line(out, "    printf(\"finishing token (%lu): %u\\n\", tree->next_id, rule);");
     output_line(out, "    size_t offset = tree->next_offset;");
     output_line(out, "    write_tree(tree, next_sibling ? offset - next_sibling : 0);");
     output_line(out, "    switch (rule) {");
@@ -702,23 +699,6 @@ void generate(struct generator *gen)
     output_line(out, "    uint32_t capacity;");
     output_line(out, "    int error;");
     output_line(out, "};");
-    output_line(out, "static void continuation_stack_push(struct fill_run_state **top) {");
-    output_line(out, "    struct fill_run_continuation *cont = (*top)->cont;");
-    output_line(out, "    cont->top_index++;");
-    output_line(out, "    if (cont->top_index >= cont->capacity) {");
-    output_line(out, "        size_t new_capacity = (cont->capacity + 2) * 3 / 2;");
-    output_line(out, "        if (new_capacity <= cont->capacity)");
-    output_line(out, "            abort();");
-    output_line(out, "        struct fill_run_state *new_states = realloc(cont->stack, new_capacity * sizeof(struct fill_run_state));");
-    output_line(out, "        if (!new_states)");
-    output_line(out, "            abort();");
-    output_line(out, "        cont->stack = new_states;");
-    output_line(out, "        cont->capacity = new_capacity;");
-    output_line(out, "        *top = &cont->stack[cont->top_index];");
-    output_line(out, "    } else");
-    output_line(out, "        (*top)++;");
-    output_line(out, "    (*top)->cont = cont;");
-    output_line(out, "}");
     struct automaton *a = &gen->deterministic->automaton;
     struct automaton *b = &gen->deterministic->bracket_automaton;
     set_unsigned_number_substitution(out, "first-bracket-state-id",
@@ -848,8 +828,21 @@ void generate(struct generator *gen)
         output_string(out, ", uint32_t mask%%mask-index");
     }
     output_line(out, ") {");
-    // TODO: inline continuation_stack_push
-    output_line(out, "    continuation_stack_push(&top);");
+    output_line(out, "    struct fill_run_continuation *cont = top->cont;");
+    output_line(out, "    cont->top_index++;");
+    output_line(out, "    if (cont->top_index >= cont->capacity) {");
+    output_line(out, "        size_t new_capacity = (cont->capacity + 2) * 3 / 2;");
+    output_line(out, "        if (new_capacity <= cont->capacity)");
+    output_line(out, "            abort();");
+    output_line(out, "        struct fill_run_state *new_states = realloc(cont->stack, new_capacity * sizeof(struct fill_run_state));");
+    output_line(out, "        if (!new_states)");
+    output_line(out, "            abort();");
+    output_line(out, "        cont->stack = new_states;");
+    output_line(out, "        cont->capacity = new_capacity;");
+    output_line(out, "        top = &cont->stack[cont->top_index];");
+    output_line(out, "    } else");
+    output_line(out, "        top++;");
+    output_line(out, "    top->cont = cont;");
     for (uint32_t i = 0; i < mask_width; ++i) {
         set_unsigned_number_substitution(out, "mask-index", i);
         output_line(out, "    top->reachability_mask[%%mask-index] = mask%%mask-index;");
@@ -1348,7 +1341,6 @@ static struct bit_range next_bit_range(struct bit_range r, uint8_t bits)
 
 static void set_bit_range(uint8_t *bytes, struct bit_range r, uint32_t val)
 {
-//    fprintf(stderr, "%u %u - %u %u -> %x\n", r.start_byte, r.start_bit, r.end_byte, r.end_bit, val);
     for (uint8_t i = r.start_byte; i <= r.end_byte; ++i) {
         int32_t offset = 8 * (int32_t)(i - r.start_byte) - r.start_bit;
         int32_t end = 8 * (int32_t)(i - r.end_byte + 1) - r.end_bit;
@@ -1505,8 +1497,6 @@ static void generate_action_table(struct generator *gen,
     uint32_t tries_left = MAX_TRIES;
     for (uint32_t i = 0; i < number_of_groups; ++i) {
         struct action_table_bucket_group group = groups[i];
-        // TODO: remove
-//        printf("group size: %u (%u, %u, %u)\n", group.length, nfa_state, tries_left, bucket_limit);
         while (true) {
             if (nfa_state == UINT32_MAX)
                 abort();
@@ -1574,13 +1564,6 @@ retry:
     struct bit_range nfa_state_range = next_bit_range((struct bit_range){.end_byte=key_bytes}, nfa_state_bits);
     struct bit_range action_range = next_bit_range(nfa_state_range, action_bits);
     struct bit_range push_nfa_state_range = next_bit_range(action_range, nfa_state_bits);
-//#define printthething(s) fprintf(stderr, #s " = %u %u - %u %u\n", s.start_byte, s.start_bit, s.end_byte, s.end_bit)
-//    printthething(target_nfa_state_range);
-//    printthething(dfa_state_range);
-//    printthething(dfa_symbol_range);
-//    printthething(nfa_state_range);
-//    printthething(action_range);
-//    printthething(push_nfa_state_range);
     set_unsigned_number_substitution(out, "entry-bytes", key_bytes + value_bytes);
     set_unsigned_number_substitution(out, "table-size", table_size);
     set_unsigned_number_substitution(out, "bucket-limit", bucket_limit);
@@ -1596,22 +1579,13 @@ retry:
         for (; bucket; bucket = bucket->next) {
             output_string(out, "{");
             memset(bytes, 0, key_bytes + value_bytes);
-//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
             set_bit_range(bytes, target_nfa_state_range, nfa_states[bucket->target_nfa_state]);
-//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
             set_bit_range(bytes, dfa_state_range, bucket->dfa_state);
-//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
             set_bit_range(bytes, dfa_symbol_range, bucket->dfa_symbol);
-//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
             set_bit_range(bytes, nfa_state_range, nfa_states[bucket->nfa_state]);
-//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
             set_bit_range(bytes, action_range, bucket->action_index);
-//            fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
-            if (bucket->dfa_symbol >= gen->combined->number_of_tokens) {
+            if (bucket->dfa_symbol >= gen->combined->number_of_tokens)
                 set_bit_range(bytes, push_nfa_state_range, nfa_states[bucket->push_nfa_state]);
-//                fprintf(stderr, "%x %x %x %x %x %x %x\n", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
-            }
-//            fprintf(stderr, "\n");
             for (uint32_t i = 0; i < key_bytes + value_bytes; ++i) {
                 set_unsigned_number_substitution(out, "byte", bytes[i]);
                 output_string(out, "%%byte,");
@@ -1652,7 +1626,6 @@ retry:
     decode_bit_range(out, nfa_state_range, "entry.nfa_state");
     decode_bit_range(out, action_range, "entry.actions");
     decode_bit_range(out, push_nfa_state_range, "entry.push_nfa_state");
-//    output_line(out, "    printf(\"decoding: %u %u %u\\n\", entry.nfa_state, entry.actions, entry.push_nfa_state);");
     output_line(out, "    return entry;");
     output_line(out, "}");
     output_line(out, "static struct action_table_entry action_table_lookup(%%state-type nfa_state, %%state-type dfa_state, %%token-type token) {");
@@ -1667,7 +1640,6 @@ retry:
     output_line(out, "    struct action_table_key key = encode_key(nfa_state, dfa_state, token);");
     output_line(out, "    uint32_t j = 0;");
     output_line(out, "    const uint8_t *entry = 0;");
-//    output_line(out, "    printf(\"Searching for: %u,%u,%u -> %u %u %u %u\\n\", nfa_state, dfa_state, token, key.bytes[0], key.bytes[1], key.bytes[2], key.bytes[3]);");
     output_line(out, "    for (; j < %%bucket-limit; ++j) {");
     output_line(out, "        entry = action_table[index1][j];");
     output_line(out, "        if (!memcmp(key.bytes, entry, sizeof(key.bytes)))");
@@ -1676,7 +1648,6 @@ retry:
     output_line(out, "        if (!memcmp(key.bytes, entry, sizeof(key.bytes)))");
     output_line(out, "            break;");
     output_line(out, "    }");
-//    output_line(out, "    printf(\"Found: %u,%u\\n\", entry->nfa_state, entry->actions);");
     output_line(out, "    if (j >= %%bucket-limit)");
     output_line(out, "        abort();");
     output_line(out, "    return decode_entry(entry);");

@@ -1611,23 +1611,6 @@ struct fill_run_continuation {
     uint32_t capacity;
     int error;
 };
-static void continuation_stack_push(struct fill_run_state **top) {
-    struct fill_run_continuation *cont = (*top)->cont;
-    cont->top_index++;
-    if (cont->top_index >= cont->capacity) {
-        size_t new_capacity = (cont->capacity + 2) * 3 / 2;
-        if (new_capacity <= cont->capacity)
-            abort();
-        struct fill_run_state *new_states = realloc(cont->stack, new_capacity * sizeof(struct fill_run_state));
-        if (!new_states)
-            abort();
-        cont->stack = new_states;
-        cont->capacity = new_capacity;
-        *top = &cont->stack[cont->top_index];
-    } else
-        (*top)++;
-    (*top)->cont = cont;
-}
 static void bracket_entry_state(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index, uint32_t mask0);
 static void (*state_funcs[92])(struct owl_token_run *, struct fill_run_state *, uint16_t);
 static void state_func_70(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
@@ -2278,7 +2261,21 @@ static void (*state_funcs[92])(struct owl_token_run *, struct fill_run_state *, 
     state_func_84, state_func_84, state_func_86, state_func_87,
     state_func_88, state_func_84, state_func_90, state_func_91,};
 static void bracket_entry_state(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index, uint32_t mask0) {
-    continuation_stack_push(&top);
+    struct fill_run_continuation *cont = top->cont;
+    cont->top_index++;
+    if (cont->top_index >= cont->capacity) {
+        size_t new_capacity = (cont->capacity + 2) * 3 / 2;
+        if (new_capacity <= cont->capacity)
+            abort();
+        struct fill_run_state *new_states = realloc(cont->stack, new_capacity * sizeof(struct fill_run_state));
+        if (!new_states)
+            abort();
+        cont->stack = new_states;
+        cont->capacity = new_capacity;
+        top = &cont->stack[cont->top_index];
+    } else
+        top++;
+    top->cont = cont;
     top->reachability_mask[0] = mask0;
     run->states[token_index] = 59;
     state_func_59(run, top, token_index);

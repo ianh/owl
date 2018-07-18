@@ -692,7 +692,6 @@ static void fill_run_states(struct interpret_context *ctx,
                 if (k != UINT32_MAX)
                     bitset_add(&reachability, k);
             }
-            // TODO: if nothing is reachable, give up?
             if (ctx->stack_depth == UINT32_MAX)
                 abort();
             ctx->stack = grow_array(ctx->stack, &ctx->stack_allocated_bytes,
@@ -817,7 +816,7 @@ static void follow_transition_reversed(struct interpret_context *ctx,
     nfa_state = entry->nfa_state;
     if (bracket_transition) {
         state_array_push(&ctx->nfa_stack, nfa_state);
-        // TODO: Use a table.
+        // FIXME: Use a table instead of doing this linear search.
         for (state_id i = 0; i <
          ctx->combined->bracket_automaton.number_of_states; ++i) {
             struct state s = ctx->combined->bracket_automaton.states[i];
