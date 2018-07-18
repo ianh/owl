@@ -1,4 +1,4 @@
-#include "6b-fancy-tree-output.h"
+#include "6b-interpret-output.h"
 
 #include "alloc.h"
 #include <stdio.h>

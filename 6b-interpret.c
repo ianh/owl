@@ -140,7 +140,7 @@ struct interpret_node {
     size_t number_of_slots;
     struct interpret_node **slots;
 
-    // Used for fancy tree output:
+    // Used for formatted output:
     // Sorted by start_location.  Only includes children of type NODE_RULE.
     size_t number_of_children;
     struct interpret_node **children;
@@ -964,7 +964,7 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
      sizeof(struct interpret_node *));
     memcpy(node->slots, slots,
      sizeof(struct interpret_node *) * node->number_of_slots);
-    // Compute the depth and children for the fancy tree functions to use.
+    // Compute the depth and children for the output functions to use.
     uint32_t max_depth = 0;
     for (size_t i = 0; i < node->number_of_slots; ++i) {
         struct interpret_node *slot = node->slots[i];

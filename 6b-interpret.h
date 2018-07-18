@@ -3,7 +3,7 @@
 
 #include "4-check-for-ambiguity.h"
 #include "5-determinize.h"
-#include "6b-fancy-tree-output.h"
+#include "6b-interpret-output.h"
 
 #include <stdio.h>
 
@@ -20,7 +20,7 @@ struct interpreter {
 // `text` is a zero-terminated string.
 void interpret(struct interpreter *interpreter, const char *text, FILE *output);
 
-// Interpret ambiguous paths and output the resulting tree using our fancy
+// Interpret ambiguous paths and output the resulting tree using our
 // tree-drawing code.
 void output_ambiguity(struct interpreter *interpreter,
  struct ambiguity *ambiguity, FILE *output);
