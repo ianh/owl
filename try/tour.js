@@ -332,6 +332,4 @@ expr =
   .operators infix left
     '+' : plus
     '-' : minus
-`,"input":
-`1 - 2 - 3 - 4
-`}};
+`,"input":""}};
