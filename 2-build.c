@@ -19,6 +19,8 @@ struct context {
     size_t bracket_nesting;
     size_t expression_nesting;
 };
+
+// Limit nesting depth to avoid stack overflow.
 #define MAX_EXPRESSION_NESTING 3000
 
 struct boundary_states;
@@ -30,6 +32,9 @@ static void build_body_expression(struct context *ctx,
 static struct boundary_states connect_expression(struct context *ctx,
  struct automaton *a, struct owl_ref ref, struct boundary_states outer);
 
+static uint32_t add_choice(struct context *ctx, struct rule *rule,
+ struct owl_ref identifier, struct source_range expr_range);
+
 static uint32_t add_slot(struct context *ctx, struct rule *rule,
  const char *slot_name, size_t slot_name_length, uint32_t referenced_rule_index,
  struct source_range range, const char *error_reason);
@@ -40,22 +45,6 @@ static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
 static uint32_t add_rule(struct context *ctx, const char *name, size_t len);
 static void add_token_rule(struct context *ctx, const char *name, size_t len);
 static uint32_t find_rule(struct context *ctx, const char *name, size_t len);
-
-#define CHECK_FOR_DUPLICATE_CLAUSE(type, elem) \
-do { \
-    for (uint32_t i = 0; i < rule->number_of_##type##s; ++i) { \
-        if (rule->type##s[i].name_length != elem.length) \
-            continue; \
-        if (memcmp(rule->type##s[i].name, elem.identifier, elem.length)) \
-            continue; \
-        errorf("there's already a " #type " named '%.*s'", (int)elem.length, \
-         elem.identifier); \
-        error.ranges[0] = rule->type##s[i].expr_range; \
-        error.ranges[1] = rule->type##s[i].name_range; \
-        error.ranges[2] = elem.range; \
-        exit_with_error(); \
-    } \
-} while (0)
 
 void build(struct grammar *grammar, struct owl_tree *tree)
 {
@@ -121,18 +110,7 @@ void build(struct grammar *grammar, struct owl_tree *tree)
                 exit_with_error();
             }
             struct parsed_expr expr = parsed_expr_get(body.expr);
-            struct parsed_identifier choice_identifier
-             = parsed_identifier_get(body.identifier);
-            CHECK_FOR_DUPLICATE_CLAUSE(choice, choice_identifier);
-            uint32_t choice_index = rule->number_of_choices++;
-            rule->choices = grow_array(rule->choices,
-             &rule->choices_allocated_bytes,
-             sizeof(struct choice) * rule->number_of_choices);
-            struct choice *choice = &rule->choices[choice_index];
-            choice->name = choice_identifier.identifier;
-            choice->name_length = choice_identifier.length;
-            choice->name_range = choice_identifier.range;
-            choice->expr_range = expr.range;
+            add_choice(&context, rule, body.identifier, expr.range);
             body.expr = owl_next(body.expr);
             body.identifier = owl_next(body.identifier);
         }
@@ -173,27 +151,17 @@ void build(struct grammar *grammar, struct owl_tree *tree)
             // Then add each operator at this precedence to the rule.
             while (!ops.operator.empty) {
                 struct parsed_operator op = parsed_operator_get(ops.operator);
-                struct parsed_identifier op_choice =
-                 parsed_identifier_get(op.identifier);
                 if (rule->number_of_choices >= MAX_NUMBER_OF_CHOICES) {
                     errorf("rules with more than %u choice clauses are "
                      "currently unsupported", MAX_NUMBER_OF_CHOICES);
                     error.ranges[0] = rule->name_range;
                     exit_with_error();
                 }
-                CHECK_FOR_DUPLICATE_CLAUSE(choice, op_choice);
-                uint32_t op_index = rule->number_of_choices++;
-                rule->choices = grow_array(rule->choices,
-                 &rule->choices_allocated_bytes,
-                 sizeof(struct choice) * rule->number_of_choices);
-                struct choice *operator = &rule->choices[op_index];
-                operator->name = op_choice.identifier;
-                operator->name_length = op_choice.length;
-                operator->name_range = op_choice.range;
-                operator->expr_range = parsed_expr_get(op.expr).range;
-                operator->fixity = rule_fixity;
-                operator->associativity = rule_associativity;
-                operator->precedence = precedence;
+                uint32_t operator = add_choice(&context, rule, op.identifier,
+                 parsed_expr_get(op.expr).range);
+                rule->choices[operator].fixity = rule_fixity;
+                rule->choices[operator].associativity = rule_associativity;
+                rule->choices[operator].precedence = precedence;
                 ops.operator = owl_next(ops.operator);
             }
             // Each new 'operators' section has a lower precedence than the
@@ -512,6 +480,33 @@ static struct boundary_states connect_expression(struct context *ctx,
     automaton_add_transition(a, outer.entry, inner.entry, SYMBOL_EPSILON);
     automaton_add_transition(a, inner.exit, outer.exit, SYMBOL_EPSILON);
     return inner;
+}
+
+static uint32_t add_choice(struct context *ctx, struct rule *rule,
+ struct owl_ref identifier, struct source_range expr_range)
+{
+    struct parsed_identifier ident = parsed_identifier_get(identifier);
+    for (uint32_t i = 0; i < rule->number_of_choices; ++i) {
+        if (rule->choices[i].name_length != ident.length)
+            continue;
+        if (memcmp(rule->choices[i].name, ident.identifier, ident.length))
+            continue;
+        errorf("there's already a choice named '%.*s'", (int)ident.length,
+         ident.identifier);
+        error.ranges[0] = rule->choices[i].expr_range;
+        error.ranges[1] = rule->choices[i].name_range;
+        error.ranges[2] = ident.range;
+        exit_with_error();
+    }
+    uint32_t choice_index = rule->number_of_choices++;
+    rule->choices = grow_array(rule->choices, &rule->choices_allocated_bytes,
+     sizeof(struct choice) * rule->number_of_choices);
+    struct choice *choice = &rule->choices[choice_index];
+    choice->name = ident.identifier;
+    choice->name_length = ident.length;
+    choice->name_range = ident.range;
+    choice->expr_range = expr_range;
+    return choice_index;
 }
 
 static uint32_t add_slot(struct context *ctx, struct rule *rule,
