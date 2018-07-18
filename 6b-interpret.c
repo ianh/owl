@@ -1046,6 +1046,7 @@ static int fixity_associativity_lookup(uint32_t rule_index, uint32_t choice,
             return CONSTRUCT_INFIX_RIGHT;
         }
     }
+    abort();
 }
 
 static int precedence_lookup(uint32_t rule_index, uint32_t choice,
