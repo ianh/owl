@@ -4,8 +4,6 @@
 #include "5-determinize.h"
 #include <stdlib.h>
 
-struct generator_output;
-
 struct generator {
     void (*output)(const char *, size_t);
 
