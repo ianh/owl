@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
     tree = owl_tree_create_from_string(grammar_string);
     switch (owl_tree_get_error(tree, &error.ranges[0])) {
     case ERROR_INVALID_TOKEN:
-        exit_with_errorf("'%.*s' isn't a valid operator",
+        exit_with_errorf("'%.*s' isn't a valid token",
          (int)(error.ranges[0].end - error.ranges[0].start),
          grammar_string + error.ranges[0].start);
     case ERROR_UNEXPECTED_TOKEN:
@@ -271,6 +271,8 @@ void print_error(void)
 {
     int colors = terminal_colors(STDERR_FILENO);
     long columns = terminal_columns(STDERR_FILENO);
+    if (columns <= 0)
+        columns = 80;
     const char *level;
     if (error.level == WARNING) {
         if (colors >= 256)
