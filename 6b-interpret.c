@@ -171,6 +171,7 @@ static void fill_run_states(struct interpret_context *ctx,
  struct owl_token_run *run);
 static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
  struct owl_token_run *run);
+static void destroy_parse_tree(struct interpret_node *tree);
 
 static symbol_id token_symbol(struct combined_grammar *grammar, const char *s);
 static bool follow_transition(struct automaton *a, state_id *state,
@@ -266,6 +267,7 @@ static void output_ambiguity_path(struct interpreter *interpreter,
     output_document(output, &context.document, interpreter->terminal_info);
     *row_count = context.document.number_of_rows;
     destroy_document(&context.document);
+    destroy_parse_tree(root);
 }
 
 void output_ambiguity(struct interpreter *interpreter,
@@ -613,6 +615,8 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
 #endif
     output_document(output, &context.document, interpreter->terminal_info);
     destroy_document(&context.document);
+    destroy_parse_tree(root);
+    free(context.stack);
     free(context.offset_table);
     free(context.bracket_transition_for_symbol);
 }
@@ -661,6 +665,7 @@ static void fill_run_states(struct interpret_context *ctx,
             assert(symbol == BRACKET_TRANSITION_TOKEN);
             symbol = s.transition_symbol;
             run->tokens[i] = symbol;
+            bitset_destroy(&top->bracket_reachability);
             ctx->stack_depth--;
             if (ctx->stack_depth < 1)
                 abort();
@@ -747,6 +752,7 @@ static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
         run = run->prev;
         free(old);
     }
+    state_array_destroy(&ctx->nfa_stack);
     follow_transition_reversed(ctx, &nfa_state, UINT32_MAX, UINT32_MAX,
      offset, offset + whitespace);
     return construct_finish(&ctx->construct_state,
@@ -854,6 +860,21 @@ static size_t push_action_offsets(struct interpret_context *ctx, size_t start,
     push_action_offset(ctx, start);
     push_action_offset(ctx, end);
     return end;
+}
+
+static void destroy_parse_tree(struct interpret_node *tree)
+{
+    while (tree) {
+        struct interpret_node *next = tree->next_sibling;
+        for (size_t i = 0; i < tree->number_of_slots; ++i)
+            destroy_parse_tree(tree->slots[i]);
+        if (tree->type == NODE_STRING_TOKEN && tree->string.has_escapes)
+            free((void *)tree->string.string);
+        free(tree->slots);
+        free(tree->children);
+        free(tree);
+        tree = next;
+    }
 }
 
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
@@ -998,7 +1019,7 @@ static struct interpret_node *finish_token(uint32_t rule,
     if (!token)
         abort();
     context->tokens = token->next_sibling;
-    token->next_sibling = 0;
+    token->next_sibling = next_sibling;
     return token;
 }
 
