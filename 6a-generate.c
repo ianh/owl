@@ -403,7 +403,7 @@ void generate(struct generator *gen)
                 output_line(out, "        .identifier = ref._tree->string + start_location,");
                 output_line(out, "        .length = end_location - start_location,");
             } else if (rule_is_named(rule, "number")) {
-                output_line(out, "        .number = (union { double n; uint64_t v; }){ .v = read_tree(&offset, ref._tree) }.n,");
+                output_line(out, "        .number = (union { double n; uint64_t v; }){ .v = read_tree(&token_offset, ref._tree) }.n,");
             } else if (rule_is_named(rule, "string")) {
                 output_line(out, "        .string = string,");
                 output_line(out, "        .length = string_length,");
