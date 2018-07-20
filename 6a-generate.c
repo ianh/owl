@@ -258,6 +258,7 @@ void generate(struct generator *gen)
         }
         output_line(out, "};");
     }
+    free(choices);
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = &gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
@@ -1253,6 +1254,7 @@ static void generate_keyword_reader(struct generator *gen,
             shared_length--;
         }
     }
+    free(tokens);
     output_line(out, "    default:");
     output_line(out, "        return 0;");
     output_line(out, "    }");
@@ -1557,6 +1559,7 @@ retry:
             }
         }
     }
+    free(groups);
     const int actions_per_line = 30;
     output_line(out, "static const uint16_t actions[] = {");
     for (uint32_t i = 0; i < d->number_of_actions; ++i) {
