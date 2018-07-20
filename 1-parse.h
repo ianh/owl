@@ -2275,6 +2275,13 @@ static struct owl_tree *owl_tree_create_empty(void) {
     return calloc(1, sizeof(struct owl_tree));
 }
 
+static void free_token_runs(struct owl_token_run **run) {
+    while (*run) {
+        struct owl_token_run *prev = (*run)->prev;
+        free(*run);
+        *run = prev;
+    }
+}
 struct owl_tree *owl_tree_create_from_string(const char *string) {
     struct owl_tree *tree = owl_tree_create_empty();
     tree->string = string;
@@ -2297,6 +2304,7 @@ struct owl_tree *owl_tree_create_from_string(const char *string) {
             free(c.stack);
             tree->error = ERROR_UNEXPECTED_TOKEN;
             find_token_range(&tokenizer, token_run, failing_index, &tree->error_range.start, &tree->error_range.end);
+            free_token_runs(&token_run);
             return tree;
         }
     }
@@ -2305,6 +2313,7 @@ struct owl_tree *owl_tree_create_from_string(const char *string) {
     if (string[tokenizer.offset] != '\0') {
         tree->error = ERROR_INVALID_TOKEN;
         estimate_next_token_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);
+        free_token_runs(&token_run);
         return tree;
     }
     switch (top.state) {
@@ -2326,6 +2335,7 @@ struct owl_tree *owl_tree_create_from_string(const char *string) {
     default:
         tree->error = ERROR_MORE_INPUT_NEEDED;
         find_end_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);
+        free_token_runs(&token_run);
         return tree;
     }
     tree->root_offset = build_parse_tree(&tokenizer, token_run, tree);
@@ -2796,6 +2806,7 @@ static size_t build_parse_tree(struct owl_default_tokenizer *tokenizer, struct o
     struct action_table_entry entry = action_table_lookup(nfa_state, UINT32_MAX, UINT32_MAX);
     apply_actions(&construct_state, entry.actions, offset, offset + whitespace);
     free(state_stack);
+    free_token_runs(&run);
     return construct_finish(&construct_state, offset);
 }
 static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *text, void *info) {

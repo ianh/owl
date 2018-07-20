@@ -872,6 +872,13 @@ void generate(struct generator *gen)
     output_line(out, "    return calloc(1, sizeof(struct owl_tree));");
     output_line(out, "}");
     output_line(out, "");
+    output_line(out, "static void free_token_runs(struct owl_token_run **run) {");
+    output_line(out, "    while (*run) {");
+    output_line(out, "        struct owl_token_run *prev = (*run)->prev;");
+    output_line(out, "        free(*run);");
+    output_line(out, "        *run = prev;");
+    output_line(out, "    }");
+    output_line(out, "}");
     output_line(out, "struct owl_tree *owl_tree_create_from_string(const char *string) {");
     output_line(out, "    struct owl_tree *tree = owl_tree_create_empty();");
     output_line(out, "    tree->string = string;");
@@ -891,11 +898,10 @@ void generate(struct generator *gen)
     output_line(out, "    uint16_t failing_index = 0;");
     output_line(out, "    while (owl_default_tokenizer_advance(&tokenizer, &token_run)) {");
     output_line(out, "        if (!fill_run_states(token_run, &c, &failing_index)) {");
-    // TODO: test leaks in error cases
-    // TODO: free the rest of the runs
     output_line(out, "            free(c.stack);");
     output_line(out, "            tree->error = ERROR_UNEXPECTED_TOKEN;");
     output_line(out, "            find_token_range(&tokenizer, token_run, failing_index, &tree->error_range.start, &tree->error_range.end);");
+    output_line(out, "            free_token_runs(&token_run);");
     output_line(out, "            return tree;");
     output_line(out, "        }");
     output_line(out, "    }");
@@ -904,6 +910,7 @@ void generate(struct generator *gen)
     output_line(out, "    if (string[tokenizer.offset] != '\\0') {");
     output_line(out, "        tree->error = ERROR_INVALID_TOKEN;");
     output_line(out, "        estimate_next_token_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);");
+    output_line(out, "        free_token_runs(&token_run);");
     output_line(out, "        return tree;");
     output_line(out, "    }");
     output_line(out, "    switch (top.state) {");
@@ -917,6 +924,7 @@ void generate(struct generator *gen)
     output_line(out, "    default:");
     output_line(out, "        tree->error = ERROR_MORE_INPUT_NEEDED;");
     output_line(out, "        find_end_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);");
+    output_line(out, "        free_token_runs(&token_run);");
     output_line(out, "        return tree;");
     output_line(out, "    }");
     /*
@@ -1730,8 +1738,8 @@ retry:
     output_line(out, "    }");
     output_line(out, "    struct action_table_entry entry = action_table_lookup(nfa_state, UINT32_MAX, UINT32_MAX);");
     output_line(out, "    apply_actions(&construct_state, entry.actions, offset, offset + whitespace);");
-    // TODO: Free all remaining token runs here (or in the caller?).
     output_line(out, "    free(state_stack);");
+    output_line(out, "    free_token_runs(&run);");
     output_line(out, "    return construct_finish(&construct_state, offset);");
     output_line(out, "}");
     free(bucket_sizes);
