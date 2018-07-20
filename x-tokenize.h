@@ -183,7 +183,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
             offset++;
             continue;
         }
-        TOKEN_T token;
+        TOKEN_T token = -1;
         bool is_token = false;
         bool end_token = false;
         bool comment = false;

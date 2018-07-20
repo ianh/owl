@@ -412,7 +412,7 @@ void generate(struct generator *gen)
         output_line(out, "        .range.start = start_location,");
         output_line(out, "        .range.end = end_location,");
         if (rule->number_of_choices > 0)
-            output_line(out, "        .type = read_tree(&offset, ref._tree),");
+            output_line(out, "        .type = (enum parsed_type)read_tree(&offset, ref._tree),");
         output_line(out, "    };");
         for (uint32_t j = 0; j < rule->number_of_slots; ++j) {
             struct slot slot = rule->slots[j];
@@ -709,8 +709,8 @@ void generate(struct generator *gen)
     output_line(out, "};");
     output_line(out, "struct fill_run_continuation {");
     output_line(out, "    struct fill_run_state *stack;");
-    output_line(out, "    uint32_t top_index;");
-    output_line(out, "    uint32_t capacity;");
+    output_line(out, "    size_t top_index;");
+    output_line(out, "    size_t capacity;");
     output_line(out, "    int error;");
     output_line(out, "};");
     struct automaton *a = &gen->deterministic->automaton;

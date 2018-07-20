@@ -377,7 +377,7 @@ struct parsed_fixity parsed_fixity_get(struct owl_ref ref) {
     struct parsed_fixity result = {
         .range.start = start_location,
         .range.end = end_location,
-        .type = read_tree(&offset, ref._tree),
+        .type = (enum parsed_type)read_tree(&offset, ref._tree),
     };
     result.assoc._tree = ref._tree;
     result.assoc._offset = read_tree(&offset, ref._tree);
@@ -398,7 +398,7 @@ struct parsed_assoc parsed_assoc_get(struct owl_ref ref) {
     struct parsed_assoc result = {
         .range.start = start_location,
         .range.end = end_location,
-        .type = read_tree(&offset, ref._tree),
+        .type = (enum parsed_type)read_tree(&offset, ref._tree),
     };
     return result;
 }
@@ -447,7 +447,7 @@ struct parsed_expr parsed_expr_get(struct owl_ref ref) {
     struct parsed_expr result = {
         .range.start = start_location,
         .range.end = end_location,
-        .type = read_tree(&offset, ref._tree),
+        .type = (enum parsed_type)read_tree(&offset, ref._tree),
     };
     result.identifier._tree = ref._tree;
     result.identifier._offset = read_tree(&offset, ref._tree);
@@ -1115,7 +1115,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
             offset++;
             continue;
         }
-        uint32_t token;
+        uint32_t token = -1;
         bool is_token = false;
         bool end_token = false;
         bool comment = false;
@@ -1593,8 +1593,8 @@ struct fill_run_state {
 };
 struct fill_run_continuation {
     struct fill_run_state *stack;
-    uint32_t top_index;
-    uint32_t capacity;
+    size_t top_index;
+    size_t capacity;
     int error;
 };
 static void bracket_entry_state(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index, uint32_t mask0);
