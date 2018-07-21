@@ -1,13 +1,14 @@
 .PHONY: install clean clean-js
 
 UNAME!=sh -c 'uname -s 2>/dev/null'
+OS?=$(UNAME)
 LIBDL_FreeBSD=no
-LIBDL_=no
-LIBDL=$(LIBDL_$(UNAME))
+LIBDL_Windows_NT=no
+LIBDL=$(LIBDL_$(OS))
 LDLIBS_no=
 LDLIBS_=-ldl
-DEFINES_=-DNOT_UNIX
-DEFINES=$(DEFINES_$(UNAME))
+DEFINES_Windows_NT=-DNOT_UNIX
+DEFINES=$(DEFINES_$(OS))
 
 INSTALL?=/usr/bin/install
 PREFIX?=/usr/local
