@@ -2,14 +2,18 @@
 
 UNAME!=sh -c 'uname -s 2>/dev/null'
 LIBDL_FreeBSD=no
+LIBDL_=no
 LIBDL=$(LIBDL_$(UNAME))
 LDLIBS_no=
 LDLIBS_=-ldl
+DEFINES_=-DNOT_UNIX
+DEFINES=$(DEFINES_$(UNAME))
 
 INSTALL?=/usr/bin/install
 PREFIX?=/usr/local
 CFLAGS?=-O3 -g
 CFLAGS+=-std=c11 -pedantic -Wall -Wno-missing-braces -Wno-overlength-strings
+CFLAGS+=$(DEFINES)
 EMFLAGS+=-s EXPORTED_FUNCTIONS='["_main","_fflush"]' -s ABORTING_MALLOC=0 -s MODULARIZE=1 -s EXPORT_NAME=Owl -s EXTRA_EXPORTED_RUNTIME_METHODS='["FS","ENV"]'
 LDFLAGS?=
 LDLIBS?=$(LDLIBS_$(LIBDL))

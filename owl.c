@@ -5,11 +5,13 @@
 #include "6a-generate.h"
 #include "6b-interpret.h"
 #include "alloc.h"
-#include <dlfcn.h>
 #include <stdio.h>
 #include <string.h>
+#ifndef NOT_UNIX
+#include <dlfcn.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#endif
 
 static FILE *output_file = 0;
 static struct terminal_info get_terminal_info(int fileno);
@@ -459,6 +461,7 @@ static int terminal_colors(int fileno)
 {
     if (force_terminal_colors)
         return 256;
+#ifndef NOT_UNIX
     if (fileno < 0 || !isatty(fileno))
         return 1;
     // Try some different names that "ncurses" goes by on various platforms.
@@ -496,6 +499,7 @@ static int terminal_colors(int fileno)
         if (value > 0)
             return value;
     }
+#endif
     return 1;
 }
 
