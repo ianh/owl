@@ -2,8 +2,6 @@ tour = {
 "start":{"grammar":
 `# Welcome to Owl's interpreter mode!
 
-# Here's a simple grammar for smiley faces:
-
 face = eyes nose mouth
 eyes =
   ':' : normal
@@ -18,26 +16,13 @@ mouth =
   '(' : frown
   'D' : open-smile
 
-# Feel free to modify it or replace it with
-# your own grammar.
-
-# Owl matches the first rule of the grammar
-# against the input in the box below.
-
 # A copy of the Owl tool runs in your
-# browser each time the grammar or input
-# changes.  Its output is shown in the box
-# on the right.
+# browser each time you modify this grammar
+# or the input below.  Output appears in
+# the box on the right.
 
-# Try modifying the face below or adding
-# new parts to the grammar to see how the
-# output changes.
-
-# If you want to learn more,
-# check out the repository at
-# <https://github.com/ianh/owl>.
-
-# Or take a #tour!
+# Feel free to test your grammar here.
+# You can also take a #tour.
 `,"input": 
 `:^)
 `},
@@ -181,8 +166,8 @@ expr =
 
 # This grammar matches the arguments of a
 # procedure call as a postfix operator.  A
-# C-like ternary operator is provided using
-# "infix".
+# C-like ternary operator is also provided
+# as an infix operator.
 `,"input":
 `fire_the_missiles()
 add(exp(x), y)
@@ -332,4 +317,25 @@ expr =
   .operators infix left
     '+' : plus
     '-' : minus
-`,"input":""}};
+`,"input":""},
+"example":{"grammar":
+`program = stmt*
+stmt =
+   'print' expr : print
+   identifier '=' expr : assign
+expr =
+   [ '(' expr ')' ] : parens
+   identifier : variable
+   number : literal
+ .operators prefix
+   '-' : negative
+ .operators infix left
+   '*' : times
+   '/' : divided-by
+ .operators infix left
+   '+' : plus
+   '-' : minus
+`,"input":
+`x = 7
+print 1 + 2 * x
+`}};

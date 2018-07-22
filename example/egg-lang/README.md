@@ -2,6 +2,8 @@
 
 *Egg* is a programming language loosely inspired by Lua.
 
+It includes associative arrays, lexical scope, and a simple mark-and-sweep garbage collector.
+
 To build `egg`, first build `owl`.  Then run `make`:
 
 ```

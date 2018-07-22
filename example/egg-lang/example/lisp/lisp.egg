@@ -33,20 +33,20 @@ function read()
     elseif ch == "'" then
         advance()
         return [type="list", length=2, list=
-         [[type="identifier", name="quote"], read()]]
+         [[type="symbol", name="quote"], read()]]
     elseif ch == "-" || isdigit(ch) then
         return read_number()
     else
-        return read_identifier()
+        return read_symbol()
     end
 end
 
-function read_identifier()
+function read_symbol()
     local name = ""
     while !isspace(peek()) && peek() != ")" do
         name = name + next()
     end
-    return [type="identifier", name=name]
+    return [type="symbol", name=name]
 end
 
 function read_number()
@@ -56,7 +56,7 @@ function read_number()
         advance()
     end
     if !isdigit(peek()) then
-        return [type="identifier", name="-"]
+        return [type="symbol", name="-"]
     end
     local n = 0
     while isdigit(peek()) do
@@ -84,7 +84,7 @@ function read_list()
 end
 
 function print_val(val)
-    if val.type == "identifier" then
+    if val.type == "symbol" then
         print(val.name)
     elseif val.type == "number" then
         print(val.number)
@@ -105,7 +105,7 @@ function print_val(val)
 end
 
 function eval(val)
-    if val.type == "identifier" then
+    if val.type == "symbol" then
         return env[val.name]
     elseif val.type == "list" then
         return apply(eval(val.list[0]), val)
@@ -139,6 +139,9 @@ function lambda(val)
             env[v.name] = eval(call_val.list[i + 1])
         end
         local val = eval(body)
+        for k=v in globals do
+            saved[k] = v
+        end
         env = saved
         return val
     end
@@ -154,6 +157,17 @@ function begin(val)
     local v = [type="list", length=0, list=[]]
     while i < val.length do
         v = eval(val.list[i])
+        i = i + 1
+    end
+    return v
+end
+
+function make_list(val)
+    local i = 1
+    local v = [type="list", length=val.length - 1, list=[]]
+    while i < val.length do
+        v.list[i - 1] = eval(val.list[i])
+        i = i + 1
     end
     return v
 end
@@ -192,6 +206,15 @@ end
 function eq_func(val)
     local v = eval(val.list[1])
     if v.number == eval(val.list[2]).number then
+        return [type="list", length=1, list=[v]]
+    else
+        return [type="list", length=0, list=[]]
+    end
+end
+
+function eqp_func(val)
+    local v = eval(val.list[1])
+    if v.name == eval(val.list[2]).name then
         return [type="list", length=1, list=[v]]
     else
         return [type="list", length=0, list=[]]
@@ -249,6 +272,13 @@ function set(val)
     return v
 end
 
+function set_global(val)
+    local v = eval(val.list[2])
+    env[val.list[1].name] = v
+    globals[val.list[1].name] = v
+    return v
+end
+
 function read_func(val)
     return read()
 end
@@ -263,11 +293,39 @@ function print_func(val)
     return [type="list", length=0, list=[]]
 end
 
+function has_type(t)
+    function f(val)
+        local v = eval(val.list[1])
+        if v.type == t then
+            return [type="list", length=1, list=[v]]
+        else
+            return [type="list", length=0, list=[]]
+        end
+    end
+    return f
+end
+
+function len_func(val)
+    local v = eval(val.list[1])
+    return [type="number", number=v.length]
+end
+
+function at_func(val)
+    local v = eval(val.list[1])
+    local i = eval(val.list[2])
+    return v.list[i.number]
+end
+
 env = [
+    # operatives
     quote=func_val(quote),
     lambda=func_val(lambda),
     begin=func_val(begin),
     ["if"]=func_val(if_func),
+    set=func_val(set),
+    ["set-global"]=func_val(set_global),
+
+    # applicatives
     ["+"]=func_val(plus),
     ["-"]=func_val(minus),
     ["*"]=func_val(times),
@@ -278,11 +336,17 @@ env = [
     [">"]=func_val(gt_func),
     ["<="]=func_val(le_func),
     [">="]=func_val(ge_func),
-    set=func_val(set),
+    ["len"]=func_val(len_func),
+    ["at"]=func_val(at_func),
+    ["eq?"]=func_val(eqp_func),
+    ["number?"]=func_val(has_type("number")),
+    ["list?"]=func_val(has_type("list")),
+    ["symbol?"]=func_val(has_type("symbol")),
+    list=func_val(make_list),
     read=func_val(read_func),
-    eval=func_val(eval_func),
     print=func_val(print_func),
 ]
+globals = []
 
 while true do
     print("> ")

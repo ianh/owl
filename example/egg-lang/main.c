@@ -197,22 +197,23 @@ static enum control_flow eval_stmt(struct owl_ref stmt_ref,
          eval_expr(stmt.expr));
         break;
     case PARSED_FIELD_ASSIGNMENT: {
+        struct val val = eval_expr(stmt.expr);
         struct val table = eval_expr(stmt.table);
         if (table.type != TYPE_TABLE) {
             fprintf(stderr, "error: expected table\n");
             exit(-1);
         }
-        table_set(table.table, string_for_identifier(stmt.identifier),
-         eval_expr(stmt.expr));
+        table_set(table.table, string_for_identifier(stmt.identifier), val);
         break;
     }
     case PARSED_LOOKUP_ASSIGNMENT: {
+        struct val val = eval_expr(stmt.expr);
         struct val table = eval_expr(stmt.table);
         if (table.type != TYPE_TABLE) {
             fprintf(stderr, "error: expected table\n");
             exit(-1);
         }
-        table_set(table.table, eval_expr(stmt.lookup), eval_expr(stmt.expr));
+        table_set(table.table, eval_expr(stmt.lookup), val);
         break;
     }
     case PARSED_RETURN:

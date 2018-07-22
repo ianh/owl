@@ -1,2 +1,21 @@
+'(paste this into the prompt)
+
+(set env '(a 1 (b 2 (c 3))))
+
+(set lookup-helper (lambda (x a)
+    (if (eq? (at a 0) x)
+        (at a 1)
+        (lookup-helper x (at a 2)))))
+(set lookup-env (lambda (x) (lookup-helper x env)))
+(set add-env (lambda (k v) (set-global env (list k v env))))
+(set eval (lambda (x)
+    (if (number? x) x
+    (if (symbol? x) (lookup-env x)
+    (if (list? x) (eval-list (at x 0) x)
+    (error-or-end-of-input))))))
+(set eval-list (lambda (name x)
+    (if (eq? name 'set) (add-env (at x 1) (eval (at x 2)))
+    (if (eq? name 'quote) (at x 1))
+    (error))))
 (set repl (lambda () (begin (print (eval (read))) (repl))))
 (repl)
