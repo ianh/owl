@@ -276,7 +276,7 @@ These two papers describe how to do that:
 
 The basic idea is to keep a table with the details of each transition (from state, to state, symbol, new determinized state) followed during determinization.  After matching some text, you have a path through the determinized automaton.  Then, starting from the final state, you walk backwards along this path, using the 'from state' and 'to state' information from the table to also walk backwards along the corresponding path from the original automaton.
 
-This technique was easy to adapt to Owl's iterative determinization algorithm.  Since the bracket symbols can change during determinization, the table has an extra field for the new determinized symbol, but everything else is the same.
+Adapting this technique to Owl's iterative determinization algorithm is straightfoward: since bracket symbols can change during determinization, the table has an extra field for the new determinized symbol, but everything else is the same.
 
 I also looked at some other possible approaches:
 
@@ -293,13 +293,13 @@ Laurikari's tagged NFAs looked like they would work well for a limited number of
 
 ### operator-precedence grammars
 
-As it builds the parse tree, Owl uses a variation of Dijkstra's two-stack "shunting-yard" algorithm for associating operators with their operands (see [x-construct-parse-tree.h](x-construct-parse-tree.h) for the implementation).  I mostly just read the [Wikipedia page](https://en.wikipedia.org/wiki/Shunting-yard_algorithm) for this one, though the original reference is apparently:
+A variation of Dijkstra's two-stack "shunting-yard" algorithm is used to associate operators with their operands (see [x-construct-parse-tree.h](x-construct-parse-tree.h) for the implementation).  I mostly just read the [Wikipedia page](https://en.wikipedia.org/wiki/Shunting-yard_algorithm) for this one, though the original reference is apparently:
 
 - E.W. Dijkstra. 1961. [An Algol 60 Translator for the X1](http://www.cs.utexas.edu/~EWD/MCReps/MR35.PDF).
 
 ### ambiguity checking
 
-In order to check the grammar for ambiguity, Owl creates a "product automaton" over pairs of states—a path through the product automaton corresponds to two paths in the original that accept the same input.  This paper was very helpful when I was figuring out how to search the product automaton for ambiguity in a systematic way:
+In order to check the grammar for ambiguity, Owl creates a "product automaton" over pairs of states—a path through the product automaton corresponds to two paths in the original automaton that accept the same input.  This paper was very helpful when I was figuring out how to search the product automaton for ambiguity in a systematic way:
 
 - Cyril Allauzen, Mehryar Mohri, and Ashish Rastogi. 2011. [General Algorithms for Testing the Ambiguity of Finite Automata and the Double-Tape Ambiguity of Finite-State Transducers](https://research.google.com/pubs/archive/37168.pdf). [[doi](http://doi.org/10.1142/S0129054111008477)]
 
