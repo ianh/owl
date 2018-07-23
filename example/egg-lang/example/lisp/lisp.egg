@@ -131,13 +131,15 @@ function lambda(val)
     local params = val.list[1]
     local body = val.list[2]
     function eval_lambda(call_val)
-        local saved = []
+        local next_env = []
         for k=v in env do
-            saved[k] = v
+            next_env[k] = v
         end
         for i=v in params.list do
-            env[v.name] = eval(call_val.list[i + 1])
+            next_env[v.name] = eval(call_val.list[i + 1])
         end
+        local saved = env
+        env = next_env
         local val = eval(body)
         for k=v in globals do
             saved[k] = v
@@ -162,7 +164,7 @@ function begin(val)
     return v
 end
 
-function make_list(val)
+function list_func(val)
     local i = 1
     local v = [type="list", length=val.length - 1, list=[]]
     while i < val.length do
@@ -172,10 +174,21 @@ function make_list(val)
     return v
 end
 
+function make_list(val)
+    local len = eval(val.list[1])
+    local i = 0
+    local v = [type="list", length=len.number, list=[]]
+    while i < v.length do
+        v.list[i] = [type="list", length=0, list=[]]
+        i = i + 1
+    end
+    return v
+end
+
 function if_func(val)
     local pred = eval(val.list[1])
     local v = pred
-    if pred.length > 0 then
+    if pred.type != "list" || pred.length > 0 then
         v = eval(val.list[2])
     elseif val.length >= 4 then
         v = eval(val.list[3])
@@ -297,12 +310,21 @@ function has_type(t)
     function f(val)
         local v = eval(val.list[1])
         if v.type == t then
-            return [type="list", length=1, list=[v]]
+            return [type="symbol", name="true"]
         else
             return [type="list", length=0, list=[]]
         end
     end
     return f
+end
+
+function is_null(val)
+    local v = eval(val.list[1])
+    if v.type == "list" && v.length == 0 then
+        return [type="symbol", name="true"]
+    else
+        return [type="list", length=0, list=[]]
+    end
 end
 
 function len_func(val)
@@ -314,6 +336,14 @@ function at_func(val)
     local v = eval(val.list[1])
     local i = eval(val.list[2])
     return v.list[i.number]
+end
+
+function set_at_func(val)
+    local v = eval(val.list[1])
+    local i = eval(val.list[2])
+    local a = eval(val.list[3])
+    v.list[i.number] = a
+    return a
 end
 
 env = [
@@ -338,11 +368,14 @@ env = [
     [">="]=func_val(ge_func),
     ["len"]=func_val(len_func),
     ["at"]=func_val(at_func),
+    ["set-at"]=func_val(set_at_func),
     ["eq?"]=func_val(eqp_func),
     ["number?"]=func_val(has_type("number")),
     ["list?"]=func_val(has_type("list")),
     ["symbol?"]=func_val(has_type("symbol")),
-    list=func_val(make_list),
+    ["null?"]=func_val(is_null),
+    list=func_val(list_func),
+    ["make-list"]=func_val(make_list),
     read=func_val(read_func),
     print=func_val(print_func),
 ]
