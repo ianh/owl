@@ -948,13 +948,17 @@ static void write_number_token(size_t offset, size_t length, double number,
     ctx->tokens = node;
 }
 
-static int compare_start_locations(const void *a, const void *b)
+static int compare_locations(const void *a, const void *b)
 {
     struct interpret_node *na = *(struct interpret_node **)a;
     struct interpret_node *nb = *(struct interpret_node **)b;
     if (na->start_location < nb->start_location)
         return -1;
     if (na->start_location > nb->start_location)
+        return 1;
+    if (na->end_location < nb->end_location)
+        return -1;
+    if (na->end_location > nb->end_location)
         return 1;
     if (na->order > nb->order)
         return -1;
@@ -1010,7 +1014,7 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
         }
     }
     qsort(node->children, node->number_of_children,
-     sizeof(struct interpret_node *), compare_start_locations);
+     sizeof(struct interpret_node *), compare_locations);
     return node;
 }
 

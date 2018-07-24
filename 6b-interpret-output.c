@@ -260,7 +260,7 @@ static bool advance_label(struct line *line, struct document *document,
         if (row > 0 && label_index > line->row_ranges[row].start) {
             // Apply minimum inter-label spacing.
             struct label prev = document->rows[row].labels[label_index - 1];
-            if (prev.end >= r.start) {
+            if (prev.end >= r.start && prev.end < r.end) {
                 push_offsets(line, l.start, offset_at(line, prev.end) +
                  + LABEL_PADDING);
             }
