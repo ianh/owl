@@ -61,8 +61,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
             renames_for_rule[i][j].from = token.symbol;
             renames_for_rule[i][j].to = index;
 
-            // We call `find_token` so that an error is produced if a token is
-            // used both as a comment token and as a normal token.
+            // We call `find_token` on comment_tokens so an error is produced if
+            // a token is used both as a comment token and as a normal token.
             find_token(grammar->comment_tokens,
              grammar->number_of_comment_tokens, token.string, token.length,
              token.type, &token.range);
@@ -90,7 +90,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
         automaton_add_transition(&automaton_for_rule[i], 0, 1, symbol);
         automaton_mark_accepting_state(&automaton_for_rule[i], 1);
     }
-    // Bracket transition symbols come after the tokens.
+    // Bracket symbols come after the tokens.
     symbol_id next_bracket_symbol = result->number_of_tokens;
 
     // Third pass: build the rule automata.  We build the automata bottom-up by
@@ -106,7 +106,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
             automaton_copy(&rule->automaton, &automaton);
         } else {
             // Otherwise, we have to combine all the choices and operators
-            // together, using actions to track which choices and operators are
+            // together, using actions to track which choice or operator is
             // matched.
             state_id start = automaton_create_state(&automaton);
             state_id end = automaton_create_state(&automaton);
@@ -152,7 +152,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
                     // all the states here by embedding the automaton in itself.
                     state_id rhs_end = automaton_create_state(&automaton);
                     // We have to mark the state as accepting so embed works
-                    // properly.
+                    // properly. (this is kind of silly)
                     automaton_mark_accepting_state(&automaton, end);
                     state_id rhs_start = embed(&automaton, &automaton, rhs_end,
                      SYMBOL_EPSILON, 0);
@@ -348,8 +348,11 @@ static void substitute_slots(struct grammar *grammar, struct rule *rule,
                     break;
                 }
             }
-            if (renamed)
+            if (renamed) {
+                // Slots are never renamed, so there's no need to loop through
+                // the slots looking for this symbol.
                 continue;
+            }
             for (uint32_t k = 0; k < rule->number_of_slots; ++k) {
                 struct slot *slot = &rule->slots[k];
                 for (uint32_t l = 0; l < slot->number_of_choice_sets; ++l) {
@@ -360,10 +363,15 @@ static void substitute_slots(struct grammar *grammar, struct rule *rule,
                     struct rule *slot_rule = &grammar->rules[slot->rule_index];
                     uint16_t begin_action = 0;
                     uint16_t end_action = 0;
+                    // Mark this slot in the action list.
                     if (slot_rule->is_token)
                         end_action = CONSTRUCT_ACTION(ACTION_TOKEN_SLOT, k);
                     else if (slot_rule->first_operator_choice <
                      slot_rule->number_of_choices) {
+                        // Using '0' instead of 'k' here actually reduces the
+                        // size of the automata (if two transitions have the
+                        // same action, we can follow both of them
+                        // simultaneously while determinizing).
                         begin_action =
                          CONSTRUCT_ACTION(ACTION_BEGIN_EXPRESSION_SLOT, 0);
                         end_action =
@@ -466,6 +474,7 @@ static state_id embed(struct automaton *into, struct automaton *from,
         return automaton_create_state(into);
 }
 
+// The `remove_choice_actions` function is used to implement the `\:` operator.
 static void remove_choice_actions(struct automaton *a, struct bitset *choices)
 {
     for (state_id i = 0; i < a->number_of_states; ++i) {

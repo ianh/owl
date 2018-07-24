@@ -31,7 +31,7 @@ More examples are available in the [example/](example/) directory.
 
 ## how to use it
 
-You can build the `owl` tool from this repository using `make`<sup><a name="footnote2up" href="#footnote2">[2]</a></sup>:
+You can build the `owl` tool from this repository using `make`:
 
 ```
 $ git clone https://github.com/ianh/owl.git
@@ -153,12 +153,8 @@ For a more thorough guide to Owl's grammar format, check out the [grammar refere
 * Large grammars — Owl uses precomputed DFAs and action tables, which can blow up in size as grammars get more complex.  In the future, it would be nice to build the DFAs incrementally.
 * Custom tokenizers — Owl has a built-in tokenizer which supports numbers, strings, identifiers, comments, and keywords.  Apart from literal keywords, there's no way to add more kinds of tokens.
 * Memory use — Owl stores a small (single digit bytes) amount of information for every token while parsing in order to resolve nondeterminism.  If a decision about what to match depends on a token which appears much later in the text, Owl needs to store enough information to go back and make this decision at the point that the token appears.  Instead of analyzing how long to wait before making these decisions, Owl just waits until the end, gathering data for the entire input before creating the parse tree.
-* Error messages — Owl can show you the token where an error happened<sup><a name="footnote3up" href="#footnote3">[3]</a></sup>, but it doesn't suggest how to fix it.
+* Error messages — Owl can show you the token where an error happened<sup><a name="footnote2up" href="#footnote2">[2]</a></sup>, but it doesn't suggest how to fix it.
 * Generating code in other languages — only C is supported right now.
-
-## who is typing all of this
-
-The author of Owl is Ian Henderson.  You can reach me at <ian@ianhenderson.org> with any questions or messages of encouragement.
 
 ## footnotes
 
@@ -190,19 +186,9 @@ If you want more context for why this is important, [LL and LR in Context: Why P
 
 . . . . . . .
 
-<a name="footnote2">[2]</a> On MinGW, you may need to specify `CC=gcc`:
-
-```
-C:\>mingw32-make CC=gcc
-```
+<a name="footnote2">[2]</a> To be precise, Owl reports the token where the input stopped being a valid prefix of the grammar.  It's possible that the "real" error location was earlier in the input.
 
 [**go back up**](#footnote2up)
-
-. . . . . . . 
-
-<a name="footnote3">[3]</a> To be precise, Owl reports the token where the input stopped being a valid prefix of the grammar.  It's possible that the "real" error location was earlier in the input.
-
-[**go back up**](#footnote3up)
 
 ## notes and bibliography
 
@@ -311,4 +297,4 @@ The way that Owl's interpreter and ambiguity checker display parse trees was ins
 
 - Patrick Dubroy, Saketh Kasibatla, Meixian Li, Marko Röder, and Alex Warth. 2016. [Language Hacking in a Live Programming Environment](https://ohmlang.github.io/pubs/live2016/).
 
-Owl turns the icicles upside down, on the principle that the text itself forms the leaves of the tree.
+Owl turns the icicles upside down (on the principle that the text itself forms the leaves of the tree).
