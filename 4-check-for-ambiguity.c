@@ -58,7 +58,7 @@ enum {
     BOUNDARY_NODE,
     ACTION_NODE,
     SYMBOL_NODE,
-    BRACKET_TRANSITION_NODE,
+    BRACKET_SYMBOL_NODE,
     // Join nodes have one path going left and one going right.
     JOIN_NODE,
 };
@@ -193,10 +193,9 @@ void check_for_ambiguity(struct combined_grammar *combined,
         .combined = combined,
     };
     context.ambiguous_bracket_paths =
-     calloc(combined->number_of_bracket_transition_symbols,
-     sizeof(struct path_node));
+     calloc(combined->number_of_bracket_symbols, sizeof(struct path_node));
     context.bracket_states =
-     calloc(combined->number_of_bracket_transition_symbols, sizeof(state_id));
+     calloc(combined->number_of_bracket_symbols, sizeof(state_id));
     struct automaton *bracket_automaton = &combined->bracket_automaton;
     for (state_id i = 0; i < bracket_automaton->number_of_states; ++i) {
         struct state s = bracket_automaton->states[i];
@@ -328,8 +327,7 @@ void check_for_ambiguity(struct combined_grammar *combined,
             path_node_destroy(context.bracket_paths.in_paths[i].next);
     }
     state_pair_table_destroy(&context.bracket_paths);
-    for (uint32_t i = 0; i < combined->number_of_bracket_transition_symbols;
-     ++i) {
+    for (uint32_t i = 0; i < combined->number_of_bracket_symbols; ++i) {
         path_node_destroy(context.ambiguous_bracket_paths[i].join[0]);
         path_node_destroy(context.ambiguous_bracket_paths[i].join[1]);
     }
@@ -538,7 +536,7 @@ static void search_state_pairs(struct context *context,
                         // symbols, this is an intrinsic ambiguity -- mark it
                         // using the AMBIGUOUS_NODE flag.
                         follow_state_pair_transition((struct path_node){
-                            .type = BRACKET_TRANSITION_NODE,
+                            .type = BRACKET_SYMBOL_NODE,
                             .next_pair = s,
                             .bracket_pair = p,
                             .flags = (at.symbol == bt.symbol ? 0 :
@@ -632,7 +630,7 @@ static void build_ambiguity_path(struct context *context,
             if (direction == 1)
                 offset.symbols++;
             break;
-        case BRACKET_TRANSITION_NODE: {
+        case BRACKET_SYMBOL_NODE: {
             struct state_pair p = node->bracket_pair;
             uint32_t i = state_pair_table_lookup(&context->bracket_paths, p,
              fnv(&p, sizeof(p)));
@@ -705,7 +703,7 @@ static void path_node_copy(struct context *context,
         case SYMBOL_NODE:
             offset->symbols++;
             break;
-        case BRACKET_TRANSITION_NODE: {
+        case BRACKET_SYMBOL_NODE: {
             struct state_pair p = node->bracket_pair;
             uint32_t i = state_pair_table_lookup(&context->bracket_paths, p,
              fnv(&p, sizeof(p)));

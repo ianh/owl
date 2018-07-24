@@ -46,7 +46,7 @@
   TOKEN_DONT_CARE, 0) >= (combined)->number_of_keyword_tokens)
 
 #if !defined(IDENTIFIER_TOKEN) || !defined(NUMBER_TOKEN) || \
- !defined(STRING_TOKEN) || !defined(BRACKET_TRANSITION_TOKEN) || \
+ !defined(STRING_TOKEN) || !defined(BRACKET_SYMBOL_TOKEN) || \
  !defined(COMMENT_TOKEN)
 #error The built-in tokenizer needs definitions of basic tokens to work.
 #endif
@@ -295,7 +295,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
         offset += token_length;
         if (end_token) {
             assert(number_of_tokens < TOKEN_RUN_LENGTH);
-            run->tokens[number_of_tokens] = BRACKET_TRANSITION_TOKEN;
+            run->tokens[number_of_tokens] = BRACKET_SYMBOL_TOKEN;
             number_of_tokens++;
         }
     }
@@ -323,7 +323,7 @@ static void find_token_range(struct owl_default_tokenizer *tokenizer,
     size_t len = 0;
     uint16_t length_offset = run->lengths_size - 1;
     for (uint16_t j = index; j < run->number_of_tokens; ++j) {
-        if (run->tokens[j] == BRACKET_TRANSITION_TOKEN)
+        if (run->tokens[j] == BRACKET_SYMBOL_TOKEN)
             continue;
         last_offset = offset;
         len = decode_token_length(run, &length_offset, &offset);

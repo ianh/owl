@@ -18,7 +18,7 @@
  (((struct tokenizer_info *)tokenizer->info)->identifier_symbol)
 #define NUMBER_TOKEN (((struct tokenizer_info *)tokenizer->info)->number_symbol)
 #define STRING_TOKEN (((struct tokenizer_info *)tokenizer->info)->string_symbol)
-#define BRACKET_TRANSITION_TOKEN 0xffffffff
+#define BRACKET_SYMBOL_TOKEN 0xffffffff
 #define COMMENT_TOKEN 0xffffffff
 
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
@@ -662,7 +662,7 @@ static void fill_run_states(struct interpret_context *ctx,
         struct state s = top->automaton->states[top->state];
         if (s.accepting && top->in_bracket) {
             // We've reached the end token for a guard bracket.
-            assert(symbol == BRACKET_TRANSITION_TOKEN);
+            assert(symbol == BRACKET_SYMBOL_TOKEN);
             symbol = s.transition_symbol;
             run->tokens[i] = symbol;
             bitset_destroy(&top->bracket_reachability);

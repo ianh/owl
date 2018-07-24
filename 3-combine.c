@@ -311,10 +311,10 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
 
     // Compute the number of bracket transition symbols (it may be different
     // from `next_bracket_symbol` due to disambiguation).
-    result->number_of_bracket_transition_symbols = 0;
+    result->number_of_bracket_symbols = 0;
     if (result->automaton.number_of_symbols > result->number_of_tokens) {
-        result->number_of_bracket_transition_symbols =
-         result->automaton.number_of_symbols - result->number_of_tokens;
+        result->number_of_bracket_symbols = result->automaton.number_of_symbols
+         - result->number_of_tokens;
     }
 
     for (uint32_t i = 0; i < n; ++i) {

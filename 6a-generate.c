@@ -12,7 +12,7 @@
 #define IDENTIFIER_TOKEN %%identifier-token
 #define NUMBER_TOKEN %%number-token
 #define STRING_TOKEN %%string-token
-#define BRACKET_TRANSITION_TOKEN %%bracket-transition-token
+#define BRACKET_SYMBOL_TOKEN %%bracket-symbol-token
 #define COMMENT_TOKEN %%comment-token
 #define TOKENIZE_BODY(...) static const char *tokenizer_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
 #include "x-tokenize.h"
@@ -619,7 +619,7 @@ void generate(struct generator *gen)
     set_unsigned_number_substitution(out, "identifier-token", 0xffffffff);
     set_unsigned_number_substitution(out, "number-token", 0xffffffff);
     set_unsigned_number_substitution(out, "string-token", 0xffffffff);
-    set_unsigned_number_substitution(out, "bracket-transition-token", 0xffffffff);
+    set_unsigned_number_substitution(out, "bracket-symbol-token", 0xffffffff);
     set_unsigned_number_substitution(out, "comment-token", 0xffffffff);
     output_line(out, "#define IGNORE_TOKEN_WRITE(...)");
     set_literal_substitution(out, "write-identifier-token", "IGNORE_TOKEN_WRITE");
