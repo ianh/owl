@@ -205,7 +205,8 @@ void check_for_ambiguity(struct combined_grammar *combined,
         }
     }
 
-    // First pass: collect paths through the bracket automaton.
+    // Phase one: collect paths through the bracket product automaton
+    // (ambiguous or not).
     bool changed;
     do {
         changed = false;
@@ -235,47 +236,21 @@ void check_for_ambiguity(struct combined_grammar *combined,
         state_pair_table_rehash(table, table->available_size);
     } while (changed);
 
-    // Second pass: look for ambiguity.
+    // Phase two: look for ambiguity.
     struct automaton reversed = {0};
     automaton_reverse(&combined->automaton, &reversed);
     struct automaton bracket_reversed = {0};
     automaton_reverse(bracket_automaton, &bracket_reversed);
     struct state_pair_table table = {0};
     while (true) {
-        // Look for ambiguities in the bracket automaton (potentially
+        // Look for ambiguities in the bracket product automaton (potentially
         // propagating ambiguities outward as we discover new ambiguous
         // transitions).
         state_pair_table_clear(&table);
         search_state_pairs(&context, &table, bracket_automaton, FORWARD);
         search_state_pairs(&context, &table, &bracket_reversed,
          BACKWARD_UNRESOLVED);
-        if (table.has_ambiguity) {
-            uint32_t path_index = state_pair_table_lookup(&table,
-             table.ambiguity, fnv(&table.ambiguity, sizeof(table.ambiguity)));
-            uint32_t i = path_index;
-            while (table.out_paths[i].type != BOUNDARY_NODE) {
-                struct state_pair p = table.out_paths[i].next_pair;
-                i = state_pair_table_lookup(&table, p, fnv(&p, sizeof(p)));
-            }
-            struct state_pair p = table.pairs[i];
-            assert(p.a == p.b);
-            struct state s = combined->bracket_automaton.states[p.a];
-            assert(s.accepting);
-            struct path_node *in = malloc(sizeof(struct path_node));
-            struct path_node *out = malloc(sizeof(struct path_node));
-            *in = table.in_paths[path_index];
-            *out = table.out_paths[path_index];
-            if (table.ain_paths[path_index].type != INVALID_NODE)
-                *in = table.ain_paths[path_index];
-            path_node_copy(&context, &table, table.in_paths, in);
-            path_node_copy(&context, &table, table.out_paths, out);
-            *ambiguous_bracket_path(&context, s.transition_symbol) =
-             (struct path_node){
-                .type = JOIN_NODE,
-                .flags = AMBIGUOUS_NODE,
-                .join = { in, out },
-             };
-        } else {
+        if (!table.has_ambiguity) {
             // No more bracket paths exist.  Now we can look for the final path
             // in the main automaton.
             state_pair_table_clear(&table);
@@ -284,8 +259,41 @@ void check_for_ambiguity(struct combined_grammar *combined,
             break;
         }
 
-        // We found some new bracket ambiguities.  Clear the table and keep
-        // looping until we don't find any more.
+        // We found an ambiguity in the bracket product automaton.
+        uint32_t path_index = state_pair_table_lookup(&table, table.ambiguity,
+         fnv(&table.ambiguity, sizeof(table.ambiguity)));
+        uint32_t i = path_index;
+        while (table.out_paths[i].type != BOUNDARY_NODE) {
+            // Follow the path until we reach a pair of accepting states.  The
+            // search needs to be able to find this ambiguous path using the
+            // transition symbols of its final, accepting pair.
+            struct state_pair p = table.out_paths[i].next_pair;
+            i = state_pair_table_lookup(&table, p, fnv(&p, sizeof(p)));
+        }
+        struct state_pair p = table.pairs[i];
+        assert(p.a == p.b);
+        struct state s = combined->bracket_automaton.states[p.a];
+        assert(s.accepting);
+
+        // Copy the path and add it to the `ambiguous_bracket_paths` array as a
+        // `JOIN_NODE`.
+        struct path_node *in = malloc(sizeof(struct path_node));
+        struct path_node *out = malloc(sizeof(struct path_node));
+        *in = table.in_paths[path_index];
+        *out = table.out_paths[path_index];
+        if (table.ain_paths[path_index].type != INVALID_NODE)
+            *in = table.ain_paths[path_index];
+        path_node_copy(&context, &table, table.in_paths, in);
+        path_node_copy(&context, &table, table.out_paths, out);
+        *ambiguous_bracket_path(&context, s.transition_symbol) =
+         (struct path_node){
+            .type = JOIN_NODE,
+            .flags = AMBIGUOUS_NODE,
+            .join = { in, out },
+         };
+
+        // Clear the table and keep looping until we don't find any more
+        // ambiguities in the bracket product automaton.
         state_pair_table_clear(&table);
     }
 
@@ -573,6 +581,8 @@ static void follow_state_pair_transition(struct path_node node, state_id a,
  struct state_pair_table *table, struct worklist *worklist)
 {
     struct state_pair pair;
+    // Set the `epsilon_state` to ensure the path can't have two sequential
+    // epsilon transitions.
     if (node.type == ACTION_NODE) {
         pair = state_pair_make(a, b, direction == FORWARD ?
          DISALLOW_EPSILON_SUCCESSORS : ALLOW_EPSILON_SUCCESSORS);
@@ -582,6 +592,8 @@ static void follow_state_pair_transition(struct path_node node, state_id a,
     }
     if (a != pair.a)
         node.flags |= SWAPPED_PATH;
+
+    // Add the next pair to the worklist.
     uint32_t i = worklist->number_of_items++;
     if (i == UINT32_MAX)
         abort();
