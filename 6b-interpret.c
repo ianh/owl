@@ -96,6 +96,7 @@ struct interpret_context {
     // If the symbol isn't a bracket transition symbol, the array has UINT32_T
     // in its position.
     uint32_t *bracket_transition_for_symbol;
+    size_t bracket_transitions_length;
 
     struct state_array nfa_stack;
 
@@ -643,6 +644,7 @@ static void fill_bracket_transitions_for_symbols(struct interpret_context *ctx)
             len = symbol + 1;
     }
     ctx->bracket_transition_for_symbol = malloc(len * sizeof(uint32_t));
+    ctx->bracket_transitions_length = len;
     memset(ctx->bracket_transition_for_symbol, 0xff, len * sizeof(uint32_t));
     for (uint32_t i = 0; i < d->transitions.number_of_transitions; ++i) {
         symbol_id symbol =
@@ -684,7 +686,9 @@ static void fill_run_states(struct interpret_context *ctx,
                 if (!valid_state(ctx, top, s.transitions[j].target))
                     continue;
                 symbol_id symbol = s.transitions[j].symbol;
-                uint32_t k = ctx->bracket_transition_for_symbol[symbol];
+                uint32_t k = UINT32_MAX;
+                if (symbol < ctx->bracket_transitions_length)
+                    k = ctx->bracket_transition_for_symbol[symbol];
                 if (k != UINT32_MAX)
                     bitset_add(&reachability, k);
             }
