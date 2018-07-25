@@ -66,13 +66,9 @@ enum options {
     INCLUDE_START_STATE = 0,
     IGNORE_START_STATE = 1,
 
-    // Mark the accepting states of a bracket automaton using the deterministic
-    // transition symbols in `in_transitions`.
-    MARK_ACCEPTING_BRACKET_STATES = 2,
-
     // Treat epsilon transitions with actions like symbols instead of like
     // epsilon transitions.  We use this when checking for ambiguity.
-    DISAMBIGUATE = 4,
+    DISAMBIGUATE = 2,
 };
 
 struct context {
@@ -93,6 +89,8 @@ static void determinize_automaton(struct context context)
     struct automaton *a = context.input;
     struct automaton *result = context.result;
     automaton_clear(result);
+    if (context.action_map)
+        context.action_map->number_of_entries = 0;
     struct bracket_transitions in_transitions = context.in_transitions;
 
     automaton_compute_epsilon_closure(a, (context.options & DISAMBIGUATE) ?
@@ -270,18 +268,6 @@ static void determinize_automaton(struct context context)
             ts->transitions[j].transition_symbols =
              transition_symbols_from_state(a, &subsets, i);
         }
-        if (context.options & MARK_ACCEPTING_BRACKET_STATES) {
-            struct bitset s = transition_symbols_from_state(a, &subsets, i);
-            uint32_t j;
-            for (j = 0; j < in_transitions.number_of_transitions; ++j) {
-                struct bracket_transition t = in_transitions.transitions[j];
-                if (bitset_compare(&t.transition_symbols, &s))
-                    continue;
-                state->transition_symbol = t.deterministic_transition_symbol;
-                break;
-            }
-            bitset_destroy(&s);
-        }
     }
 
     // Clean up memory.
@@ -451,23 +437,22 @@ static state_id deterministic_state_for_subset(struct subset_table *table,
 }
 
 static void find_bracket_transitions(struct context context,
- struct bracket_transitions *result)
+ struct bracket_transitions *out, struct automaton *result)
 {
-    struct automaton a = {0};
     struct bracket_transitions transitions = {0};
-    context.result = &a;
-    context.out_transitions = result;
+    context.result = result;
+    context.out_transitions = out;
     while (true) {
         context.in_transitions = transitions;
         determinize_automaton(context);
-        qsort(result->transitions, result->number_of_transitions,
+        qsort(out->transitions, out->number_of_transitions,
          sizeof(struct bracket_transition), compare_bracket_transitions);
-        if (equal_bracket_transitions(&transitions, result))
+        if (equal_bracket_transitions(&transitions, out))
             break;
 #if 0
         printf("-\n");
-        for (uint32_t i = 0; i < result->number_of_transitions; ++i) {
-            struct bracket_transition t = result->transitions[i];
+        for (uint32_t i = 0; i < out->number_of_transitions; ++i) {
+            struct bracket_transition t = out->transitions[i];
             printf("%x: ", t.deterministic_transition_symbol);
             for (uint32_t j = 0; j < t.transition_symbols.number_of_elements; ++j) {
                 if (bitset_contains(&t.transition_symbols, j))
@@ -477,11 +462,10 @@ static void find_bracket_transitions(struct context context,
         }
 #endif
         bracket_transitions_destroy(&transitions);
-        transitions = *result;
-        *result = (struct bracket_transitions){0};
+        transitions = *out;
+        *out = (struct bracket_transitions){0};
     }
     bracket_transitions_destroy(&transitions);
-    automaton_destroy(&a);
 }
 
 void disambiguate(struct automaton *input, struct automaton *input_bracket,
@@ -493,7 +477,7 @@ void disambiguate(struct automaton *input, struct automaton *input_bracket,
         .input = input_bracket,
         .first_transition_symbol = first_bracket_transition_symbol,
         .options = DISAMBIGUATE,
-    }, &transitions);
+    }, &transitions, result_bracket);
 
     // FIXME: Minimize! (how?)
     determinize_automaton((struct context){
@@ -503,23 +487,17 @@ void disambiguate(struct automaton *input, struct automaton *input_bracket,
         .first_transition_symbol = first_bracket_transition_symbol,
         .options = DISAMBIGUATE,
     });
-    determinize_automaton((struct context){
-        .input = input_bracket,
-        .result = result_bracket,
-        .in_transitions = transitions,
-        .first_transition_symbol = first_bracket_transition_symbol,
-        .options = MARK_ACCEPTING_BRACKET_STATES | DISAMBIGUATE,
-    });
-    bracket_transitions_destroy(&transitions);
 }
 
 void determinize(struct combined_grammar *grammar,
  struct deterministic_grammar *result)
 {
+    struct action_map *bracket_action_map = &result->bracket_action_map;
     find_bracket_transitions((struct context){
         .input = &grammar->bracket_automaton,
         .first_transition_symbol = grammar->number_of_tokens,
-    }, &result->transitions);
+        .action_map = bracket_action_map,
+    }, &result->transitions, &result->bracket_automaton);
     struct action_map *action_map = &result->action_map;
     determinize_automaton((struct context){
         .input = &grammar->automaton,
@@ -527,15 +505,6 @@ void determinize(struct combined_grammar *grammar,
         .in_transitions = result->transitions,
         .first_transition_symbol = grammar->number_of_tokens,
         .action_map = action_map,
-    });
-    struct action_map *bracket_action_map = &result->bracket_action_map;
-    determinize_automaton((struct context){
-        .input = &grammar->bracket_automaton,
-        .result = &result->bracket_automaton,
-        .in_transitions = result->transitions,
-        .first_transition_symbol = grammar->number_of_tokens,
-        .action_map = bracket_action_map,
-        .options = MARK_ACCEPTING_BRACKET_STATES,
     });
 
     // De-duplicate actions and copy them into a single array.
