@@ -218,10 +218,16 @@ int main(int argc, char *argv[])
     struct owl_tree *tree;
     tree = owl_tree_create_from_string(grammar_string);
     switch (owl_tree_get_error(tree, &error.ranges[0])) {
-    case ERROR_INVALID_TOKEN:
+    case ERROR_INVALID_TOKEN: {
+        char *s = grammar_string + error.ranges[0].start;
+        if (s[0] == '-' && s[1] == '-' && s[2] == '-') {
+            error.ranges[0].end = error.ranges[0].start + 3;
+            exit_with_errorf("to interpret a grammar in test format, use -T");
+        }
         exit_with_errorf("'%.*s' isn't a valid token",
          (int)(error.ranges[0].end - error.ranges[0].start),
          grammar_string + error.ranges[0].start);
+    }
     case ERROR_UNEXPECTED_TOKEN:
         exit_with_errorf("unexpected token '%.*s' while parsing grammar",
          (int)(error.ranges[0].end - error.ranges[0].start),
