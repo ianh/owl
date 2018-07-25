@@ -260,19 +260,21 @@ These two papers describe how to do that:
 - Danny Dubé and Marc Feeley. 2000. [Efficiently building a parse tree from a regular expression](http://www.iro.umontreal.ca/~feeley/papers/DubeFeeleyACTAINFORMATICA00.pdf). [[doi](http://dx.doi.org/10.1007/s002360000037)]
 - Danny Dubé and Anass Kadiri. 2006. [Automatic construction of parse trees for lexemes](http://www.schemeworkshop.org/2006/14-dube.pdf).
 
-The basic idea is to keep a table with the details of each transition (from state, to state, symbol, new determinized state) followed during determinization.  After matching some text, you have a path through the determinized automaton.  Then, starting from the final state, you walk backwards along this path, using the 'from state' and 'to state' information from the table to also walk backwards along the corresponding path from the original automaton.
+The basic idea is: to produce each transition in the deterministic automaton, you'll follow various transitions in the original automaton (typically with the same symbol).  Collect the original transitions which produce each deterministic transition together in a table.
 
-Adapting this technique to Owl's iterative determinization algorithm is straightfoward: since bracket symbols can change during determinization, the table has an extra field for the new determinized symbol, but everything else is the same.
+Then, when you find a path through the deterministic automaton, start from the end and walk backward along the path, using the table for each transition to reconstruct the original path through the original automaton.
 
-I also looked at some other possible approaches:
+Adapting this technique to Owl's iterative determinization algorithm is straightfoward: since determinized bracket symbols can represent multiple non-deterministic symbols, the table has an extra field for the non-deterministic symbol, but everything else is the same.
 
-A Thompson-style NFA interpreter sidesteps the problem by interpreting the original, nondeterministic automaton.
+I considered some other approaches too:
+
+A Thompson-style interpreter would sidestep the problem by interpreting the original, non-deterministic automaton.
 
 - Russ Cox. 2009. [Regular Expression Matching: the Virtual Machine Approach](https://swtch.com/~rsc/regexp/regexp2.html).
 
 Each thread would have to store its own action list, which could end up taking a lot of memory for some inputs—that's why I avoided this approach in the first place.  But the Dubé-Feeley-style action maps also take up a lot of memory.  In retrospect, I think this approach could be worth a try.
 
-Laurikari's tagged NFAs looked like they would work well for a limited number of sub-matches, but I couldn't think of a way to scale them up to a full parse tree:
+Laurikari's tagged NFAs seem like they would work well for a limited number of sub-matches, but I couldn't think of a way to scale them up to a full parse tree:
 
 - Ville Laurikari. 2000. [NFAs with Tagged Transitions, their Conversion to Deterministic Automata and Application to Regular Expressions](https://laurikari.net/ville/spire2000-tnfa.pdf). [[doi](https://doi.org/10.1109/SPIRE.2000.878194)]
 - Ville Laurikari. 2001. [Efficient Submatch Addressing for Regular Expressions](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.23.6717).
@@ -297,4 +299,4 @@ The way that Owl's interpreter and ambiguity checker display parse trees was ins
 
 - Patrick Dubroy, Saketh Kasibatla, Meixian Li, Marko Röder, and Alex Warth. 2016. [Language Hacking in a Live Programming Environment](https://ohmlang.github.io/pubs/live2016/).
 
-Owl turns the icicles upside down (on the principle that the text itself forms the leaves of the tree).
+Owl turns the icicles upside down (a stalagmite plot?) on the principle that the text itself forms the leaves of the tree.

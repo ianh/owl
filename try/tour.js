@@ -2,6 +2,9 @@ tour = {
 "start":{"grammar":
 `# Welcome to Owl's interpreter mode!
 
+# Here's an example grammar (feel free to
+# modify or delete it):
+
 face = eyes nose mouth
 eyes =
   ':' : normal
@@ -21,8 +24,7 @@ mouth =
 # or the input below.  Output appears in
 # the box on the right.
 
-# Feel free to test your grammar here.
-# You can also take a #tour.
+# You can also take a tour here: #tour
 `,"input": 
 `:^)
 `},
