@@ -35,7 +35,9 @@ int main(int argc, char *argv[])
     const char *input_filename = 0;
     const char *output_filename = 0;
     char *grammar_string = 0;
+    char *input_string = 0;
     bool compile = false;
+    bool test_format = false;
     enum {
         NO_PARAMETER,
         INPUT_FILE_PARAMETER,
@@ -72,7 +74,10 @@ int main(int argc, char *argv[])
                 if (grammar_string)
                     exit_with_errorf("owl only supports one grammar at a time");
                 parameter_state = GRAMMAR_TEXT_PARAMETER;
-            } else if (!strcmp(short_name, "c") ||
+            } else if (!strcmp(short_name, "T") ||
+             !strcmp(long_name, "test-format"))
+                test_format = true;
+            else if (!strcmp(short_name, "c") ||
              !strcmp(long_name, "compile"))
                 compile = true;
             else if (!strcmp(short_name, "C") || !strcmp(long_name, "color"))
@@ -139,11 +144,35 @@ int main(int argc, char *argv[])
         fprintf(stderr, " -o file     --output file      write to file instead of standard output\n");
         fprintf(stderr, " -c          --compile          output a C header file instead of parsing input\n");
         fprintf(stderr, " -g grammar  --grammar grammar  specify the grammar text on the command line\n");
+        fprintf(stderr, " -T          --test-format      use test format with combined input and grammar\n");
         fprintf(stderr, " -C          --color            force 256-color parse tree output\n");
         fprintf(stderr, " -V          --version          print version info and exit\n");
         fprintf(stderr, " -h          --help             output this help text\n");
         return 1;
     }
+    if (test_format) {
+        size_t i = 0;
+        for (; grammar_string[i]; ++i) {
+            if (grammar_string[i] != '-')
+                continue;
+            i++;
+            if (grammar_string[i] != '-')
+                continue;
+            i++;
+            if (grammar_string[i] != '-')
+                continue;
+            break;
+        }
+        if (grammar_string[i] == '\0') {
+            exit_with_errorf("a file in test format requires the string '---' "
+             "to separate input from grammars");
+        }
+        input_string = malloc(i - 1);
+        strncpy(input_string, grammar_string, i - 2);
+        input_string[i - 2] = '\0';
+        grammar_string += i + 1;
+    }
+
     error_in_string = grammar_string;
 
     // Check to see if the version is compatible.
@@ -239,12 +268,14 @@ int main(int argc, char *argv[])
         };
         generate(&generator);
     } else {
-        FILE *input_file = stdin;
-        if (input_filename)
-            input_file = fopen_or_error(input_filename, "r");
-        char *input_string = read_string(input_file);
-        if (input_filename)
-            fclose(input_file);
+        if (!input_string) {
+            FILE *input_file = stdin;
+            if (input_filename)
+                input_file = fopen_or_error(input_filename, "r");
+            input_string = read_string(input_file);
+            if (input_filename)
+                fclose(input_file);
+        }
         struct interpreter interpreter = {
             .grammar = &grammar,
             .combined = &combined,
@@ -253,7 +284,6 @@ int main(int argc, char *argv[])
         };
         error_in_string = input_string;
         interpret(&interpreter, input_string, output_file);
-        free(input_string);
     }
 
     if (output_filename)
@@ -262,6 +292,7 @@ int main(int argc, char *argv[])
     combined_grammar_destroy(&combined);
     grammar_destroy(&grammar);
     owl_tree_destroy(tree);
+    free(input_string);
     free(grammar_string);
     return 0;
 }
