@@ -35,6 +35,8 @@ int main(int argc, char *argv[])
     const char *input_filename = 0;
     const char *output_filename = 0;
     char *grammar_string = 0;
+    // May be different if the grammar is in "test format".
+    char *grammar_string_to_free = 0;
     char *input_string = 0;
     bool compile = false;
     bool test_format = false;
@@ -90,6 +92,7 @@ int main(int argc, char *argv[])
             } else if (!grammar_string) {
                 FILE *grammar_file = fopen_or_error(argv[i], "r");
                 grammar_string = read_string(grammar_file);
+                grammar_string_to_free = grammar_string;
                 fclose(grammar_file);
             } else
                 exit_with_errorf("owl only supports one grammar at a time");
@@ -293,7 +296,7 @@ int main(int argc, char *argv[])
     grammar_destroy(&grammar);
     owl_tree_destroy(tree);
     free(input_string);
-    free(grammar_string);
+    free(grammar_string_to_free);
     return 0;
 }
 
