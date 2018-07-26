@@ -421,6 +421,8 @@ static void update_number_of_symbols(struct automaton *a)
             if (symbol != SYMBOL_EPSILON && symbol >= a->number_of_symbols)
                 a->number_of_symbols = symbol + 1;
         }
+        if (a->states[i].transition_symbol >= a->number_of_symbols)
+            a->number_of_symbols = a->states[i].transition_symbol + 1;
     }
 }
 
@@ -434,18 +436,6 @@ static void equalize_number_of_symbols(struct automaton *a,
         number_of_symbols = bracket->number_of_symbols;
     a->number_of_symbols = number_of_symbols;
     bracket->number_of_symbols = number_of_symbols;
-
-    // Remove useless accepting states to enforce an invariant on their
-    // transition symbols.
-    for (uint32_t i = 0; i < bracket->number_of_states; ++i) {
-        struct state *s = &bracket->states[i];
-        if (!s->accepting)
-            continue;
-        if (s->transition_symbol >= number_of_symbols) {
-            s->accepting = false;
-            s->transition_symbol = 0;
-        }
-    }
 }
 
 static state_id embed(struct automaton *into, struct automaton *from,
