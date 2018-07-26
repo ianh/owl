@@ -33,7 +33,7 @@ test: owl
 	sh -c 'cd test; for i in *.owl; do ../owl -i /dev/null "$$i" > "results/$$i.stdout" 2> "results/$$i.stderr"; done;:'
 	sh -c 'cd test; for i in *.owltest; do ../owl -T "$$i" > "results/$$i.stdout" 2> "results/$$i.stderr"; done;:'
 	git diff --stat --exit-code test/results
-	@echo "  * * All tests passed. * *"
+	@echo "All tests passed."
 
 clean:
 	rm owl
