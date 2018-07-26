@@ -316,6 +316,14 @@ function updateOutput()
     owl._fflush(0);
     formatOutput(document.getElementById("out"));
 }
+function keydown(e)
+{
+    var grammar = document.getElementById("grammar");
+    if (e.key == "Tab") {
+        e.preventDefault();
+        document.execCommand("insertText", false, "  ");
+    }
+}
 function createOwl()
 {
     owl = false;
@@ -417,7 +425,7 @@ function updateColumns()
     <body>
         <div id="grammar-scroll-container">
             <div id="grammar-container">
-                <textarea spellcheck=false oninput="update()" wrap="off" id="grammar">
+                <textarea spellcheck=false onkeydown="keydown(event)" oninput="update()" wrap="off" id="grammar">
 plus = number '+' number</textarea>
                 <pre id="grammar-text-container"><span id="grammar-text"></span><br></pre>
             </div>
