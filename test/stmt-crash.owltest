@@ -1,0 +1,10 @@
+if a { a. }
+---
+input = stmt*
+stmts =
+    [ '{' stmt* '}' ] : group
+    [ '{' stmt* '}' ] : stmt
+stmt =
+    'if' expr [ '{' stmt* '}' ] : if
+    expr '.' : expr
+expr = identifier+
