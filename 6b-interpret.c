@@ -207,7 +207,7 @@ static void fill_rows(struct interpret_context *ctx,
 
 static void output_ambiguity_path(struct interpreter *interpreter,
  struct ambiguity *ambiguity, int which_path, struct label *token_labels,
- uint32_t *row_count, FILE *output)
+ uint32_t number_of_token_labels, uint32_t *row_count, FILE *output)
 {
     struct interpret_context context = {
         .grammar = interpreter->grammar,
@@ -243,15 +243,15 @@ static void output_ambiguity_path(struct interpreter *interpreter,
     }
     struct interpret_node *root = construct_finish(&context.construct_state, 0);
 
-    initialize_document(&context, root, ambiguity->number_of_tokens * 2,
+    initialize_document(&context, root, number_of_token_labels,
      PRINT_ROOT_NODE);
     memcpy(context.document.rows[0].labels, token_labels,
-     ambiguity->number_of_tokens * 2 * sizeof(struct label));
+     number_of_token_labels * sizeof(struct label));
 
     uint32_t end_offset = 0;
     fill_rows(&context, root, root->depth - 1, &end_offset);
     offset_labels(&context.document, (uint32_t)root->end_location,
-     ambiguity->number_of_tokens * 4, end_offset, 0);
+     2 * number_of_token_labels, end_offset, 0);
 #if 0
     for (uint32_t i = 0; i < context.document.number_of_rows; ++i) {
         printf("row %u:\n", i);
@@ -274,7 +274,7 @@ static void output_ambiguity_path(struct interpreter *interpreter,
 void output_ambiguity(struct interpreter *interpreter,
  struct ambiguity *ambiguity, FILE *output)
 {
-    struct label *token_labels = calloc(ambiguity->number_of_tokens * 2,
+    struct label *token_labels = calloc(ambiguity->number_of_tokens * 2 + 1,
      sizeof(struct label));
     struct combined_grammar *combined = interpreter->combined;
     uint32_t identifier_iterator = 0;
@@ -341,13 +341,19 @@ void output_ambiguity(struct interpreter *interpreter,
             .end = i * 4 + 3,
         };
     }
+    token_labels[ambiguity->number_of_tokens * 2] = (struct label){
+        .text = "",
+        .length = 0,
+        .start = ambiguity->number_of_tokens * 4,
+        .end = ambiguity->number_of_tokens * 4 + 1,
+    };
 
     errorf("this grammar is ambiguous");
     print_error();
     fputs("\n", output);
     struct row token_row = {
         .labels = token_labels,
-        .number_of_labels = ambiguity->number_of_tokens * 2,
+        .number_of_labels = ambiguity->number_of_tokens * 2 + 1,
     };
     struct document token_document = {
         .rows = &token_row,
@@ -356,11 +362,11 @@ void output_ambiguity(struct interpreter *interpreter,
     output_document(output, &token_document, interpreter->terminal_info);
     fputs("\n  can be parsed in two different ways: as\n\n", output);
     uint32_t row_count = UINT32_MAX;
-    output_ambiguity_path(interpreter, ambiguity, 0, token_labels, &row_count,
-     output);
+    output_ambiguity_path(interpreter, ambiguity, 0, token_labels,
+     token_row.number_of_labels, &row_count, output);
     fputs("\n  or as\n\n", output);
-    output_ambiguity_path(interpreter, ambiguity, 1, token_labels, &row_count,
-     output);
+    output_ambiguity_path(interpreter, ambiguity, 1, token_labels,
+     token_row.number_of_labels, &row_count, output);
     fputs("\n", output);
 
     for (uint32_t i = 0; i < ambiguity->number_of_tokens; ++i) {

@@ -4,12 +4,14 @@ error: this grammar is ambiguous
 
   can be parsed in two different ways: as
 
-.  
-  a
+.    
+  b b
+  a--
 
   or as
 
-.  
-  b
-  a
+.    
+  | c
+  b b
+  a--
 
