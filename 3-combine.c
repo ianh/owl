@@ -269,7 +269,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
             }
         }
         automaton_add_transition(&combined_bracket_automaton,
-         result->bracket_automaton.start_state,
+         combined_bracket_automaton.start_state,
          bracket_automaton.start_state + m, SYMBOL_EPSILON);
         automaton_destroy(&bracket_automaton);
     }
