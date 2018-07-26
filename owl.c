@@ -350,7 +350,7 @@ void print_error(void)
         if (error.text[i] == ' ')
             wrap_offset = i + 1;
     }
-    fwrite(error.text + line_offset, 1, i + offset - line_offset, stderr);
+    fwrite(error.text + line_offset, 1, i - line_offset, stderr);
     fputs("\n", stderr);
     qsort(error.ranges, MAX_ERROR_RANGES, sizeof(struct source_range),
      compare_source_ranges);
