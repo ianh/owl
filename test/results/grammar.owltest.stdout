@@ -1,0 +1,181 @@
+. grammar = (rule       | comment-token)*
+  |         |expr:ident   expr:ident---  
+  |         |expr:choice---------------  
+  |         expr:parens----------------- 
+  |         expr:zero-or-more------------
+  |         body-------------------------
+  rule-----------------------------------
+
+. rule = identifier '='          body      
+  |      expr:ident expr:literal expr:ident
+  |      expr:concatenation----------------
+  |      body------------------------------
+  rule-------------------------------------
+
+. body = expr       | (expr       ':'          identifier)+ operators *       
+  |      |            |expr:ident expr:literal expr:ident   |                 
+  |      |            |expr:concatenation----------------   |                 
+  |      |            expr:parens-------------------------  expr:ident        
+  |      |            expr:one-or-more--------------------- expr:zero-or-more 
+  |      expr:ident   expr:concatenation------------------------------------- 
+  |      expr:choice--------------------------------------------------------- 
+  |      body---------------------------------------------------------------- 
+  rule----------------------------------------------------------------------- 
+
+. operators = '.operators' fixity     operator  +      
+  |           |            |          expr:ident       
+  |           expr:literal expr:ident expr:one-or-more 
+  |           expr:concatenation---------------------- 
+  |           body------------------------------------ 
+  rule------------------------------------------------ 
+
+. fixity =
+  rule----
+
+.   'postfix'    : postfix-op
+    expr:literal             
+    body---------------------
+  ---------------------------
+
+.   'prefix'     : prefix-op
+    expr:literal            
+  --------------------------
+  --------------------------
+
+.   'infix'      assoc      : infix-op
+    expr:literal expr:ident           
+    expr:concatenation-----           
+  ------------------------------------
+  ------------------------------------
+
+. assoc =
+  rule---
+
+.   'flat'       : flat-op
+    expr:literal          
+    body------------------
+  ------------------------
+
+.   'left'       : left-op
+    expr:literal          
+  ------------------------
+  ------------------------
+
+.   'right'      : right-op
+    expr:literal           
+  -------------------------
+  -------------------------
+
+.   'nonassoc'   : nonassoc-op
+    expr:literal              
+  ----------------------------
+  ----------------------------
+
+. operator = expr       ':'          identifier
+  |          expr:ident expr:literal expr:ident
+  |          expr:concatenation----------------
+  |          body------------------------------
+  rule-----------------------------------------
+
+. expr =
+  rule--
+
+.   identifier ('\\'         ':'          identifier@exception)* (           ..
+    |          |expr:literal expr:literal expr:ident----------   |             
+    |          |expr:concatenation----------------------------   |             
+    |          expr:parens-------------------------------------  expr:parens---
+    expr:ident expr:zero-or-more-------------------------------- expr:optional-
+    expr:concatenation---------------------------------------------------------
+    body-----------------------------------------------------------------------
+  -----------------------------------------------------------------------------
+ .. '@'          identifier@rename)? : ident
+    expr:literal expr:ident-------          
+    expr:concatenation------------          
+  ---------------------------------         
+  ----------------------------------        
+  ----------------------------------        
+  ------------------------------------------
+  ------------------------------------------
+
+.   string     : literal
+    expr:ident          
+  ----------------------
+  ----------------------
+
+.   [ '(' expr       ')' ] : parens
+    |     expr:ident               
+    expr:bracketed--------         
+  ---------------------------------
+  ---------------------------------
+
+.   [ '[' string@begin-token expr\:choice? string@end-token ']' ] : bracketed
+    |     |                  expr:ident--  |                                 
+    |     expr:ident-------- expr:optional expr:ident------                  
+    |     expr:concatenation-------------------------------                  
+    expr:bracketed-----------------------------------------------            
+  ---------------------------------------------------------------------------
+  ---------------------------------------------------------------------------
+
+.  .operators postfix          
+   |          fixity:postfix-op
+   operators-------------------
+  -----------------------------
+  -----------------------------
+
+.   '*'          : zero-or-more
+    expr:literal               
+    operator-------------------
+  -----------------------------
+  -----------------------------
+  -----------------------------
+
+.   '+'          : one-or-more
+    expr:literal              
+    operator------------------
+  ----------------------------
+  ----------------------------
+  ----------------------------
+
+.   '?'          : optional
+    expr:literal           
+    operator---------------
+  -------------------------
+  -------------------------
+  -------------------------
+
+.  .operators infix flat         
+   |          |     assoc:flat-op
+   |          fixity:infix-op----
+   operators---------------------
+  -------------------------------
+  -------------------------------
+
+.   ''           : concatenation
+    expr:literal                
+    operator--------------------
+  ------------------------------
+  ------------------------------
+  ------------------------------
+
+.  .operators infix flat         
+   |          |     assoc:flat-op
+   |          fixity:infix-op----
+   operators---------------------
+  -------------------------------
+  -------------------------------
+
+.   '|'          : choice
+    expr:literal         
+    operator-------------
+  -----------------------
+  -----------------------
+  -----------------------
+
+. comment-token = 'line-comment-token' string    
+  |               expr:literal-------- expr:ident
+  |               expr:concatenation-------------
+  |               body---------------------------
+  rule-------------------------------------------
+
+. line-comment-token '#'
+  comment-token---------
