@@ -1,0 +1,18 @@
+error: this grammar is ambiguous
+
+. a ( b ) 
+
+  can be parsed in two different ways: as
+
+. a ( b )       
+  expr:function 
+  stmt:expr---- 
+  program------ 
+
+  or as
+
+. a          ( b )       
+  expr:ident expr:parens 
+  stmt:expr- stmt:expr-- 
+  program--------------- 
+

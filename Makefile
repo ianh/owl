@@ -1,4 +1,4 @@
-.PHONY: install clean clean-js
+.PHONY: install test clean clean-js
 
 UNAME!=sh -c 'uname -s 2>/dev/null'
 OS?=$(UNAME)
@@ -28,6 +28,11 @@ try/owl.js: *.c *.h
 
 install: owl
 	$(INSTALL) -m 557 owl $(PREFIX)/bin/owl
+
+test: owl
+	sh -c 'cd test; for i in *.owl; do ../owl -i /dev/null "$$i" > "results/$$i.stdout" 2> "results/$$i.stderr"; done;:'
+	sh -c 'cd test; for i in *.owltest; do ../owl -T "$$i" > "results/$$i.stdout" 2> "results/$$i.stderr"; done;:'
+	git diff test/results
 
 clean:
 	rm owl

@@ -1,0 +1,21 @@
+error: this grammar is ambiguous
+
+. a ( b ) - c ( d ) 
+
+  can be parsed in two different ways: as
+
+. a          ( b          ) - c          ( d          ) 
+  |            |            | expr:ident   |            
+  expr:ident   expr:ident   expr:negate-   expr:ident   
+  stmt:call---------------- stmt:call------------------ 
+  program---------------------------------------------- 
+
+  or as
+
+. a          ( b          ) - c          ( d          ) 
+  expr:ident   expr:ident     |            |            
+  expr:call----------------   expr:ident   |            
+  expr:minus----------------------------   expr:ident   
+  stmt:call-------------------------------------------- 
+  program---------------------------------------------- 
+

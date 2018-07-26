@@ -1,0 +1,8 @@
+error: there are multiple rules named 'invalid'
+
+  invalid = b
+  ~~~~~~~    
+  ...
+  invalid = c
+  ~~~~~~~    
+

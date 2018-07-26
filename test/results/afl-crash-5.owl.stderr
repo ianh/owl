@@ -1,0 +1,16 @@
+error: this grammar is ambiguous
+
+. a x 
+
+  can be parsed in two different ways: as
+
+. a          x 
+  expr:ident   
+  expr:b------ 
+
+  or as
+
+. a          x 
+  expr:ident   
+  expr:a------ 
+

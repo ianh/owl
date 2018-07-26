@@ -1,0 +1,23 @@
+error: this grammar is ambiguous
+
+. function a ( ) { "a" ( ) - false ( ) } 
+
+  can be parsed in two different ways: as
+
+. function a ( ) { "a"         ( ) - false      ( ) } 
+  |                expr:string       |                
+  |                expr:call------   expr:false       
+  |                expr:minus------------------       
+  |                stmt:call-----------------------   
+  decl:function-------------------------------------- 
+  program-------------------------------------------- 
+
+  or as
+
+. function a ( ) { "a"         ( ) - false      ( ) } 
+  |                |               | expr:false       
+  |                expr:string     expr:negate-       
+  |                stmt:call------ stmt:call-------   
+  decl:function-------------------------------------- 
+  program-------------------------------------------- 
+
