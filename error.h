@@ -16,6 +16,7 @@ struct error {
     char text[1024];
 };
 
+extern char *error_in_string;
 extern struct error error;
 void print_error(void);
 #define exit_with_error() do { print_error(); exit(-1); } while (0)
