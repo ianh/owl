@@ -1,4 +1,4 @@
-.PHONY: install test clean clean-js
+.PHONY: install test sysinfo clean clean-js
 
 UNAME!=sh -c 'uname -s 2>/dev/null'
 OS?=$(UNAME)
@@ -34,6 +34,11 @@ test: owl
 	sh -c 'cd test; for i in *.owltest; do ../owl -T "$$i" > "results/$$i.stdout" 2> "results/$$i.stderr"; done;:'
 	git diff --stat --exit-code test/results
 	@echo "All tests passed."
+
+sysinfo:
+	@echo "OS=$(OS)"
+	@echo "MAKE_VERSION=$(MAKE_VERSION)"
+	uname -srv
 
 clean:
 	rm owl
