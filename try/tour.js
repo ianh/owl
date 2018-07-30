@@ -21,7 +21,7 @@ mouth =
 
 # A copy of the Owl tool runs in your
 # browser each time you modify this grammar
-# or the input below.  Output appears in
+# or the input below.  Its output appears in
 # the box on the right.
 
 # You can also take a tour here: #tour
