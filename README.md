@@ -218,16 +218,16 @@ The idea is to treat an entire bracketed group of tokens `( ... )` as a single *
 
 Each symbol is classified as one of the following:
 
-* the regular symbols *a*<sub>1</sub> … *a*<sub>*l*</sub>
-* the start symbols (<sub>1</sub> … (<sub>*m*</sub>
-* the end symbols )<sub>1</sub> … )<sub>*n*</sub>
-* the bracket symbols ()<sub>1</sub> … ()<sub>*k*</sub> — these don't appear in the input, but are produced by matching against the bracket automaton.
+* the **begin symbols** (<sub>1</sub> … (<sub>*m*</sub> — "begin tokens" that appear on the left side of a guard bracket
+* the **end symbols** )<sub>1</sub> … )<sub>*n*</sub> — "end tokens" that appear on the right side of a guard bracket
+* the **regular symbols** *a*<sub>1</sub> … *a*<sub>*l*</sub> — all tokens except the begin and end tokens
+* the **bracket symbols** ()<sub>1</sub> … ()<sub>*k*</sub> — these don't appear in the input, but are produced by matching against the bracket automaton.
 
 Execution starts at the start state of the base automaton.  A stack of states is used during execution; it's initialized to be empty.  The automaton reads each symbol from the input and acts according to its classification:
 
 * a regular symbol
     * transitions normally;
-* a start symbol
+* a begin symbol
     * pushes the current state onto the stack,
     * moves to the start state of the bracket automaton,
     * and transitions normally from that start state;
@@ -239,15 +239,18 @@ Execution starts at the start state of the base automaton.  A stack of states is
 
 A sequence of input symbols is recognized if this process leaves us in an accepting state of the base automaton.
 
-Here's a quick drawing of what the automata look like for this [grammar of nested arrays](https://ianh.github.io/owl/try/#nested): `a = [ '[' (a (',' a)*)? ']' ]`.
+Here's a quick drawing of what the two automata look like for this [grammar of nested arrays](https://ianh.github.io/owl/try/#nested): `a = [ '[' (a (',' a)*)? ']' ]`.
 
-<img src="automata.png" width=276 height=280>
+| <img src="doc/base-automaton.png" width=162 height=57> | <img src="doc/bracket-automaton.png" width=225 height=187> |
+| :---: | :---: |
+| *base automaton* | *bracket automaton* |
+
 
 The square-shaped state is the labeled accepting state of the bracket automaton.
 
 ### determinization
 
-[Owl's determinization](5-determinize.c) is an iterative version of the usual [subset construction](https://en.wikipedia.org/wiki/Powerset_construction).  The first iteration ignores the bracket symbols, following only transitions involving regular, start, and end symbols.  Once accepting state sets appear in the determinized bracket automaton, the bracket symbols corresponding to the states in each set are followed simultaneously (since their appearance in a state set means they can occur together) during the next iteration of the subset construction.
+[Owl's determinization](5-determinize.c) is an iterative version of the usual [subset construction](https://en.wikipedia.org/wiki/Powerset_construction).  The first iteration ignores the bracket symbols, following only transitions involving regular, begin, and end symbols.  Once accepting state sets appear in the determinized bracket automaton, the bracket symbols corresponding to the states in each set are followed simultaneously (since their appearance in a state set means they can occur together) during the next iteration of the subset construction.
 
 Because these accepting state sets grow monotonically (we only ever find new ways of reaching them) and are bounded above in size, this iterative process eventually stops making progress.  At this point, determinization is finished, and the accepting state sets in the bracket automaton become the new bracket symbols in the deterministic automata.
 
@@ -260,7 +263,7 @@ These two papers describe how to do that:
 - Danny Dubé and Marc Feeley. 2000. [Efficiently building a parse tree from a regular expression](http://www.iro.umontreal.ca/~feeley/papers/DubeFeeleyACTAINFORMATICA00.pdf). [[doi](http://dx.doi.org/10.1007/s002360000037)]
 - Danny Dubé and Anass Kadiri. 2006. [Automatic construction of parse trees for lexemes](http://www.schemeworkshop.org/2006/14-dube.pdf).
 
-The basic idea is: to produce each transition in the deterministic automaton, you'll follow various transitions in the original automaton (typically with the same symbol).  Collect the original transitions which produce each deterministic transition together in a table.
+The basic idea is: each transition in the deterministic automaton is derived from several transitions in the original automaton (typically with the same symbol).  Collect the original transitions which produce each deterministic transition together in a table.
 
 Then, when you find a path through the deterministic automaton, start from the end and walk backward along the path, using the table for each transition to reconstruct the original path through the original automaton.
 
