@@ -250,13 +250,13 @@ The square-shaped state is the labeled accepting state of the bracket automaton.
 
 ### determinization
 
-[Owl's determinization](5-determinize.c) is an iterative version of the usual [subset construction](https://en.wikipedia.org/wiki/Powerset_construction).  The first iteration ignores the bracket symbols, following only transitions involving regular, begin, and end symbols.  Once accepting state sets appear in the determinized bracket automaton, the bracket symbols corresponding to the states in each set are followed simultaneously (since their appearance in a state set means they can occur together) during the next iteration of the subset construction.
+[Owl's determinization](src/5-determinize.c) is an iterative version of the usual [subset construction](https://en.wikipedia.org/wiki/Powerset_construction).  The first iteration ignores the bracket symbols, following only transitions involving regular, begin, and end symbols.  Once accepting state sets appear in the determinized bracket automaton, the bracket symbols corresponding to the states in each set are followed simultaneously (since their appearance in a state set means they can occur together) during the next iteration of the subset construction.
 
 Because these accepting state sets grow monotonically (we only ever find new ways of reaching them) and are bounded above in size, this iterative process eventually stops making progress.  At this point, determinization is finished, and the accepting state sets in the bracket automaton become the new bracket symbols in the deterministic automata.
 
 ### parse tree construction
 
-The next step is to generate a parse tree.  When Owl builds its automata from a grammar, it encodes [parse tree actions](construct-actions.h) (like "start operand", "set slot choice", etc.) along certain transitions.  How can Owl preserve this information during determinization so it can reconstruct the list of actions?
+The next step is to generate a parse tree.  When Owl builds its automata from a grammar, it encodes [parse tree actions](src/construct-actions.h) (like "start operand", "set slot choice", etc.) along certain transitions.  How can Owl preserve this information during determinization so it can reconstruct the list of actions?
 
 These two papers describe how to do that:
 
@@ -284,7 +284,7 @@ Laurikari's tagged NFAs seem like they would work well for a limited number of s
 
 ### operator-precedence grammars
 
-A variation of Dijkstra's two-stack "shunting-yard" algorithm is used to associate operators with their operands (see [x-construct-parse-tree.h](x-construct-parse-tree.h) for the implementation).  I mostly just read the [Wikipedia page](https://en.wikipedia.org/wiki/Shunting-yard_algorithm) for this one, though the original reference is apparently:
+A variation of Dijkstra's two-stack "shunting-yard" algorithm is used to associate operators with their operands (see [src/x-construct-parse-tree.h](src/x-construct-parse-tree.h) for the implementation).  I mostly just read the [Wikipedia page](https://en.wikipedia.org/wiki/Shunting-yard_algorithm) for this one, though the original reference is apparently:
 
 - E.W. Dijkstra. 1961. [An Algol 60 Translator for the X1](http://www.cs.utexas.edu/~EWD/MCReps/MR35.PDF).
 
