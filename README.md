@@ -1,4 +1,4 @@
-<img src="logo.png" width=476 height=185>
+<img src="doc/logo.png" width=475 height=186>
 
 Owl is a parser generator which targets the class of [visibly pushdown languages](https://en.wikipedia.org/wiki/Nested_word).  It is:
 
@@ -303,3 +303,8 @@ The way that Owl's interpreter and ambiguity checker display parse trees was ins
 - Patrick Dubroy, Saketh Kasibatla, Meixian Li, Marko Röder, and Alex Warth. 2016. [Language Hacking in a Live Programming Environment](https://ohmlang.github.io/pubs/live2016/).
 
 Owl turns the icicles upside down (a stalagmite plot?) on the principle that the text itself forms the leaves of the tree.
+
+. . . . . . .
+
+*Ian Henderson <<ian@ianhenderson.org>><br>
+(Feel free to email me with any questions or comments!)*
