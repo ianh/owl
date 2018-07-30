@@ -20,11 +20,11 @@ LDFLAGS?=
 LDLIBS?=$(LDLIBS_$(LIBDL))
 EMCC?=emcc
 
-owl: *.c *.h
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ *.c $(LDLIBS)
+owl: src/*.c src/*.h
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ src/*.c $(LDLIBS)
 
-try/owl.js: *.c *.h
-	$(EMCC) $(CFLAGS) $(LDFLAGS) $(EMFLAGS) -o $@ *.c $(LDLIBS)
+try/owl.js: src/*.c src/*.h
+	$(EMCC) $(CFLAGS) $(LDFLAGS) $(EMFLAGS) -o $@ src/*.c $(LDLIBS)
 
 install: owl
 	$(INSTALL) -m 557 owl $(PREFIX)/bin/owl
