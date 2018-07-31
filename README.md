@@ -239,7 +239,9 @@ Execution starts at the start state of the base automaton.  A stack of states is
 
 A sequence of input symbols is recognized if this process leaves us in an accepting state of the base automaton.
 
-Here's a visual representation of what the two automata look like for this [grammar of nested arrays](https://ianh.github.io/owl/try/#nested): `a = [ '[' (a (',' a)*)? ']' ]`.
+Here's a visual representation of what the two automata look like for this [grammar of nested arrays](https://ianh.github.io/owl/try/#nested):
+
+`a = [ '[' (a (',' a)*)? ']' ]`
 
 | <img src="doc/base-automaton.png"> | <img src="doc/bracket-automaton.png"> |
 | :---: | :---: |
