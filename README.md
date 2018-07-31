@@ -241,7 +241,7 @@ A sequence of input symbols is recognized if this process leaves us in an accept
 
 Here's a quick drawing of what the two automata look like for this [grammar of nested arrays](https://ianh.github.io/owl/try/#nested): `a = [ '[' (a (',' a)*)? ']' ]`.
 
-| <img src="doc/base-automaton.png" width=162 height=57> | <img src="doc/bracket-automaton.png" width=225 height=187> |
+| <img src="doc/base-automaton.png"> | <img src="doc/bracket-automaton.png"> |
 | :---: | :---: |
 | *base automaton* | *bracket automaton* |
 
