@@ -43,8 +43,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static bool token_is(struct token *token, const char *name);
-
 static void generate_fields_for_token_rule(struct generator_output *out,
  struct rule *rule, const char *string);
 static void generate_keyword_reader(struct generator *gen,
@@ -635,12 +633,19 @@ void generate(struct generator *gen)
     set_literal_substitution(out, "write-string-token", "IGNORE_TOKEN_WRITE");
     for (uint32_t i = gen->combined->number_of_keyword_tokens;
      i < gen->combined->number_of_tokens; ++i) {
-        if (token_is(&gen->combined->tokens[i], "identifier"))
+        uint32_t rule_index = gen->combined->tokens[i].rule_index;
+        struct rule *rule = &gen->grammar->rules[rule_index];
+        switch (rule->token_type) {
+        case RULE_TOKEN_IDENTIFIER:
             set_unsigned_number_substitution(out, "identifier-token", i);
-        else if (token_is(&gen->combined->tokens[i], "number"))
+            break;
+        case RULE_TOKEN_NUMBER:
             set_unsigned_number_substitution(out, "number-token", i);
-        else if (token_is(&gen->combined->tokens[i], "string"))
+            break;
+        case RULE_TOKEN_STRING:
             set_unsigned_number_substitution(out, "string-token", i);
+            break;
+        }
     }
     output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info);");
     for (uint32_t i = 0; i < n; ++i) {
@@ -1768,12 +1773,6 @@ retry:
     free(buckets);
     free(table_buckets);
     free(nfa_states);
-}
-
-static bool token_is(struct token *token, const char *name)
-{
-    return token->length == strlen(name) &&
-     !memcmp(name, token->string, token->length);
 }
 
 static void output_indentation(struct generator_output *out, size_t indentation)
