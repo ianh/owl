@@ -54,6 +54,7 @@ enum rule_token_type {
     RULE_TOKEN_IDENTIFIER,
     RULE_TOKEN_NUMBER,
     RULE_TOKEN_STRING,
+    RULE_TOKEN_CUSTOM,
 };
 struct rule {
     // This string is a direct reference to the original parsed text.
@@ -64,6 +65,10 @@ struct rule {
     // Token classes like 'identifier' and 'number' are represented as rules.
     bool is_token;
     enum rule_token_type token_type;
+    // Custom tokens can have keyword examples.
+    struct token *token_examples;
+    uint32_t token_examples_allocated_bytes;
+    uint32_t number_of_token_examples;
 
     // Choices are named alternatives in a rule.  For example, here's a rule
     // with three choices:

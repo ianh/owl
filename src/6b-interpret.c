@@ -6,10 +6,12 @@
 #include <stdio.h>
 
 #define READ_KEYWORD_TOKEN read_keyword_token
+#define READ_CUSTOM_TOKEN read_custom_token
 
 #define WRITE_NUMBER_TOKEN write_number_token
 #define WRITE_IDENTIFIER_TOKEN write_identifier_token
 #define WRITE_STRING_TOKEN write_string_token
+#define WRITE_CUSTOM_TOKEN write_custom_token
 
 #define ALLOW_DASHES_IN_IDENTIFIERS(info) \
  (((struct tokenizer_info *)info)->allow_dashes_in_identifiers)
@@ -23,10 +25,14 @@
 
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
  const char *text, void *info);
+static bool read_custom_token(uint32_t *token, size_t *token_length,
+ const char *text, void *info);
 static void write_identifier_token(size_t offset, size_t length, void *info);
 static void write_string_token(size_t offset, size_t length,
  const char *string, size_t string_length, bool has_escapes, void *info);
 static void write_number_token(size_t offset, size_t length, double number,
+ void *info);
+static void write_custom_token(size_t offset, size_t length, uint32_t token,
  void *info);
 
 struct interpret_context;
@@ -124,6 +130,7 @@ enum interpret_node_type {
     NODE_IDENTIFIER_TOKEN,
     NODE_NUMBER_TOKEN,
     NODE_STRING_TOKEN,
+    NODE_CUSTOM_TOKEN,
 };
 
 struct interpret_node {
@@ -133,8 +140,9 @@ struct interpret_node {
     size_t start_location;
     size_t end_location;
 
-    // For rules.
+    // For rules and custom tokens.
     uint32_t rule_index;
+    // For rules.
     uint32_t choice_index;
     bool is_operator;
 
@@ -281,6 +289,7 @@ void output_ambiguity(struct interpreter *interpreter,
     uint32_t identifier_iterator = 0;
     uint32_t number_iterator = 0;
     uint32_t string_iterator = 0;
+    uint32_t custom_iterator = 0;
     for (uint32_t i = 0; i < ambiguity->number_of_tokens; ++i) {
         token_labels[i * 2] = (struct label){
             .start = i * 4,
@@ -330,9 +339,27 @@ void output_ambiguity(struct interpreter *interpreter,
                     string_iterator++;
                     break;
                 }
+                case RULE_TOKEN_CUSTOM: {
+                    const char *original_text = 0;
+                    if (rule->number_of_token_examples == 0) {
+                        original_text = token.string;
+                        length = token.length;
+                    } else {
+                        uint32_t index = custom_iterator %
+                         rule->number_of_token_examples;
+                        struct token *example = &rule->token_examples[index];
+                        original_text = example->string;
+                        length = example->length;
+                    }
+                    text = malloc(length);
+                    memcpy(text, original_text, length);
+                    custom_iterator++;
+                    break;
                 }
-            } while (find_token(combined->tokens, combined->number_of_tokens,
-             text, length, TOKEN_DONT_CARE, 0) < combined->number_of_tokens);
+                }
+            } while (find_token(combined->tokens,
+             combined->number_of_keyword_tokens, text, length, TOKEN_DONT_CARE,
+             0) < combined->number_of_keyword_tokens);
             token_labels[i * 2].text = text;
             token_labels[i * 2].length = length;
         }
@@ -919,6 +946,37 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token,
     return max_len;
 }
 
+static bool read_custom_token(uint32_t *token, size_t *token_length,
+ const char *text, void *info)
+{
+    struct interpret_context *ctx = ((struct tokenizer_info *)info)->context;
+    struct combined_grammar *combined = ctx->combined;
+    bool matched = false;
+    for (uint32_t i = combined->number_of_keyword_tokens;
+     i < combined->number_of_tokens; ++i) {
+        struct rule *r = &ctx->grammar->rules[combined->tokens[i].rule_index];
+        if (r->token_type != RULE_TOKEN_CUSTOM)
+            continue;
+        if (r->number_of_token_examples > 0) {
+            for (uint32_t j = 0; j < r->number_of_token_examples; ++j) {
+                struct token e = r->token_examples[j];
+                if (e.length > *token_length &&
+                 !strncmp(text, e.string, e.length)) {
+                    *token_length = e.length;
+                    *token = combined->tokens[i].symbol;
+                    matched = true;
+                }
+            }
+        } else if (r->name_length > *token_length &&
+         !strncmp(text, r->name, r->name_length)) {
+            *token_length = r->name_length;
+            *token = combined->tokens[i].symbol;
+            matched = true;
+        }
+    }
+    return matched;
+}
+
 static void write_identifier_token(size_t offset, size_t length, void *info)
 {
     struct interpret_context *ctx = ((struct tokenizer_info *)info)->context;
@@ -951,6 +1009,17 @@ static void write_number_token(size_t offset, size_t length, double number,
     node->next_sibling = ctx->tokens;
     node->type = NODE_NUMBER_TOKEN;
     node->number = number;
+    ctx->tokens = node;
+}
+
+static void write_custom_token(size_t offset, size_t length, uint32_t token,
+ void *info)
+{
+    struct interpret_context *ctx = ((struct tokenizer_info *)info)->context;
+    struct interpret_node *node = calloc(1, sizeof(struct interpret_node));
+    node->next_sibling = ctx->tokens;
+    node->type = NODE_CUSTOM_TOKEN;
+    node->rule_index = ctx->combined->tokens[token].rule_index;
     ctx->tokens = node;
 }
 

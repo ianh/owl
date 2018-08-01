@@ -47,6 +47,12 @@ static void add_token_rule(struct context *ctx, const char *name, size_t len,
  enum rule_token_type type);
 static uint32_t find_rule(struct context *ctx, const char *name, size_t len);
 
+enum version_capability {
+    CUSTOM_TOKENS,
+};
+static void check_version(struct grammar_version version,
+ enum version_capability capability, struct source_range range);
+
 void build(struct grammar *grammar, struct owl_tree *tree,
  struct grammar_version version)
 {
@@ -80,6 +86,38 @@ void build(struct grammar *grammar, struct owl_tree *tree,
         errorf("an owl grammar needs at least one rule of the form "
          "'rule_name = ...'");
         exit_with_error();
+    }
+
+    // Add custom token rules.
+    for (struct owl_ref t = g.custom_token; !t.empty; t = owl_next(t)) {
+        struct parsed_custom_token token = parsed_custom_token_get(t);
+        check_version(version, CUSTOM_TOKENS, token.range);
+        struct parsed_identifier name = parsed_identifier_get(token.identifier);
+        uint32_t index = add_rule(&context, name.identifier, name.length);
+        if (index == UINT32_MAX) {
+            errorf("the rule '%.*s' has the same name as a token",
+             (int)name.length, name.identifier);
+            uint32_t other = find_rule(&context, name.identifier, name.length);
+            error.ranges[0] = grammar->rules[other].name_range;
+            error.ranges[1] = name.range;
+            exit_with_error();
+        }
+        struct rule *rule = &context.grammar->rules[index];
+        rule->is_token = true;
+        rule->token_type = RULE_TOKEN_CUSTOM;
+        rule->name_range = name.range;
+        for (struct owl_ref s = token.string; !s.empty; s = owl_next(s)) {
+            struct parsed_string string = parsed_string_get(s);
+            uint32_t index = rule->number_of_token_examples++;
+            if (index == UINT32_MAX)
+                abort();
+            rule->token_examples = grow_array(rule->token_examples,
+             &rule->token_examples_allocated_bytes,
+             rule->number_of_token_examples * sizeof(struct token));
+            rule->token_examples[index].string = string.string;
+            rule->token_examples[index].length = string.length;
+            rule->token_examples[index].range = string.range;
+        }
     }
 
     // Add rules for all built-in token types.
@@ -616,6 +654,38 @@ static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
     if (token_index >= rule->number_of_keyword_tokens) {
         if (token_index == UINT32_MAX)
             abort();
+
+        // Check for overlap with custom tokens (so example generation in
+        // ambiguity checking works properly).
+        for (uint32_t i = 0; i < ctx->grammar->number_of_rules; ++i) {
+            struct rule *rule = &ctx->grammar->rules[i];
+            if (!rule->is_token)
+                continue;
+            if (rule->token_type != RULE_TOKEN_CUSTOM)
+                continue;
+            if (rule->number_of_token_examples == 0) {
+                if (rule->name_length == keyword.length &&
+                 !memcmp(rule->name, keyword.string, keyword.length)) {
+                    error.ranges[0] = rule->name_range;
+                    error.ranges[1] = keyword.range;
+                    exit_with_errorf("this custom token can't share its name "
+                     "with a keyword");
+                }
+            } else {
+                for (uint32_t i = 0; i < rule->number_of_token_examples; ++i) {
+                    struct token example = rule->token_examples[i];
+                    if (example.length == keyword.length &&
+                     !memcmp(example.string, keyword.string, keyword.length)) {
+                        error.ranges[0] = example.range;
+                        error.ranges[1] = keyword.range;
+                        exit_with_errorf("this example string conflicts with a "
+                         "keyword");
+                    }
+                }
+            }
+        }
+
+        // Add the new token to the list.
         rule->number_of_keyword_tokens = token_index + 1;
         rule->keyword_tokens = grow_array(rule->keyword_tokens,
          &rule->keyword_tokens_allocated_bytes,
@@ -675,6 +745,18 @@ static uint32_t find_rule(struct context *ctx, const char *name, size_t len)
     return UINT32_MAX;
 }
 
+static void check_version(struct grammar_version version,
+ enum version_capability capability, struct source_range range)
+{
+    assert(capability == CUSTOM_TOKENS);
+    if (!strcmp(version.string, "owl.v1")) {
+        error.ranges[0] = range;
+        error.ranges[1] = version.range;
+        exit_with_errorf("custom tokens are unsupported in versions before "
+         "owl.v2");
+    }
+}
+
 void grammar_destroy(struct grammar *grammar)
 {
     for (uint32_t i = 0; i < grammar->number_of_rules; ++i) {
@@ -692,6 +774,7 @@ void grammar_destroy(struct grammar *grammar)
         }
         free(r.slots);
         free(r.keyword_tokens);
+        free(r.token_examples);
         automaton_destroy(&r.automaton);
     }
     free(grammar->rules);
