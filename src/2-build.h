@@ -45,6 +45,11 @@ struct bracket;
 struct choice;
 struct slot;
 
+enum rule_token_type {
+    RULE_TOKEN_IDENTIFIER,
+    RULE_TOKEN_NUMBER,
+    RULE_TOKEN_STRING,
+};
 struct rule {
     // This string is a direct reference to the original parsed text.
     const char *name;
@@ -53,6 +58,7 @@ struct rule {
 
     // Token classes like 'identifier' and 'number' are represented as rules.
     bool is_token;
+    enum rule_token_type token_type;
 
     // Choices are named alternatives in a rule.  For example, here's a rule
     // with three choices:
@@ -216,6 +222,9 @@ struct token {
     // In step 3, we combine the lists of tokens together, and this symbol is
     // global to the entire combined automaton.
     symbol_id symbol;
+
+    // For "token class" tokens, this is the corresponding rule.
+    uint32_t rule_index;
 };
 
 // We share this function with the combine step -- both build and combine need

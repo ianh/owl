@@ -174,7 +174,8 @@ static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
  struct owl_token_run *run);
 static void destroy_parse_tree(struct interpret_node *tree);
 
-static symbol_id token_symbol(struct combined_grammar *grammar, const char *s);
+static symbol_id token_symbol(struct combined_grammar *combined,
+ struct grammar *grammar, enum rule_token_type type);
 static bool follow_transition(struct automaton *a, state_id *state,
  symbol_id symbol);
 static void follow_transition_reversed(struct interpret_context *ctx,
@@ -291,12 +292,7 @@ void output_ambiguity(struct interpreter *interpreter,
             token_labels[i * 2].text = token.string;
             token_labels[i * 2].length = token.length;
         } else {
-            bool is_identifier = token.length == strlen("identifier") &&
-             !memcmp(token.string, "identifier", strlen("identifier"));
-            bool is_number = token.length == strlen("number") &&
-             !memcmp(token.string, "number", strlen("number"));
-            bool is_string = token.length == strlen("string") &&
-             !memcmp(token.string, "string", strlen("string"));
+            struct rule *rule = &interpreter->grammar->rules[token.rule_index];
             char *text = 0;
             size_t length = 0;
             do {
@@ -304,7 +300,8 @@ void output_ambiguity(struct interpreter *interpreter,
                 // parse as keywords.  We don't want to confuse anyone by
                 // producing a token that won't actually parse to the right
                 // thing.
-                if (is_identifier) {
+                switch (rule->token_type) {
+                case RULE_TOKEN_IDENTIFIER: {
                     size_t underscores = identifier_iterator / 26;
                     size_t letter = identifier_iterator % 26;
                     text = realloc(text, underscores + 1);
@@ -313,12 +310,15 @@ void output_ambiguity(struct interpreter *interpreter,
                     text[underscores] = 'a' + letter;
                     length = underscores + 1;
                     identifier_iterator++;
-                } else if (is_number) {
+                    break;
+                }
+                case RULE_TOKEN_NUMBER:
                     length = snprintf(0, 0, "%u", number_iterator + 1);
                     text = realloc(text, length + 1);
                     sprintf(text, "%u", number_iterator + 1);
                     number_iterator++;
-                } else if (is_string) {
+                    break;
+                case RULE_TOKEN_STRING: {
                     size_t copies = 1 + (string_iterator / 26);
                     size_t letter = string_iterator % 26;
                     text = realloc(text, copies + 2);
@@ -328,6 +328,8 @@ void output_ambiguity(struct interpreter *interpreter,
                     text[copies + 1] = '"';
                     length = copies + 2;
                     string_iterator++;
+                    break;
+                }
                 }
             } while (find_token(combined->tokens, combined->number_of_tokens,
              text, length, TOKEN_DONT_CARE, 0) < combined->number_of_tokens);
@@ -519,9 +521,10 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
 
     struct owl_token_run *token_run = 0;
     struct tokenizer_info info = {
-        .identifier_symbol = token_symbol(combined, "identifier"),
-        .number_symbol = token_symbol(combined, "number"),
-        .string_symbol = token_symbol(combined, "string"),
+        .identifier_symbol = token_symbol(combined, grammar,
+         RULE_TOKEN_IDENTIFIER),
+        .number_symbol = token_symbol(combined, grammar, RULE_TOKEN_NUMBER),
+        .string_symbol = token_symbol(combined, grammar, RULE_TOKEN_STRING),
         .allow_dashes_in_identifiers =
          SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(combined),
     };
@@ -769,17 +772,14 @@ static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
      SIZE_MAX - ctx->next_action_offset + 1);
 }
 
-static symbol_id token_symbol(struct combined_grammar *grammar, const char *s)
+static symbol_id token_symbol(struct combined_grammar *combined,
+ struct grammar *grammar, enum rule_token_type type)
 {
-    size_t length = strlen(s);
-    for (uint32_t i = grammar->number_of_keyword_tokens;
-     i < grammar->number_of_tokens; ++i) {
-        struct token *token = &grammar->tokens[i];
-        if (token->length != length)
-            continue;
-        if (memcmp(token->string, s, length))
-            continue;
-        return i;
+    for (uint32_t i = combined->number_of_keyword_tokens;
+     i < combined->number_of_tokens; ++i) {
+        struct rule *rule = &grammar->rules[combined->tokens[i].rule_index];
+        if (rule->token_type == type)
+            return i;
     }
     return SYMBOL_EPSILON;
 }

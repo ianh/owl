@@ -43,7 +43,8 @@ static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
  struct owl_ref string_ref, enum token_type type);
 
 static uint32_t add_rule(struct context *ctx, const char *name, size_t len);
-static void add_token_rule(struct context *ctx, const char *name, size_t len);
+static void add_token_rule(struct context *ctx, const char *name, size_t len,
+ enum rule_token_type type);
 static uint32_t find_rule(struct context *ctx, const char *name, size_t len);
 
 void build(struct grammar *grammar, struct owl_tree *tree)
@@ -80,10 +81,11 @@ void build(struct grammar *grammar, struct owl_tree *tree)
         exit_with_error();
     }
 
-    // Add rules for all the kinds of tokens we support.
-    add_token_rule(&context, "identifier", strlen("identifier"));
-    add_token_rule(&context, "number", strlen("number"));
-    add_token_rule(&context, "string", strlen("string"));
+    // Add rules for all built-in token types.
+    add_token_rule(&context, "identifier", strlen("identifier"),
+     RULE_TOKEN_IDENTIFIER);
+    add_token_rule(&context, "number", strlen("number"), RULE_TOKEN_NUMBER);
+    add_token_rule(&context, "string", strlen("string"), RULE_TOKEN_STRING);
 
     // Now we fill in the choices for each rule.  We need to do this in a
     // separate pass in case there are "exception" specifiers which exclude
@@ -645,7 +647,8 @@ static uint32_t add_rule(struct context *ctx, const char *name, size_t len)
     return index;
 }
 
-static void add_token_rule(struct context *ctx, const char *name, size_t len)
+static void add_token_rule(struct context *ctx, const char *name, size_t len,
+ enum rule_token_type type)
 {
     uint32_t index = add_rule(ctx, name, len);
     if (index == UINT32_MAX) {
@@ -655,6 +658,7 @@ static void add_token_rule(struct context *ctx, const char *name, size_t len)
         return;
     }
     ctx->grammar->rules[index].is_token = true;
+    ctx->grammar->rules[index].token_type = type;
 }
 
 static uint32_t find_rule(struct context *ctx, const char *name, size_t len)

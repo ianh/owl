@@ -84,6 +84,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
         result->tokens[symbol].string = rule->name;
         result->tokens[symbol].length = rule->name_length;
         result->tokens[symbol].symbol = symbol;
+        result->tokens[symbol].rule_index = i;
 
         // Create an automaton to be substituted into other rules.
         automaton_set_start_state(&automaton_for_rule[i], 0);
