@@ -18,7 +18,11 @@ static FILE *fopen_or_error(const char *filename, const char *mode);
 static char *read_string(FILE *file);
 static void write_to_output(const char *string, size_t len);
 
-static const char *version_string = "owl.v1";
+static const char *version_string = "owl.v2";
+static const char *compatible_versions[] = {
+    "owl.v1",
+    "owl.v2",
+};
 
 int main(int argc, char *argv[])
 {
@@ -174,8 +178,12 @@ int main(int argc, char *argv[])
 
     // Check to see if the version is compatible.
     size_t using_length = strlen("#using ");
-    size_t version_length = strlen(version_string);
+    bool compatible_version = false;
+    struct grammar_version version = {
+        .string = version_string,
+    };
     if (strncmp(grammar_string, "#using ", using_length)) {
+        compatible_version = true;
         if (compile) {
             errorf("compiling a grammar without a version string");
             error.level = WARNING;
@@ -188,12 +196,23 @@ int main(int argc, char *argv[])
             fprintf(stderr, "  to the top of your grammar file to lock in "
              "this version.\n\n");
         }
-    } else if (strncmp(grammar_string + using_length, version_string,
-     version_length) || !(grammar_string[using_length + version_length] == '\r'
-     || grammar_string[using_length + version_length] == '\n')) {
+    } else for (size_t i = 0; i < sizeof(compatible_versions) /
+     sizeof(compatible_versions[0]); ++i) {
+        size_t version_length = strlen(compatible_versions[i]);
+        size_t j = using_length;
+        size_t end = j + version_length;
+        if (strncmp(grammar_string + j, compatible_versions[i], version_length)
+         || !(grammar_string[end] == '\r' || grammar_string[end] == '\n'))
+            continue;
+        version.string = compatible_versions[i];
+        version.range.start = j;
+        version.range.end = end;
+        compatible_version = true;
+    }
+    if (!compatible_version) {
         size_t i = using_length;
         error.ranges[0].start = i;
-        while (grammar_string[i] && grammar_string[i] != '\r' &&
+        while (grammar_string[i] != '\0' && grammar_string[i] != '\r' &&
          grammar_string[i] != '\n')
             i++;
         error.ranges[0].end = i;
@@ -233,7 +252,7 @@ int main(int argc, char *argv[])
     }
 
     struct grammar grammar = {0};
-    build(&grammar, tree);
+    build(&grammar, tree, version);
 
     struct combined_grammar combined = {0};
     combine(&combined, &grammar);

@@ -21,10 +21,15 @@
 struct grammar;
 struct rule;
 struct token;
+struct grammar_version {
+    const char *string;
+    struct source_range range;
+};
 
 // The main function of this step.  The `grammar` struct should be initialized
 // to be full of zeros.
-void build(struct grammar *grammar, struct owl_tree *tree);
+void build(struct grammar *grammar, struct owl_tree *tree,
+ struct grammar_version version);
 
 void grammar_destroy(struct grammar *grammar);
 

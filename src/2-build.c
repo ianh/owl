@@ -47,7 +47,8 @@ static void add_token_rule(struct context *ctx, const char *name, size_t len,
  enum rule_token_type type);
 static uint32_t find_rule(struct context *ctx, const char *name, size_t len);
 
-void build(struct grammar *grammar, struct owl_tree *tree)
+void build(struct grammar *grammar, struct owl_tree *tree,
+ struct grammar_version version)
 {
     struct context context = {
         .grammar = grammar,
