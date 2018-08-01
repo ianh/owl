@@ -8,7 +8,7 @@ Owl is a parser generator which targets the class of [visibly pushdown languages
 
 Here's a grammar for a simple programming language with expressions, assignment, and a `print` statement ([see it online with syntax highlighting](https://ianh.github.io/owl/try/#example)).
 
-```
+```EBNF
 program = stmt*
 stmt =
    'print' expr : print
@@ -33,7 +33,7 @@ More examples are available in the [example/](example/) directory.
 
 You can build the `owl` tool from this repository using `make`:
 
-```
+```console
 $ git clone https://github.com/ianh/owl.git
 $ cd owl/
 $ make
@@ -45,7 +45,7 @@ Owl has two modes of operation&mdash;**interpreter mode** and **compilation mode
 
 In **interpreter mode**, Owl reads your grammar file, then parses standard input on the fly, producing a visual representation of the parse tree as soon as you hit `^D`:
 
-```
+```console
 $ owl test/expr.owl
 1 + 2
 ^D
@@ -56,7 +56,7 @@ $ owl test/expr.owl
 
 You can specify a file to use as input with `--input` or `-i`:
 
-```
+```console
 $ echo "8 * 7" > multiply.txt
 $ owl test/expr.owl -i multiply.txt
 . 8            * 7
@@ -68,19 +68,19 @@ You can also use Owl's interpreter [on the web](https://ianh.github.io/owl/try/)
 
 In **compilation mode**, Owl reads your grammar file, but doesn't parse any input right away.  Instead, it generates C code with functions that let you parse the input later.
 
-```
+```console
 $ owl -c test/expr.owl -o parser.h
 ```
 
 You can `#include` this generated parser into a C program:
 
-```
+```C
 #include "parser.h"
 ```
 
 Wherever you #define `OWL_PARSER_IMPLEMENTATION`, the implementation of the parser will also be included.  Make sure to do this somewhere in your program:
 
-```
+```C
 #define OWL_PARSER_IMPLEMENTATION
 #include "parser.h"
 ```
@@ -91,7 +91,7 @@ For more about how to use this header, see the docs on [using the generated pars
 
 Rules in owl are written like regular expressions with a few extra features.  Here's a rule that matches a comma-separated list of numbers:
 
-```
+```EBNF
 number-list = number (',' number)*
 ```
 
@@ -99,7 +99,7 @@ Note that Owl operates on tokens (like `','` and `number`), not individual chara
 
 To create a parse tree, you can write rules that refer to each other:
 
-```
+```EBNF
 variable = 'var' identifier (':' type)?
 type = 'int' | 'string'
 ```
@@ -108,7 +108,7 @@ Rules can only refer to later rules, not earlier ones: plain recursion isn't all
 
 *Guarded recursion* is recursion inside `[ guard brackets ]`.  Here's a grammar to parse `{"arrays", "that", {"look", "like"}, "this"}`:
 
-```
+```EBNF
 element = array | string
 array = [ '{' element (',' element)* '}' ]
 ```
@@ -117,7 +117,7 @@ The symbols just inside the brackets — `'{'` and `'}'` here — are the *begin
 
 *Expression recursion* lets you define unary and binary operators using the `.operators` keyword:
 
-```
+```EBNF
 expression =
     identifier | number | parens : value
   .operators prefix
@@ -132,7 +132,7 @@ Operators in the same `.operators` clause have the same precedence level; clause
 
 These forms of recursion may seem limiting, but you can go surprisingly far with them.  For example, if you're willing to use `?` and `:` as begin and end tokens, the C ternary operator can be written as an infix operator:
 
-```
+```EBNF
 expr =
     ...
   .operators infix left
