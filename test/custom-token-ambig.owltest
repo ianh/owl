@@ -1,0 +1,7 @@
+---
+.token integer "1" "2342"
+.token imaginary "1.0j"
+.token other
+
+input = integer integer imaginary other other x*
+x = ''

@@ -1,0 +1,8 @@
+1 2342 1.0j other
+---#using owl.v2
+
+.token integer "1" "2342"
+.token imaginary "1.0j"
+.token other
+
+input = (integer | imaginary | other)+
