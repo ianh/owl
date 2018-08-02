@@ -1,0 +1,6 @@
+#using owl.v2
+
+# The strings here are just examples; the real tokenizing code is in main.c.
+.token hex-color '#fff' '#CC9966'
+
+color = hex-color | 'rgb' '(' number@r ',' number@g ',' number@b ')'
