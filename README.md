@@ -1,4 +1,4 @@
-<img src="doc/images/logo.png" width=475 height=186>
+<img src="doc/images/logo.png" width=475>
 
 Owl is a parser generator which targets the class of [visibly pushdown languages](https://en.wikipedia.org/wiki/Nested_word).  It is:
 
