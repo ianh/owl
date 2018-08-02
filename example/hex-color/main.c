@@ -40,9 +40,9 @@ int main(int argc, char *argv[])
 static struct owl_token tokenize(const char *text, void *info)
 {
     if (text[0] != '#')
-        return owl_token_none;
+        return owl_token_no_match;
     if (!is_hex(text[1]) || !is_hex(text[2]) || !is_hex(text[3]))
-        return owl_token_none;
+        return owl_token_no_match;
     if (!is_hex(text[4]) || !is_hex(text[5]) || !is_hex(text[6])) {
         return (struct owl_token){
             .type = OWL_TOKEN_HEX_COLOR,

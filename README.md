@@ -1,4 +1,4 @@
-<img src="doc/logo.png" width=475 height=186>
+<img src="doc/images/logo.png" width=475 height=186>
 
 Owl is a parser generator which targets the class of [visibly pushdown languages](https://en.wikipedia.org/wiki/Nested_word).  It is:
 
@@ -151,7 +151,6 @@ For a more thorough guide to Owl's grammar format, check out the [grammar refere
 ### current limitations
 
 * Large grammars — Owl uses precomputed DFAs and action tables, which can blow up in size as grammars get more complex.  In the future, it would be nice to build the DFAs incrementally.
-* Custom tokenizers — Owl has a built-in tokenizer which supports numbers, strings, identifiers, comments, and keywords.  Apart from literal keywords, there's no way to add more kinds of tokens.
 * Memory use — Owl stores a small (single digit bytes) amount of information for every token while parsing in order to resolve nondeterminism.  If a decision about what to match depends on a token which appears much later in the text, Owl needs to store enough information to go back and make this decision at the point that the token appears.  Instead of analyzing how long to wait before making these decisions, Owl just waits until the end, gathering data for the entire input before creating the parse tree.
 * Error messages — Owl can show you the token where an error happened<sup><a name="footnote2up" href="#footnote2">[2]</a></sup>, but it doesn't suggest how to fix it.
 * Generating code in other languages — only C is supported right now.
@@ -241,7 +240,7 @@ A sequence of input symbols is recognized if this process leaves us in an accept
 
 Here's a quick drawing of what the two automata look like for this [grammar of nested arrays](https://ianh.github.io/owl/try/#nested): `a = [ '[' (a (',' a)*)? ']' ]`.
 
-| <img src="doc/base-automaton.png" width=162 height=57> | <img src="doc/bracket-automaton.png" width=225 height=187> |
+| <img src="doc/images/base-automaton.png" width=162 height=57> | <img src="doc/images/bracket-automaton.png" width=225 height=187> |
 | :---: | :---: |
 | *base automaton* | *bracket automaton* |
 

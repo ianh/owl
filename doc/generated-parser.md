@@ -54,7 +54,7 @@ Here are some steps you can follow to create a new program that uses a generated
 
 ## creating a tree
 
-Owl uses the `struct owl_tree` type to represent a parse tree.  There are two ways to create a tree:
+Owl uses the `struct owl_tree` type to represent a parse tree.  There are three ways to create a tree:
 
 ### from a string
 
@@ -76,13 +76,22 @@ The `file` parameter must be an open `FILE *`.
 
 Owl will copy the contents of the file into an internal buffer, so feel free to close the file after calling this function.
 
+### using options
+
+```C
+struct owl_tree *tree = owl_tree_create_with_options(options);
+```
+
+Either `options.file` or `options.string` must be set (but not both).  Use this function if you want to provide a custom tokenize function (see <a href="#user-defined-tokens">user defined tokens</a>).  More options may be available in the future.
+
 ### reporting errors
 
-There are a few kinds of errors that can happen while creating a tree (see the table below).  If one of these errors happens, the `owl_create_tree_from_...` functions return an *error tree*.  Calling any function other than `owl_tree_destroy` on an error tree will print the error and exit.
+There are a few kinds of errors that can happen while creating a tree (see the table below).  If one of these errors happens, the `owl_create_tree_...` functions return an *error tree*.  Calling any function other than `owl_tree_destroy` on an error tree will print the error and exit.
 
 | error type | what it means | error range |
 | --- | --- | --- |
 | `ERROR_INVALID_FILE` | The argument to `owl_tree_create_from_file` was null, or there was an error while reading it. | None. |
+| `ERROR_INVALID_OPTIONS` | The `options` argument to `owl_tree_create_with_options` either had both `options.file` and `options.string` set, or it had neither. | None. |
 | `ERROR_INVALID_TOKEN` | Part of the text didn't match any valid token. | A range that begins with the first unrecognized character. |
 | `ERROR_UNEXPECTED_TOKEN` | The parser encountered an out-of-place token that didn't fit the grammar. | The range of the unexpected token. |
 | `ERROR_MORE_INPUT_NEEDED` | The input is valid so far, but incomplete; more tokens are necessary to complete it. | A range positioned at the end of the input. |
@@ -272,6 +281,86 @@ struct parsed_string parsed_string_get(struct owl_ref);
 
 If `has_escapes` is true, the string data is owned by the `owl_tree`—otherwise, it's a direct reference to the parsed text.
 
+<a id="user-defined-tokens">
+## user-defined tokens
+</a>
+
+[User-defined tokens](grammar-reference.md#user-defined-tokens) match their contents by calling a function pointer you provide.
+
+If a grammar has any custom tokens, `owl_tree_create_with_options` accepts two extra parameters in its `owl_tree_options` struct:
+
+```C
+struct owl_tree_options {
+    // ...
+    owl_token_func_t tokenize;
+    void *tokenize_info;
+};
+```
+
+The first parameter is the tokenize function itself, of type
+
+```C
+typedef struct owl_token (*owl_token_func_t)(const char *string, void *info)
+```
+
+Each time Owl's tokenizer steps forward, it calls the tokenize function with the remaining zero-terminated input `string` as its first parameter.  The second parameter is the `tokenize_info` pointer from `owl_tree_options`, which can be used to store context information.
+
+Let's look at an example.  Say you want to define a token representing a single numeric digit.
+
+```
+.token digit '1' '9' '0'
+input = digit*
+```
+
+The tokenize function matches each digit:
+
+```C
+struct owl_token match_digit(const char *string, void *info)
+{
+    if ('0' <= string[0] && string[0] <= '9') {
+        return (struct owl_token){
+            .type = OWL_TOKEN_DIGIT,
+            .length = 1,
+            .data.integer = string[0] - '0'
+        };
+    } else
+        return owl_token_no_match;
+}
+```
+
+Its return value is an `owl_token` struct representing details about the match.
+
+```C
+struct owl_token {
+    enum owl_token_type type;
+    size_t length;
+    union {
+        uint64_t integer;
+        double real;
+        void *pointer;
+    } data;
+};
+```
+
+A return value of `owl_token_no_match` (or any value with the `length` field set to zero) indicates no match.  Otherwise, the `length` field indicates how long the match is, and `type` indicates which type of token it is (`OWL_TOKEN_...`).
+
+If there's a conflict between a user-defined token and a keyword, the longest match will be chosen, with ties going to the keyword.
+
+User-defined tokens can be unpacked into `parsed_...` structs just like rules and built-in tokens.
+
+```
+struct parsed_digit {
+    struct source_range range;
+    union {
+        uint64_t integer;
+        double real;
+        void *pointer;
+    } data;
+};
+```
+
+Any data returned via the `data` field in `owl_token` will appear in the `parsed_...` struct automatically.
+
 ## function index
 
 `ROOT` is the root rule name.  `RULE` ranges over all rules.
@@ -282,6 +371,7 @@ If `has_escapes` is true, the string data is owned by the `owl_tree`—otherwise
 | `owl_refs_equal` | Two `owl_ref` values. | `true` if the refs refer to the same match; `false` otherwise. |
 | `owl_tree_create_from_file` | A `FILE *` to read from.  The file is read into an intermediate string and may be closed immediately. | A new tree. |
 | `owl_tree_create_from_string` | A null-terminated string to parse.  You retain ownership and must keep the string around until the tree is destroyed. | A new tree. |
+| `owl_tree_create_with_options` | An `owl_tree_options` struct—use this to specify a custom tokenize function. | A new tree. |
 | `owl_tree_destroy` | An `owl_tree *` to destroy, freeing its resources back to the system.  May be `NULL`. | None. |
 | `owl_tree_get_error` | An `owl_tree *` and an `error_range` out-parameter.  The error range may be `NULL`. | An error which interrupted parsing, or `ERROR_NONE` if there was no error. |
 | `owl_tree_get_parsed_ROOT` | An `owl_tree *`. | A `parsed_ROOT` struct corresponding to the root match. |
@@ -291,3 +381,4 @@ If `has_escapes` is true, the string data is owned by the `owl_tree`—otherwise
 | `parsed_number_get` | An `owl_ref` corresponding to a number match. | A `parsed_number` struct corresponding to the number match. |
 | `parsed_string_get` | An `owl_ref` corresponding to a string match. | A `parsed_string` struct corresponding to the identifier match. |
 | `parsed_RULE_get` | An `owl_ref` corresponding to a match for `RULE`. | A `parsed_RULE` struct corresponding to the ref's match. |
+| `parsed_TOKEN_get` | An `owl_ref` corresponding to a match for the user-defined token `TOKEN`. | A `parsed_TOKEN` struct corresponding to the ref's match. |

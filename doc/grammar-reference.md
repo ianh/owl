@@ -158,12 +158,52 @@ A *line comment token* will cause the rest of the line on which it appears to be
 line-comment-token '//'
 ```
 
+<a id="user-defined-tokens">
+## user-defined tokens
+</a>
+
+A *user-defined token* is a token that uses custom code to match its contents.  The `.token` keyword creates a new one:
+
+```
+.token hex-color '#fff' '#DEFACE'
+```
+
+The name which follows `.token` becomes a pattern that matches the token.
+
+```
+color = hex-color | 'rgb' '(' number ',' number ',' number ')'
+```
+
+To see how to write the code that matches these tokens, check out the [user-defined tokens](generated-parser.md#user-defined-tokens) section in the generated parser documentation.
+
+### exemplar strings
+
+In interpreter mode, Owl can't match user-defined tokens precisely—the code to match them isn't available.  But for testing, a few concrete examples are usually enough to get the idea.
+
+Any strings following the token name (`'#fff'` and `'#DEFACE'` in the original example) become *exemplar strings*, which stand in for the user-defined token in interpreter mode:
+
+```shell
+$ echo "#fff" | owl -g ".token hex-color '#fff'  input = hex-color"
+. #fff  
+  input 
+```
+
+If you don't provide any exemplar strings, the token name itself becomes the exemplar:
+
+```shell
+$ echo "hex-color" | owl -g ".token hex-color  input = hex-color"
+. hex-color
+  input----
+```
+
+Exemplar strings are also used to show ambiguities.
+
 ## versioning
 
 The Owl grammar format may change in the future.  To allow future versions to interpret older grammars as they were originally written, Owl matches its current version against a version specified at the beginning of your grammar file:
 
 ```
-#using owl.v1
+#using owl.v?
 ```
 
 If the version is older, Owl may attempt to interpret the grammar in the same way that older version did.  If the version is newer, Owl will exit with an error.  If no version is specified, Owl will assume you're OK with the current version.
@@ -172,7 +212,7 @@ To see the current version string for your installation, run `owl --version`:
 
 ```
 $ owl --version
-owl.v1
+owl.v?
 ```
 
 ## grammar.owl

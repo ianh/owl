@@ -177,7 +177,7 @@ void generate(struct generator *gen)
     output_line(out, "");
     output_line(out, "// Explicitly create a tree with particular options.");
     if (has_custom_tokens)
-        output_line(out, "typedef struct owl_token (*owl_token_func_t)(const char *text, void *info);");
+        output_line(out, "typedef struct owl_token (*owl_token_func_t)(const char *string, void *info);");
     output_line(out, "struct owl_tree_options {");
     output_line(out, "    // Exactly one of string or file should be set.");
     output_line(out, "    const char *string;");
@@ -353,7 +353,7 @@ void generate(struct generator *gen)
         output_line(out, "        void *pointer;");
         output_line(out, "    } data;");
         output_line(out, "};");
-        output_line(out, "static struct owl_token owl_token_none;");
+        output_line(out, "static struct owl_token owl_token_no_match;");
     }
     output_line(out, "");
     output_line(out, "#endif");
