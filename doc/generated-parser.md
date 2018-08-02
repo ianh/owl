@@ -348,7 +348,7 @@ If there's a conflict between a user-defined token and a keyword, the longest ma
 
 User-defined tokens can be unpacked into `parsed_...` structs just like rules and built-in tokens.
 
-```
+```C
 struct parsed_digit {
     struct source_range range;
     union {
