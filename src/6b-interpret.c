@@ -343,15 +343,15 @@ void output_ambiguity(struct interpreter *interpreter,
                 }
                 case RULE_TOKEN_CUSTOM: {
                     const char *original_text = 0;
-                    if (rule->number_of_token_examples == 0) {
+                    if (rule->number_of_token_exemplars == 0) {
                         original_text = token.string;
                         length = token.length;
                     } else {
                         uint32_t index = custom_iterator %
-                         rule->number_of_token_examples;
-                        struct token *example = &rule->token_examples[index];
-                        original_text = example->string;
-                        length = example->length;
+                         rule->number_of_token_exemplars;
+                        struct token *exemplar = &rule->token_exemplars[index];
+                        original_text = exemplar->string;
+                        length = exemplar->length;
                     }
                     text = malloc(length);
                     memcpy(text, original_text, length);
@@ -959,9 +959,9 @@ static bool read_custom_token(uint32_t *token, size_t *token_length,
         struct rule *r = &ctx->grammar->rules[combined->tokens[i].rule_index];
         if (r->token_type != RULE_TOKEN_CUSTOM)
             continue;
-        if (r->number_of_token_examples > 0) {
-            for (uint32_t j = 0; j < r->number_of_token_examples; ++j) {
-                struct token e = r->token_examples[j];
+        if (r->number_of_token_exemplars > 0) {
+            for (uint32_t j = 0; j < r->number_of_token_exemplars; ++j) {
+                struct token e = r->token_exemplars[j];
                 if (e.length > *token_length &&
                  !strncmp(text, e.string, e.length)) {
                     *token_length = e.length;

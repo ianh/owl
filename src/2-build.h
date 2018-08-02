@@ -65,10 +65,10 @@ struct rule {
     // Token classes like 'identifier' and 'number' are represented as rules.
     bool is_token;
     enum rule_token_type token_type;
-    // Custom tokens can have keyword examples.
-    struct token *token_examples;
-    uint32_t token_examples_allocated_bytes;
-    uint32_t number_of_token_examples;
+    // Custom tokens can have keyword exemplars.
+    struct token *token_exemplars;
+    uint32_t token_exemplars_allocated_bytes;
+    uint32_t number_of_token_exemplars;
 
     // Choices are named alternatives in a rule.  For example, here's a rule
     // with three choices:

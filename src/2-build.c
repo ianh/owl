@@ -110,17 +110,17 @@ void build(struct grammar *grammar, struct owl_tree *tree,
             struct parsed_string string = parsed_string_get(s);
             if (string.length == 0) {
                 error.ranges[0] = string.range;
-                exit_with_errorf("token examples can't be empty");
+                exit_with_errorf("token exemplar strings can't be empty");
             }
-            uint32_t index = rule->number_of_token_examples++;
+            uint32_t index = rule->number_of_token_exemplars++;
             if (index == UINT32_MAX)
                 abort();
-            rule->token_examples = grow_array(rule->token_examples,
-             &rule->token_examples_allocated_bytes,
-             rule->number_of_token_examples * sizeof(struct token));
-            rule->token_examples[index].string = string.string;
-            rule->token_examples[index].length = string.length;
-            rule->token_examples[index].range = string.range;
+            rule->token_exemplars = grow_array(rule->token_exemplars,
+             &rule->token_exemplars_allocated_bytes,
+             rule->number_of_token_exemplars * sizeof(struct token));
+            rule->token_exemplars[index].string = string.string;
+            rule->token_exemplars[index].length = string.length;
+            rule->token_exemplars[index].range = string.range;
         }
     }
 
@@ -659,7 +659,7 @@ static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
         if (token_index == UINT32_MAX)
             abort();
 
-        // Check for overlap with custom tokens (so example generation in
+        // Check for overlap with custom tokens (so exemplar generation in
         // ambiguity checking works properly).
         for (uint32_t i = 0; i < ctx->grammar->number_of_rules; ++i) {
             struct rule *rule = &ctx->grammar->rules[i];
@@ -667,23 +667,23 @@ static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
                 continue;
             if (rule->token_type != RULE_TOKEN_CUSTOM)
                 continue;
-            if (rule->number_of_token_examples == 0) {
+            if (rule->number_of_token_exemplars == 0) {
                 if (rule->name_length == keyword.length &&
                  !memcmp(rule->name, keyword.string, keyword.length)) {
                     error.ranges[0] = rule->name_range;
                     error.ranges[1] = keyword.range;
-                    exit_with_errorf("this custom token can't share its name "
-                     "with a keyword");
+                    exit_with_errorf("this user-defined token can't share its "
+                     "name with a keyword");
                 }
             } else {
-                for (uint32_t i = 0; i < rule->number_of_token_examples; ++i) {
-                    struct token example = rule->token_examples[i];
-                    if (example.length == keyword.length &&
-                     !memcmp(example.string, keyword.string, keyword.length)) {
-                        error.ranges[0] = example.range;
+                for (uint32_t i = 0; i < rule->number_of_token_exemplars; ++i) {
+                    struct token exemplar = rule->token_exemplars[i];
+                    if (exemplar.length == keyword.length &&
+                     !memcmp(exemplar.string, keyword.string, keyword.length)) {
+                        error.ranges[0] = exemplar.range;
                         error.ranges[1] = keyword.range;
-                        exit_with_errorf("this example string conflicts with a "
-                         "keyword");
+                        exit_with_errorf("this exemplar string conflicts with "
+                         "a keyword");
                     }
                 }
             }
@@ -778,7 +778,7 @@ void grammar_destroy(struct grammar *grammar)
         }
         free(r.slots);
         free(r.keyword_tokens);
-        free(r.token_examples);
+        free(r.token_exemplars);
         automaton_destroy(&r.automaton);
     }
     free(grammar->rules);
