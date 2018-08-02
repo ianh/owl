@@ -108,6 +108,10 @@ void build(struct grammar *grammar, struct owl_tree *tree,
         rule->name_range = name.range;
         for (struct owl_ref s = token.string; !s.empty; s = owl_next(s)) {
             struct parsed_string string = parsed_string_get(s);
+            if (string.length == 0) {
+                error.ranges[0] = string.range;
+                exit_with_errorf("token examples can't be empty");
+            }
             uint32_t index = rule->number_of_token_examples++;
             if (index == UINT32_MAX)
                 abort();
