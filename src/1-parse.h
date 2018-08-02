@@ -27,6 +27,14 @@ struct owl_tree *owl_tree_create_from_string(const char *string);
 // Creates an owl_tree by reading from a file.
 struct owl_tree *owl_tree_create_from_file(FILE *file);
 
+// Explicitly create a tree with particular options.
+struct owl_tree_options {
+    // Exactly one of string or file should be set.
+    const char *string;
+    FILE *file;
+};
+struct owl_tree *owl_tree_create_with_options(struct owl_tree_options options);
+
 // Destroys an owl_tree, freeing its resources back to the system.
 void owl_tree_destroy(struct owl_tree *);
 
@@ -65,11 +73,12 @@ enum owl_error {
     // No error -- everything's fine!
     ERROR_NONE,
 
-    // The file passed to owl_tree_create_from_file wasn't valid because
-    // - it was NULL,
-    // - it doesn't support fseek/ftell, or
-    // - there was an error while reading it.
+    // The file passed to owl_tree_create_from_file was NULL.
     ERROR_INVALID_FILE,
+
+    // The options passed to owl_tree_create_with_options weren't valid --
+    // both file and string were specified at the same time or neither were.
+    ERROR_INVALID_OPTIONS,
 
     // A piece of text couldn't be matched as a token.
     ERROR_INVALID_TOKEN,
@@ -767,6 +776,9 @@ static void check_for_error(struct owl_tree *tree) {
     case ERROR_INVALID_FILE:
         fprintf(stderr, "invalid file\n");
         break;
+    case ERROR_INVALID_OPTIONS:
+        fprintf(stderr, "invalid options\n");
+        break;
     case ERROR_INVALID_TOKEN:
         fprintf(stderr, "invalid token '%.*s'\n", (int)(tree->error_range.end - tree->error_range.start), tree->string + tree->error_range.start);
         break;
@@ -1043,6 +1055,8 @@ struct parsed_grammar owl_tree_get_parsed_grammar(struct owl_tree *tree) {
     return parsed_grammar_get(owl_tree_root_ref(tree));
 }
 #define IGNORE_TOKEN_WRITE(...)
+#define IGNORE_TOKEN_READ(...) (0)
+#define CUSTOM_TOKEN_DATA(...)
 static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *text, void *info);
 static void write_identifier_token(size_t offset, size_t length, void *info) {
     struct owl_tree *tree = info;
@@ -1175,6 +1189,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
             continue;
         }
         uint32_t token = -1;
+        CUSTOM_TOKEN_DATA(custom_data);
         bool is_token = false;
         bool end_token = false;
         bool custom_token = false;
@@ -1186,7 +1201,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
             if (token == 4294967295U) comment = true;
         }
         double number = 0;
-        if ((0)) {
+        if (IGNORE_TOKEN_READ(&token, &token_length, text + offset, &custom_data, tokenizer->info)) {
             is_token = true;
             custom_token = true;
             end_token = false;
@@ -1282,7 +1297,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
             write_string_token(offset, token_length, string, string_length, has_escapes, tokenizer->info);
         }
         else if (custom_token) {
-            ;
+            IGNORE_TOKEN_WRITE(offset, token_length, token, custom_data, tokenizer->info);
         }
         run->tokens[number_of_tokens] = token;
         whitespace = 0;
@@ -2375,8 +2390,7 @@ static void free_token_runs(struct owl_token_run **run) {
         *run = prev;
     }
 }
-struct owl_tree *owl_tree_create_from_string(const char *string) {
-    struct owl_tree *tree = owl_tree_create_empty();
+static void parse_string(struct owl_tree *tree, const char *string) {
     tree->string = string;
     tree->next_offset = 1;
     struct owl_default_tokenizer tokenizer = {
@@ -2398,7 +2412,7 @@ struct owl_tree *owl_tree_create_from_string(const char *string) {
             tree->error = ERROR_UNEXPECTED_TOKEN;
             find_token_range(&tokenizer, token_run, failing_index, &tree->error_range.start, &tree->error_range.end);
             free_token_runs(&token_run);
-            return tree;
+            return;
         }
     }
     struct fill_run_state top = c.stack[c.top_index];
@@ -2407,7 +2421,7 @@ struct owl_tree *owl_tree_create_from_string(const char *string) {
         tree->error = ERROR_INVALID_TOKEN;
         estimate_next_token_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);
         free_token_runs(&token_run);
-        return tree;
+        return;
     }
     switch (top.state) {
     case 0:
@@ -2431,42 +2445,50 @@ struct owl_tree *owl_tree_create_from_string(const char *string) {
         tree->error = ERROR_MORE_INPUT_NEEDED;
         find_end_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);
         free_token_runs(&token_run);
-        return tree;
+        return;
     }
     tree->root_offset = build_parse_tree(&tokenizer, token_run, tree);
-    return tree;
 }
 static struct owl_tree *owl_tree_create_with_error(enum owl_error e) {
     struct owl_tree *tree = owl_tree_create_empty();
     tree->error = e;
     return tree;
 }
+struct owl_tree *owl_tree_create_from_string(const char *string) {
+    return owl_tree_create_with_options((struct owl_tree_options){ .string = string });
+}
 struct owl_tree *owl_tree_create_from_file(FILE *file) {
     if (!file)
         return owl_tree_create_with_error(ERROR_INVALID_FILE);
-    char *str = 0;
-    size_t len = 32;
-    size_t off = 0;
-    while (true) {
-        len = len * 3 / 2;
-        char *s = realloc(str, len);
-        if (!s) {
-            free(str);
-            return 0;
+    return owl_tree_create_with_options((struct owl_tree_options){ .file = file });
+}
+struct owl_tree *owl_tree_create_with_options(struct owl_tree_options options) {
+    if (!options.file == !options.string)
+        return owl_tree_create_with_error(ERROR_INVALID_OPTIONS);
+    if (options.file) {
+        char *str = 0;
+        size_t len = 32;
+        size_t off = 0;
+        while (true) {
+            len = len * 3 / 2;
+            char *s = realloc(str, len);
+            if (!s) {
+                free(str);
+                return 0;
+            }
+            str = s;
+            off += fread(str + off, 1, len - off, options.file);
+            if (off < len) {
+                str[off] = '\0';
+                break;
+            }
         }
-        str = s;
-        off += fread(str + off, 1, len - off, file);
-        if (off < len) {
-            str[off] = '\0';
-            break;
-        }
+        options.string = str;
     }
-    struct owl_tree *tree = owl_tree_create_from_string(str);
-    if (!tree) {
-        free(str);
-        return 0;
-    }
-    tree->owns_string = true;
+    struct owl_tree *tree = owl_tree_create_empty();
+    if (options.file)
+        tree->owns_string = true;
+    parse_string(tree, options.string);
     return tree;
 }
 enum owl_error owl_tree_get_error(struct owl_tree *tree, struct source_range *error_range) {
