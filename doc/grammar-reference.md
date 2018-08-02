@@ -158,9 +158,7 @@ A *line comment token* will cause the rest of the line on which it appears to be
 line-comment-token '//'
 ```
 
-<a id="user-defined-tokens">
-## user-defined tokens
-</a>
+## <a id="user-defined-tokens">user-defined tokens</a>
 
 A *user-defined token* is a token that uses custom code to match its contents.  The `.token` keyword creates a new one:
 

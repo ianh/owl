@@ -281,9 +281,7 @@ struct parsed_string parsed_string_get(struct owl_ref);
 
 If `has_escapes` is true, the string data is owned by the `owl_tree`—otherwise, it's a direct reference to the parsed text.
 
-<a id="user-defined-tokens">
-## user-defined tokens
-</a>
+## <a id="user-defined-tokens">user-defined tokens</a>
 
 [User-defined tokens](grammar-reference.md#user-defined-tokens) match their contents by calling a function pointer you provide.
 
