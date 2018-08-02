@@ -8,6 +8,8 @@
 #define READ_KEYWORD_TOKEN read_keyword_token
 #define READ_CUSTOM_TOKEN read_custom_token
 
+#define CUSTOM_TOKEN_DATA(identifier) void *identifier = 0
+
 #define WRITE_NUMBER_TOKEN write_number_token
 #define WRITE_IDENTIFIER_TOKEN write_identifier_token
 #define WRITE_STRING_TOKEN write_string_token
@@ -26,14 +28,14 @@
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
  const char *text, void *info);
 static bool read_custom_token(uint32_t *token, size_t *token_length,
- const char *text, void *info);
+ const char *text, void **data, void *info);
 static void write_identifier_token(size_t offset, size_t length, void *info);
 static void write_string_token(size_t offset, size_t length,
  const char *string, size_t string_length, bool has_escapes, void *info);
 static void write_number_token(size_t offset, size_t length, double number,
  void *info);
 static void write_custom_token(size_t offset, size_t length, uint32_t token,
- void *info);
+ void *data, void *info);
 
 struct interpret_context;
 struct tokenizer_info {
@@ -947,7 +949,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token,
 }
 
 static bool read_custom_token(uint32_t *token, size_t *token_length,
- const char *text, void *info)
+ const char *text, void **data, void *info)
 {
     struct interpret_context *ctx = ((struct tokenizer_info *)info)->context;
     struct combined_grammar *combined = ctx->combined;
@@ -1013,7 +1015,7 @@ static void write_number_token(size_t offset, size_t length, double number,
 }
 
 static void write_custom_token(size_t offset, size_t length, uint32_t token,
- void *info)
+ void *data, void *info)
 {
     struct interpret_context *ctx = ((struct tokenizer_info *)info)->context;
     struct interpret_node *node = calloc(1, sizeof(struct interpret_node));

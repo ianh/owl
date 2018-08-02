@@ -26,6 +26,10 @@
 #define READ_CUSTOM_TOKEN(...) (0)
 #endif
 
+#ifndef CUSTOM_TOKEN_DATA
+#define CUSTOM_TOKEN_DATA(...) do { } while (0)
+#endif
+
 #ifndef WRITE_NUMBER_TOKEN
 #define WRITE_NUMBER_TOKEN(...)
 #endif
@@ -191,6 +195,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
             continue;
         }
         TOKEN_T token = -1;
+        CUSTOM_TOKEN_DATA(custom_data);
         bool is_token = false;
         bool end_token = false;
         bool custom_token = false;
@@ -205,7 +210,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
         }
         double number = 0;
         if (READ_CUSTOM_TOKEN(&token, &token_length, text + offset,
-         tokenizer->info)) {
+         &custom_data, tokenizer->info)) {
             is_token = true;
             custom_token = true;
             end_token = false;
@@ -303,7 +308,8 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
             WRITE_STRING_TOKEN(offset, token_length, string, string_length,
              has_escapes, tokenizer->info);
         } else if (custom_token) {
-            WRITE_CUSTOM_TOKEN(offset, token_length, token, tokenizer->info);
+            WRITE_CUSTOM_TOKEN(offset, token_length, token, custom_data,
+             tokenizer->info);
         }
         run->tokens[number_of_tokens] = token;
         whitespace = 0;
