@@ -1,4 +1,4 @@
-print("Lexical scope test:")
+println("Lexical scope test:")
 function counter()
     local a = 1
     function foo()
@@ -8,10 +8,10 @@ function counter()
     return foo
 end
 a = counter()
-print(a())
+println(a())
 b = counter()
-print(a())
-print(b())
-print(b())
-print(b())
-print(a())
+println(a())
+println(b())
+println(b())
+println(b())
+println(a())
