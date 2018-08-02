@@ -278,7 +278,10 @@ function update()
             style = 68;
         if (inIdentifier && !stillInIdentifier) {
             // match against identifier keywords
-            if (identifierText == ".operators")
+            if (identifierText == ".token") {
+                format[lastIdentifierIndex].code = 68;
+                nextIdentifierStyle = 168;
+            } else if (identifierText == ".operators")
                 format[lastIdentifierIndex].code = 97;
             else if (identifierText == "postfix" || identifierText == "prefix" ||
              identifierText == "infix" || identifierText == "flat" ||
