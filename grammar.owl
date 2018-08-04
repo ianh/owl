@@ -30,6 +30,8 @@ expr =
   '' : concatenation
  .operators infix flat
   '|' : choice
-comment-token = 'line-comment-token' string
+comment-token = '.line-comment-token' string | comment-token-v1
+comment-token-v1 = 'line-comment-token' string
 custom-token = '.token' identifier string*
-line-comment-token '#'
+
+.line-comment-token '#'

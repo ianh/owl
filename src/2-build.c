@@ -282,8 +282,23 @@ void build(struct grammar *grammar, struct owl_tree *tree,
 
     // Finally, add any comment tokens to the grammar.
     while (!g.comment_token.empty) {
-        struct parsed_string s =
-         parsed_string_get(parsed_comment_token_get(g.comment_token).string);
+        struct parsed_comment_token t =
+         parsed_comment_token_get(g.comment_token);
+        struct owl_ref str = t.string;
+        if (!strcmp(version.string, "owl.v1")) {
+            if (t.comment_token_v1.empty) {
+                error.ranges[0] = t.range;
+                error.ranges[1] = version.range;
+                exit_with_errorf(".line-comment-token was added in owl.v2");
+            }
+            str = parsed_comment_token_v1_get(t.comment_token_v1).string;
+        } else if (str.empty) {
+            error.ranges[0] = t.range;
+            error.ranges[1] = version.range;
+            exit_with_errorf("line-comment-token has been removed; use "
+             ".line-comment-token instead");
+        }
+        struct parsed_string s = parsed_string_get(str);
         if (s.length == 0) {
             error.ranges[0] = s.range;
             exit_with_errorf("comment tokens can't be empty");
