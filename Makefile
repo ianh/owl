@@ -12,7 +12,7 @@ DEFINES=$(DEFINES_$(OS))
 
 INSTALL?=/usr/bin/install
 PREFIX?=/usr/local
-CFLAGS?=-O3 -g
+CFLAGS?=-O3
 CFLAGS+=-std=c11 -pedantic -Wall -Wno-missing-braces -Wno-overlength-strings
 CFLAGS+=$(DEFINES)
 EMFLAGS+=-s EXPORTED_FUNCTIONS='["_main","_fflush"]' -s ABORTING_MALLOC=0 -s MODULARIZE=1 -s EXPORT_NAME=Owl -s EXTRA_EXPORTED_RUNTIME_METHODS='["FS","ENV"]'
@@ -44,4 +44,4 @@ clean:
 	rm owl
 
 clean-js:
-	rm try/owl.js try/owl.wasm try/owl.wast try/owl.wasm.map
+	rm try/owl.js try/owl.wasm
