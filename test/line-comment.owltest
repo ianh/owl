@@ -1,0 +1,6 @@
+x x x .hello there!
+x x .asdf
+.
+---
+.line-comment-token '.'
+input = 'x'*
