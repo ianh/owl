@@ -1,4 +1,4 @@
-error: this custom token can't share its name with a keyword
+error: this user-defined token can't share its name with a keyword
 
   .token other
          ~~~~~
