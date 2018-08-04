@@ -152,10 +152,10 @@ Except within guard brackets `[ ]`, a rule can only refer to rules after it in t
 
 ## comments
 
-A *line comment token* will cause the rest of the line on which it appears to be treated like whitespace.  You can specify line comment tokens using `line-comment-token`.
+A *line comment token* will cause the rest of the line on which it appears to be treated like whitespace.  You can specify line comment tokens using `.line-comment-token`.
 
 ```
-line-comment-token '//'
+.line-comment-token '//'
 ```
 
 ## <a id="user-defined-tokens">user-defined tokens</a>
@@ -218,12 +218,12 @@ owl.v?
 Here's the file Owl uses to generate its own parser—you can read it both as an example of a grammar and as the definition of the grammar syntax itself.
 
 ```
-#using owl.v1
+#using owl.v2
 
 # This is the grammar for Owl itself.
-# Compile with `owl -c grammar.owl -o 1-parse.h`.
+# Compile with `owl -c grammar.owl -o src/1-parse.h`.
 
-grammar = (rule | comment-token)*
+grammar = (rule | comment-token | custom-token)*
 rule = identifier '=' body
 body = expr | (expr ':' identifier)+ operators*
 operators = '.operators' fixity operator+
@@ -250,6 +250,9 @@ expr =
   '' : concatenation
  .operators infix flat
   '|' : choice
-comment-token = 'line-comment-token' string
-line-comment-token '#'
+comment-token = '.line-comment-token' string | comment-token-v1
+comment-token-v1 = 'line-comment-token' string
+custom-token = '.token' identifier string*
+
+.line-comment-token '#'
 ```

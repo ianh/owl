@@ -247,39 +247,7 @@ value =
 
 # Here's Owl's own grammar parsing itself:
 
-grammar = (rule | comment-token)*
-rule = identifier '=' body
-body = expr | (expr ':' identifier)+ operators*
-operators = '.operators' fixity operator+
-fixity =
-  'postfix' : postfix-op
-  'prefix' : prefix-op
-  'infix' assoc : infix-op
-assoc =
-  'flat' : flat-op
-  'left' : left-op
-  'right' : right-op
-  'nonassoc' : nonassoc-op
-operator = expr ':' identifier
-expr =
-  identifier ('\\\\' ':' identifier@exception)*
-    ('@' identifier@rename)? : ident
-  string : literal
-  [ '(' expr ')' ] : parens
-  [ '[' string@begin-token expr\\:choice?
-    string@end-token ']' ] : bracketed
- .operators postfix
-  '*' : zero-or-more
-  '+' : one-or-more
-  '?' : optional
- .operators infix flat
-  '' : concatenation
- .operators infix flat
-  '|' : choice
-comment-token = 'line-comment-token' string
-line-comment-token '#'
-`,"input":
-`grammar = (rule | comment-token)*
+grammar = (rule | comment-token | custom-token)*
 rule = identifier '=' body
 body = expr | (expr ':' identifier)+ operators*
 operators = '.operators' fixity operator+
@@ -306,8 +274,43 @@ expr =
   '' : concatenation
  .operators infix flat
   '|' : choice
-comment-token = 'line-comment-token' string
-line-comment-token '#'
+comment-token = '.line-comment-token' string | comment-token-v1
+comment-token-v1 = 'line-comment-token' string
+custom-token = '.token' identifier string*
+
+.line-comment-token '#'`,"input":
+`grammar = (rule | comment-token | custom-token)*
+rule = identifier '=' body
+body = expr | (expr ':' identifier)+ operators*
+operators = '.operators' fixity operator+
+fixity =
+  'postfix' : postfix-op
+  'prefix' : prefix-op
+  'infix' assoc : infix-op
+assoc =
+  'flat' : flat-op
+  'left' : left-op
+  'right' : right-op
+  'nonassoc' : nonassoc-op
+operator = expr ':' identifier
+expr =
+  identifier ('\\\\' ':' identifier@exception)* ('@' identifier@rename)? : ident
+  string : literal
+  [ '(' expr ')' ] : parens
+  [ '[' string@begin-token expr\\:choice? string@end-token ']' ] : bracketed
+ .operators postfix
+  '*' : zero-or-more
+  '+' : one-or-more
+  '?' : optional
+ .operators infix flat
+  '' : concatenation
+ .operators infix flat
+  '|' : choice
+comment-token = '.line-comment-token' string | comment-token-v1
+comment-token-v1 = 'line-comment-token' string
+custom-token = '.token' identifier string*
+
+.line-comment-token '#'
 `},
 "arith":{"grammar":
 `input = expr*

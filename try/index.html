@@ -279,9 +279,11 @@ function update()
         if (inIdentifier && !stillInIdentifier) {
             // match against identifier keywords
             if (identifierText == ".token") {
-                format[lastIdentifierIndex].code = 68;
+                format[lastIdentifierIndex].code = 214;
                 nextIdentifierStyle = 168;
-            } else if (identifierText == ".operators")
+            } else if (identifierText == ".line-comment-token")
+                format[lastIdentifierIndex].code = 214;
+            else if (identifierText == ".operators")
                 format[lastIdentifierIndex].code = 97;
             else if (identifierText == "postfix" || identifierText == "prefix" ||
              identifierText == "infix" || identifierText == "flat" ||
