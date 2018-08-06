@@ -1074,9 +1074,10 @@ struct parsed_grammar owl_tree_get_parsed_grammar(struct owl_tree *tree) {
 #define IGNORE_TOKEN_WRITE(...)
 #define IGNORE_TOKEN_READ(...) (0)
 #define CUSTOM_TOKEN_DATA(...)
-#define IF_IDENTIFIER_TOKEN_ENABLED(...) __VA_ARGS__
-#define IF_NUMBER_TOKEN_ENABLED(...) (0)
-#define IF_STRING_TOKEN_ENABLED(...) __VA_ARGS__
+#define IF_IDENTIFIER_TOKEN(cond, ...) if (cond) __VA_ARGS__
+#define NUMBER_TOKEN_DATA(...)
+#define IF_NUMBER_TOKEN(...) if (0) { /* no number tokens */  }
+#define IF_STRING_TOKEN(cond, ...) if (cond) __VA_ARGS__
 static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *text, void *info);
 static void write_identifier_token(size_t offset, size_t length, void *info) {
     struct owl_tree *tree = info;
@@ -1200,6 +1201,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
         }
         uint32_t token = -1;
         CUSTOM_TOKEN_DATA(custom_data);
+        NUMBER_TOKEN_DATA(number);
         bool is_token = false;
         bool end_token = false;
         bool custom_token = false;
@@ -1210,14 +1212,13 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
             is_token = true;
             if (token == 4294967295U) comment = true;
         }
-        double number = 0;
         if (IGNORE_TOKEN_READ(&token, &token_length, text + offset, &custom_data, tokenizer->info)) {
             is_token = true;
             custom_token = true;
             end_token = false;
             comment = false;
         }
-        if (IF_NUMBER_TOKEN_ENABLED(char_is_numeric(c) || (c == '.' && char_is_numeric(text[offset + 1])))) {
+        IF_NUMBER_TOKEN(char_is_numeric(c) || (c == '.' && char_is_numeric(text[offset + 1])), {
             const char *start = (const char *)text + offset;
             char *rest = 0;
             number = strtod(start, &rest);
@@ -1229,7 +1230,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
                 token = 4294967295U;
             }
         }
-        else if (IF_STRING_TOKEN_ENABLED(c == '\'' || c == '"')) {
+        ) else IF_STRING_TOKEN(c == '\'' || c == '"', {
             size_t string_offset = offset + 1;
             while (text[string_offset] != '\0') {
                 if (text[string_offset] == c) {
@@ -1248,7 +1249,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
                 string_offset++;
             }
         }
-        else if (IF_IDENTIFIER_TOKEN_ENABLED(char_starts_identifier(c))) {
+        ) else IF_IDENTIFIER_TOKEN(char_starts_identifier(c), {
             size_t identifier_offset = offset + 1;
             while (char_continues_identifier(text[identifier_offset], tokenizer->info)) identifier_offset++;
             if (identifier_offset - offset > token_length) {
@@ -1259,7 +1260,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
                 token = 23;
             }
         }
-        if (comment) {
+        ) if (comment) {
             while (text[offset] != '\0' && text[offset] != '\n') {
                 whitespace++;
                 offset++;
