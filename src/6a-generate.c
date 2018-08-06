@@ -772,8 +772,10 @@ void generate(struct generator *gen)
     if (!has_number_token) {
         output_line(out, "#define NUMBER_TOKEN_DATA(...)");
         output_line(out, "#define IF_NUMBER_TOKEN(...) if (0) { /* no number tokens */  }");
-    } else
+    } else {
+        output_line(out, "#define NUMBER_TOKEN_DATA(name) double name");
         output_line(out, "#define IF_NUMBER_TOKEN(cond, ...) if (cond) __VA_ARGS__");
+    }
     if (!has_string_token)
         output_line(out, "#define IF_STRING_TOKEN(...) if (0) { /* no string tokens */  }");
     else
