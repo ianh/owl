@@ -1,0 +1,4 @@
+1.0
+---
+.token digit '1'
+input = digit '.0'
