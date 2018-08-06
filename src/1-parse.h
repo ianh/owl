@@ -192,11 +192,6 @@ struct parsed_identifier {
     size_t length;
 };
 
-struct parsed_number {
-    struct source_range range;
-    double number;
-};
-
 struct parsed_string {
     struct source_range range;
     const char *string;
@@ -215,7 +210,6 @@ struct parsed_comment_token parsed_comment_token_get(struct owl_ref);
 struct parsed_comment_token_v1 parsed_comment_token_v1_get(struct owl_ref);
 struct parsed_custom_token parsed_custom_token_get(struct owl_ref);
 struct parsed_identifier parsed_identifier_get(struct owl_ref);
-struct parsed_number parsed_number_get(struct owl_ref);
 struct parsed_string parsed_string_get(struct owl_ref);
 
 #endif
@@ -237,7 +231,6 @@ struct owl_tree {
     struct source_range error_range;
     size_t root_offset;
     size_t next_identifier_token_offset;
-    size_t next_number_token_offset;
     size_t next_string_token_offset;
 };
 // Reserve 10 bytes for each entry (the maximum encoded size of a 64-bit value).
@@ -492,7 +485,7 @@ struct parsed_expr parsed_expr_get(struct owl_ref ref) {
     result.rename.empty = result.rename._offset == 0;
     result.string._tree = ref._tree;
     result.string._offset = read_tree(&offset, ref._tree);
-    result.string._type = 13;
+    result.string._type = 12;
     result.string.empty = result.string._offset == 0;
     result.expr._tree = ref._tree;
     result.expr._offset = read_tree(&offset, ref._tree);
@@ -500,11 +493,11 @@ struct parsed_expr parsed_expr_get(struct owl_ref ref) {
     result.expr.empty = result.expr._offset == 0;
     result.begin_token._tree = ref._tree;
     result.begin_token._offset = read_tree(&offset, ref._tree);
-    result.begin_token._type = 13;
+    result.begin_token._type = 12;
     result.begin_token.empty = result.begin_token._offset == 0;
     result.end_token._tree = ref._tree;
     result.end_token._offset = read_tree(&offset, ref._tree);
-    result.end_token._type = 13;
+    result.end_token._type = 12;
     result.end_token.empty = result.end_token._offset == 0;
     result.operand._tree = ref._tree;
     result.operand._offset = read_tree(&offset, ref._tree);
@@ -529,7 +522,7 @@ struct parsed_comment_token parsed_comment_token_get(struct owl_ref ref) {
     };
     result.string._tree = ref._tree;
     result.string._offset = read_tree(&offset, ref._tree);
-    result.string._type = 13;
+    result.string._type = 12;
     result.string.empty = result.string._offset == 0;
     result.comment_token_v1._tree = ref._tree;
     result.comment_token_v1._offset = read_tree(&offset, ref._tree);
@@ -553,7 +546,7 @@ struct parsed_comment_token_v1 parsed_comment_token_v1_get(struct owl_ref ref) {
     };
     result.string._tree = ref._tree;
     result.string._offset = read_tree(&offset, ref._tree);
-    result.string._type = 13;
+    result.string._type = 12;
     result.string.empty = result.string._offset == 0;
     return result;
 }
@@ -578,7 +571,7 @@ struct parsed_custom_token parsed_custom_token_get(struct owl_ref ref) {
     result.identifier.empty = result.identifier._offset == 0;
     result.string._tree = ref._tree;
     result.string._offset = read_tree(&offset, ref._tree);
-    result.string._type = 13;
+    result.string._type = 12;
     result.string.empty = result.string._offset == 0;
     return result;
 }
@@ -602,27 +595,8 @@ struct parsed_identifier parsed_identifier_get(struct owl_ref ref) {
     };
     return result;
 }
-struct parsed_number parsed_number_get(struct owl_ref ref) {
-    if (ref.empty || ref._type != 12) {
-        return (struct parsed_number){
-        0
-        };
-    }
-    size_t offset = ref._offset;
-    read_tree(&offset, ref._tree); // Read and ignore the 'next offset' field.
-    size_t token_offset = read_tree(&offset, ref._tree);
-    read_tree(&token_offset, ref._tree);
-    size_t start_location = read_tree(&token_offset, ref._tree);
-    size_t end_location = start_location + read_tree(&token_offset, ref._tree);
-    struct parsed_number result = {
-        .number = (union { double n; uint64_t v; }){ .v = read_tree(&token_offset, ref._tree) }.n,
-        .range.start = start_location,
-        .range.end = end_location,
-    };
-    return result;
-}
 struct parsed_string parsed_string_get(struct owl_ref ref) {
-    if (ref.empty || ref._type != 13) {
+    if (ref.empty || ref._type != 12) {
         return (struct parsed_string){
         0
         };
@@ -785,14 +759,6 @@ static size_t finish_token(uint32_t rule, size_t next_sibling, void *info) {
         break;
     }
     case 12: {
-        size_t offset = tree->next_number_token_offset;
-        if (offset == 0)
-            abort();
-        write_tree(tree, offset);
-        tree->next_number_token_offset = offset - read_tree(&offset, tree);
-        break;
-    }
-    case 13: {
         size_t offset = tree->next_string_token_offset;
         if (offset == 0)
             abort();
@@ -1108,6 +1074,9 @@ struct parsed_grammar owl_tree_get_parsed_grammar(struct owl_tree *tree) {
 #define IGNORE_TOKEN_WRITE(...)
 #define IGNORE_TOKEN_READ(...) (0)
 #define CUSTOM_TOKEN_DATA(...)
+#define IF_IDENTIFIER_TOKEN_ENABLED(...) __VA_ARGS__
+#define IF_NUMBER_TOKEN_ENABLED(...) (0)
+#define IF_STRING_TOKEN_ENABLED(...) __VA_ARGS__
 static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *text, void *info);
 static void write_identifier_token(size_t offset, size_t length, void *info) {
     struct owl_tree *tree = info;
@@ -1116,16 +1085,6 @@ static void write_identifier_token(size_t offset, size_t length, void *info) {
     write_tree(tree, offset);
     write_tree(tree, length);
     tree->next_identifier_token_offset = token_offset;
-}
-static void write_number_token(size_t offset, size_t length, double number, void *info) {
-    struct owl_tree *tree = info;
-    size_t token_offset = tree->next_offset;
-    write_tree(tree, token_offset - tree->next_number_token_offset);
-    write_tree(tree, offset);
-    write_tree(tree, length);
-    union { double n; uint64_t v; } u = { .n = number };
-    write_tree(tree, u.v);
-    tree->next_number_token_offset = token_offset;
 }
 static void write_string_token(size_t offset, size_t length, const char *string, size_t string_length, bool has_escapes, void *info) {
     struct owl_tree *tree = info;
@@ -1258,7 +1217,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
             end_token = false;
             comment = false;
         }
-        else if (char_is_numeric(c) || (c == '.' && char_is_numeric(text[offset + 1]))) {
+        if (IF_NUMBER_TOKEN_ENABLED(char_is_numeric(c) || (c == '.' && char_is_numeric(text[offset + 1])))) {
             const char *start = (const char *)text + offset;
             char *rest = 0;
             number = strtod(start, &rest);
@@ -1267,10 +1226,10 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
                 is_token = true;
                 end_token = false;
                 comment = false;
-                token = 24;
+                token = 4294967295U;
             }
         }
-        else if (c == '\'' || c == '"') {
+        else if (IF_STRING_TOKEN_ENABLED(c == '\'' || c == '"')) {
             size_t string_offset = offset + 1;
             while (text[string_offset] != '\0') {
                 if (text[string_offset] == c) {
@@ -1278,7 +1237,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
                     is_token = true;
                     end_token = false;
                     comment = false;
-                    token = 25;
+                    token = 24;
                     break;
                 }
                 if (text[string_offset] == '\\') {
@@ -1289,7 +1248,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
                 string_offset++;
             }
         }
-        else if (char_starts_identifier(c)) {
+        else if (IF_IDENTIFIER_TOKEN_ENABLED(char_starts_identifier(c))) {
             size_t identifier_offset = offset + 1;
             while (char_continues_identifier(text[identifier_offset], tokenizer->info)) identifier_offset++;
             if (identifier_offset - offset > token_length) {
@@ -1318,10 +1277,10 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
         if (token == 23) {
             write_identifier_token(offset, token_length, tokenizer->info);
         }
-        else if (token == 24) {
-            write_number_token(offset, token_length, number, tokenizer->info);
+        else if (token == 4294967295U) {
+            IGNORE_TOKEN_WRITE(offset, token_length, number, tokenizer->info);
         }
-        else if (token == 25) {
+        else if (token == 24) {
             size_t content_offset = offset + 1;
             size_t content_length = token_length - 2;
             const char *string = text + content_offset;
@@ -1811,7 +1770,7 @@ static void state_func_87(struct owl_token_run *run, struct fill_run_state *top,
     }
     top->cont->top_index--;
     top--;
-    run->tokens[token_index] = 26;
+    run->tokens[token_index] = 25;
     run->states[token_index] = top->state;
     state_funcs[top->state](run, top, token_index);
     return;
@@ -1827,7 +1786,7 @@ static void state_func_77(struct owl_token_run *run, struct fill_run_state *top,
     }
     top->cont->top_index--;
     top--;
-    run->tokens[token_index] = 27;
+    run->tokens[token_index] = 26;
     run->states[token_index] = top->state;
     state_funcs[top->state](run, top, token_index);
     return;
@@ -1870,14 +1829,14 @@ static void state_func_3(struct owl_token_run *run, struct fill_run_state *top, 
 static void state_func_2(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
-    case 25: top->state = 62; return;
+    case 24: top->state = 62; return;
     default: top->cont->error = 1; return;
     }
 }
 static void state_func_1(struct owl_token_run *run, struct fill_run_state *top, uint16_t token_index) {
     uint32_t token = run->tokens[token_index];
     switch (token) {
-    case 25: top->state = 63; return;
+    case 24: top->state = 63; return;
     default: top->cont->error = 1; return;
     }
 }
@@ -1954,7 +1913,7 @@ static void state_func_66(struct owl_token_run *run, struct fill_run_state *top,
     }
     uint32_t token = run->tokens[token_index];
     switch (token) {
-    case 25: top->state = 67; return;
+    case 24: top->state = 67; return;
     default: top->cont->error = 1; return;
     }
 }
@@ -2003,9 +1962,9 @@ static void state_func_14(struct owl_token_run *run, struct fill_run_state *top,
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 23: top->state = 6; return;
-    case 25: top->state = 7; return;
-    case 26: top->state = 8; return;
-    case 27: top->state = 9; return;
+    case 24: top->state = 7; return;
+    case 25: top->state = 8; return;
+    case 26: top->state = 9; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2015,9 +1974,9 @@ static void state_func_30(struct owl_token_run *run, struct fill_run_state *top,
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 23: top->state = 31; return;
-    case 25: top->state = 24; return;
-    case 26: top->state = 25; return;
-    case 27: top->state = 26; return;
+    case 24: top->state = 24; return;
+    case 25: top->state = 25; return;
+    case 26: top->state = 26; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2027,9 +1986,9 @@ static void state_func_42(struct owl_token_run *run, struct fill_run_state *top,
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 23: top->state = 44; return;
-    case 25: top->state = 45; return;
-    case 26: top->state = 46; return;
-    case 27: top->state = 47; return;
+    case 24: top->state = 45; return;
+    case 25: top->state = 46; return;
+    case 26: top->state = 47; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2043,9 +2002,9 @@ static void state_func_91(struct owl_token_run *run, struct fill_run_state *top,
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 23: top->state = 83; return;
-    case 25: top->state = 84; return;
-    case 26: top->state = 85; return;
-    case 27: top->state = 86; return;
+    case 24: top->state = 84; return;
+    case 25: top->state = 85; return;
+    case 26: top->state = 86; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2059,9 +2018,9 @@ static void state_func_67(struct owl_token_run *run, struct fill_run_state *top,
     uint32_t token = run->tokens[token_index];
     switch (token) {
     case 23: top->state = 68; return;
-    case 25: top->state = 69; return;
-    case 26: top->state = 70; return;
-    case 27: top->state = 71; return;
+    case 24: top->state = 69; return;
+    case 25: top->state = 70; return;
+    case 26: top->state = 71; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2074,7 +2033,7 @@ static void state_func_61(struct owl_token_run *run, struct fill_run_state *top,
     case 21: top->state = 2; return;
     case 22: top->state = 3; return;
     case 23: top->state = 4; return;
-    case 25: top->state = 61; return;
+    case 24: top->state = 61; return;
     default: top->cont->error = 1; return;
     }
 }
@@ -2086,9 +2045,9 @@ static void state_func_21(struct owl_token_run *run, struct fill_run_state *top,
     case 21: top->state = 2; return;
     case 22: top->state = 3; return;
     case 23: top->state = 23; return;
-    case 25: top->state = 24; return;
-    case 26: top->state = 25; return;
-    case 27: top->state = 26; return;
+    case 24: top->state = 24; return;
+    case 25: top->state = 25; return;
+    case 26: top->state = 26; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2102,9 +2061,9 @@ static void state_func_53(struct owl_token_run *run, struct fill_run_state *top,
     case 21: top->state = 2; return;
     case 22: top->state = 3; return;
     case 23: top->state = 54; return;
-    case 25: top->state = 45; return;
-    case 26: top->state = 46; return;
-    case 27: top->state = 47; return;
+    case 24: top->state = 45; return;
+    case 25: top->state = 46; return;
+    case 26: top->state = 47; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2122,9 +2081,9 @@ static void state_func_70(struct owl_token_run *run, struct fill_run_state *top,
     case 18: top->state = 74; return;
     case 19: top->state = 75; return;
     case 23: top->state = 68; return;
-    case 25: top->state = 76; return;
-    case 26: top->state = 70; return;
-    case 27: top->state = 71; return;
+    case 24: top->state = 76; return;
+    case 25: top->state = 70; return;
+    case 26: top->state = 71; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2139,9 +2098,9 @@ static void state_func_24(struct owl_token_run *run, struct fill_run_state *top,
     case 18: top->state = 29; return;
     case 19: top->state = 30; return;
     case 23: top->state = 31; return;
-    case 25: top->state = 24; return;
-    case 26: top->state = 25; return;
-    case 27: top->state = 26; return;
+    case 24: top->state = 24; return;
+    case 25: top->state = 25; return;
+    case 26: top->state = 26; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2156,9 +2115,9 @@ static void state_func_57(struct owl_token_run *run, struct fill_run_state *top,
     case 18: top->state = 51; return;
     case 19: top->state = 52; return;
     case 23: top->state = 44; return;
-    case 25: top->state = 45; return;
-    case 26: top->state = 46; return;
-    case 27: top->state = 47; return;
+    case 24: top->state = 45; return;
+    case 25: top->state = 46; return;
+    case 26: top->state = 47; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2177,9 +2136,9 @@ static void state_func_88(struct owl_token_run *run, struct fill_run_state *top,
     case 18: top->state = 90; return;
     case 19: top->state = 91; return;
     case 23: top->state = 83; return;
-    case 25: top->state = 84; return;
-    case 26: top->state = 85; return;
-    case 27: top->state = 86; return;
+    case 24: top->state = 84; return;
+    case 25: top->state = 85; return;
+    case 26: top->state = 86; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2198,9 +2157,9 @@ static void state_func_76(struct owl_token_run *run, struct fill_run_state *top,
     case 18: top->state = 74; return;
     case 19: top->state = 75; return;
     case 23: top->state = 68; return;
-    case 25: top->state = 76; return;
-    case 26: top->state = 70; return;
-    case 27: top->state = 71; return;
+    case 24: top->state = 76; return;
+    case 25: top->state = 70; return;
+    case 26: top->state = 71; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2220,9 +2179,9 @@ static void state_func_82(struct owl_token_run *run, struct fill_run_state *top,
     case 18: top->state = 74; return;
     case 19: top->state = 75; return;
     case 23: top->state = 68; return;
-    case 25: top->state = 76; return;
-    case 26: top->state = 70; return;
-    case 27: top->state = 71; return;
+    case 24: top->state = 76; return;
+    case 25: top->state = 70; return;
+    case 26: top->state = 71; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2239,9 +2198,9 @@ static void state_func_31(struct owl_token_run *run, struct fill_run_state *top,
     case 18: top->state = 29; return;
     case 19: top->state = 30; return;
     case 23: top->state = 31; return;
-    case 25: top->state = 24; return;
-    case 26: top->state = 25; return;
-    case 27: top->state = 26; return;
+    case 24: top->state = 24; return;
+    case 25: top->state = 25; return;
+    case 26: top->state = 26; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2258,9 +2217,9 @@ static void state_func_44(struct owl_token_run *run, struct fill_run_state *top,
     case 18: top->state = 51; return;
     case 19: top->state = 52; return;
     case 23: top->state = 44; return;
-    case 25: top->state = 45; return;
-    case 26: top->state = 46; return;
-    case 27: top->state = 47; return;
+    case 24: top->state = 45; return;
+    case 25: top->state = 46; return;
+    case 26: top->state = 47; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2281,9 +2240,9 @@ static void state_func_96(struct owl_token_run *run, struct fill_run_state *top,
     case 18: top->state = 90; return;
     case 19: top->state = 91; return;
     case 23: top->state = 83; return;
-    case 25: top->state = 84; return;
-    case 26: top->state = 85; return;
-    case 27: top->state = 86; return;
+    case 24: top->state = 84; return;
+    case 25: top->state = 85; return;
+    case 26: top->state = 86; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2301,9 +2260,9 @@ static void state_func_23(struct owl_token_run *run, struct fill_run_state *top,
     case 18: top->state = 29; return;
     case 19: top->state = 30; return;
     case 23: top->state = 31; return;
-    case 25: top->state = 24; return;
-    case 26: top->state = 25; return;
-    case 27: top->state = 26; return;
+    case 24: top->state = 24; return;
+    case 25: top->state = 25; return;
+    case 26: top->state = 26; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2321,9 +2280,9 @@ static void state_func_54(struct owl_token_run *run, struct fill_run_state *top,
     case 18: top->state = 51; return;
     case 19: top->state = 52; return;
     case 23: top->state = 44; return;
-    case 25: top->state = 45; return;
-    case 26: top->state = 46; return;
-    case 27: top->state = 47; return;
+    case 24: top->state = 45; return;
+    case 25: top->state = 46; return;
+    case 26: top->state = 47; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2341,9 +2300,9 @@ static void state_func_11(struct owl_token_run *run, struct fill_run_state *top,
     case 21: top->state = 2; return;
     case 22: top->state = 3; return;
     case 23: top->state = 15; return;
-    case 25: top->state = 7; return;
-    case 26: top->state = 8; return;
-    case 27: top->state = 9; return;
+    case 24: top->state = 7; return;
+    case 25: top->state = 8; return;
+    case 26: top->state = 9; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2363,9 +2322,9 @@ static void state_func_20(struct owl_token_run *run, struct fill_run_state *top,
     case 21: top->state = 2; return;
     case 22: top->state = 3; return;
     case 23: top->state = 15; return;
-    case 25: top->state = 7; return;
-    case 26: top->state = 8; return;
-    case 27: top->state = 9; return;
+    case 24: top->state = 7; return;
+    case 25: top->state = 8; return;
+    case 26: top->state = 9; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2386,9 +2345,9 @@ static void state_func_15(struct owl_token_run *run, struct fill_run_state *top,
     case 21: top->state = 2; return;
     case 22: top->state = 3; return;
     case 23: top->state = 15; return;
-    case 25: top->state = 7; return;
-    case 26: top->state = 8; return;
-    case 27: top->state = 9; return;
+    case 24: top->state = 7; return;
+    case 25: top->state = 8; return;
+    case 26: top->state = 9; return;
     default:
         bracket_entry_state(run, top, token_index, 3);
         return;
@@ -2605,319 +2564,319 @@ static const uint16_t actions[] = {
 0,36864,40963,0,36864,45060,0,36864,45061,0,36864,45062,0,36868,40960,16384,0,36868,40960,16385,0,36868,40960,16386,0,36868,40961,16387,0,36868,
 40962,0,36868,40963,0,36868,45060,0,36868,45061,0,36868,45062,0,};
 static const uint8_t action_table[1024][3][7] = {
-{{12,52,93,157,96,6,0,},{11,92,4,5,4,0,0,},{165,88,92,160,224,3,0,},},{{159,136,73,158,96,14,0,},{157,80,93,157,168,8,0,},},{{164,104,72,244,136,2,0,},},
-{{8,132,106,26,252,110,64,},{162,152,92,47,196,11,0,},},{{44,228,6,39,4,0,0,},{158,112,101,157,168,10,0,},},{{161,32,69,130,225,9,0,},},{{6,76,66,7,188,9,0,},
-{159,48,105,26,4,222,9,},},{{9,244,70,9,20,11,0,},},{{10,196,94,197,120,14,0,},{4,188,104,26,4,30,10,},{163,104,92,160,144,11,0,},},{{161,208,76,130,49,10,0,},},
-{{9,220,102,197,168,10,0,},{4,172,104,26,4,30,10,},},{{8,148,66,7,44,15,0,},{5,164,108,37,28,14,10,},},{{33,52,40,19,4,0,0,},{197,176,74,9,12,10,0,},
-{158,64,93,157,72,10,0,},},{{244,104,68,244,16,11,0,},{163,72,104,26,84,12,10,},},{{9,4,107,26,204,90,12,},{157,136,109,37,148,217,9,},},{{31,220,41,12,4,0,0,},
-{162,48,104,26,84,12,10,},},{{130,193,92,161,72,10,0,},{160,160,68,244,224,9,0,},},{{7,68,94,6,76,10,0,},{244,72,68,244,16,11,0,},{163,40,104,26,84,12,10,},},
-{{21,76,94,6,100,6,0,},{6,60,74,7,12,10,0,},},{{15,252,89,165,0,0,0,},{13,68,92,165,96,6,0,},{159,96,69,158,72,14,0,},},{{8,60,106,26,252,110,64,},
-{158,144,101,157,168,10,0,},},{{8,76,102,6,220,14,0,},{165,64,100,160,136,4,0,},{158,40,109,37,228,218,9,},},{{164,48,68,244,80,2,0,},},{{130,225,64,130,249,10,0,},
-{159,144,109,37,28,222,9,},},{{4,20,109,37,28,30,10,},{162,112,100,160,32,12,0,},},{{5,52,108,37,28,14,10,},{165,80,92,11,132,3,0,},{163,144,100,160,32,12,0,},},
-{{163,64,64,244,160,12,0,},},{{6,100,66,7,188,9,0,},{159,176,109,37,28,222,9,},},{{26,180,54,10,4,0,0,},{12,148,93,157,96,6,0,},{165,96,64,244,32,5,0,},},
-{{164,8,100,14,196,2,0,},{158,120,69,158,16,11,0,},},{{157,88,101,157,56,9,0,},},{{157,104,105,26,108,217,9,},},{{6,84,102,6,60,9,0,},{130,193,108,37,228,26,10,},},
-{{7,52,70,7,20,11,0,},{161,248,104,26,108,25,10,},{161,192,100,161,56,9,0,},},{{18,212,92,161,96,6,0,},{130,209,108,37,228,26,10,},{161,200,108,37,148,25,10,},},
-{{164,160,72,244,136,2,0,},},{{6,52,102,6,60,9,0,},{130,169,104,26,204,26,10,},{159,40,93,157,128,13,0,},},{{165,144,108,37,244,4,10,},},{{197,192,106,26,108,89,12,},},
-{{163,144,92,160,144,11,0,},},{{130,217,64,130,249,10,0,},{162,160,108,37,124,12,10,},},{{130,17,65,130,249,10,0,},{165,224,101,27,28,6,0,},},{{10,156,106,26,252,94,12,},
-{163,48,104,26,84,12,10,},},{{21,68,94,6,100,6,0,},{9,196,110,37,228,90,12,},{159,112,109,37,28,222,9,},},{{130,249,64,130,249,10,0,},{244,88,72,244,40,11,0,},},
-{{8,36,66,7,44,15,0,},},{{26,196,54,10,4,0,0,},{244,72,72,244,40,11,0,},{158,152,73,158,40,11,0,},},{{22,220,94,197,96,6,0,},{244,64,72,244,40,11,0,},},
-{{15,228,89,165,0,0,0,},{159,104,109,37,28,222,9,},},{{8,68,66,7,44,15,0,},{165,72,64,244,32,5,0,},},{{7,148,74,7,44,11,0,},{164,56,64,244,24,2,0,},},
-{{11,196,4,4,4,0,0,},},{{159,152,69,158,72,14,0,},},{{162,104,92,160,144,11,0,},},{{25,124,5,159,0,0,0,},{157,216,69,158,224,9,0,},},{{244,40,108,37,228,10,10,},},
-{{164,104,64,244,24,2,0,},},{{157,176,12,36,220,6,0,},},{{6,100,70,7,228,9,0,},{165,120,100,160,136,4,0,},},{{18,220,92,161,96,6,0,},{244,160,104,26,204,10,10,},
-{157,112,69,158,224,9,0,},},{{6,76,74,7,12,10,0,},{4,228,68,130,73,14,0,},},{{6,60,70,7,228,9,0,},},{{29,36,41,18,4,0,0,},{158,200,65,158,248,10,0,},
-{158,96,69,158,16,11,0,},},{{10,244,106,26,252,94,12,},{197,160,94,197,168,8,0,},{163,88,104,26,84,12,10,},},{{50,180,20,36,20,0,0,},{21,28,94,6,100,6,0,},},
-{{8,148,74,7,92,15,0,},},{{10,204,66,9,44,15,0,},},{{10,212,74,9,92,15,0,},{197,176,70,9,228,9,0,},},{{244,144,92,160,72,10,0,},{157,136,101,157,56,9,0,},},
-{{6,132,106,26,108,105,64,},{4,212,104,26,4,30,10,},{160,56,92,160,168,8,0,},},{{27,236,101,27,116,6,0,},{8,44,106,26,252,110,64,},{158,176,109,37,228,218,9,},},
-{{7,68,70,7,20,11,0,},{197,208,102,197,56,9,0,},},{{9,204,70,9,20,11,0,},{4,236,64,130,49,14,0,},},{{15,172,88,165,0,0,0,},{8,132,66,7,44,15,0,},},
-{{244,48,100,160,168,10,0,},},{{244,88,100,160,168,10,0,},{244,56,100,160,168,10,0,},},{{9,172,70,9,20,11,0,},},{{130,225,72,130,41,11,0,},{159,144,101,157,224,13,0,},},
-{{158,48,93,157,72,10,0,},},{{161,232,72,130,9,10,0,},},{{7,140,94,48,108,10,0,},},{{24,44,102,8,148,6,0,},{6,100,74,7,12,10,0,},{159,176,101,157,224,13,0,},},
-{0},{{161,232,104,26,108,25,10,},},{{157,88,109,37,148,217,9,},},{{9,156,106,26,204,90,12,},},{{130,185,104,26,204,26,10,},{244,144,68,244,16,11,0,},},{{5,100,92,160,128,13,0,},
-{163,96,68,244,200,12,0,},{158,104,101,157,168,10,0,},},{{7,60,102,6,172,10,0,},{161,200,100,161,56,9,0,},},{{5,100,68,244,72,14,0,},{164,88,92,160,168,0,0,},},
-{{21,140,94,48,116,6,0,},},{{163,64,68,244,200,12,0,},{158,72,101,157,168,10,0,},},{{165,64,64,244,32,5,0,},{163,96,72,244,240,12,0,},},{{21,52,94,6,100,6,0,},
-{160,120,76,244,48,10,0,},},{{6,36,70,7,228,9,0,},{4,220,64,130,49,14,0,},{162,56,72,244,240,12,0,},},{{130,201,68,130,17,11,0,},{164,104,92,160,168,0,0,},},
-{{38,132,93,25,60,6,0,},{10,4,95,197,120,14,0,},{5,148,104,26,4,14,10,},},{{9,196,102,197,168,10,0,},{159,72,105,26,4,222,9,},},{{162,88,72,244,240,12,0,},
-{159,120,109,37,28,222,9,},},{{197,200,106,26,108,89,12,},},{{165,56,92,160,224,3,0,},{158,152,65,158,248,10,0,},},{{14,244,81,165,0,0,0,},{244,64,64,244,248,10,0,},},
-{{24,52,102,8,148,6,0,},{19,92,92,160,96,6,0,},},{{14,164,80,165,0,0,0,},{12,140,93,157,96,6,0,},},{{7,148,66,7,252,10,0,},{130,209,68,130,17,11,0,},},
-{{7,132,94,6,76,10,0,},{130,217,68,130,17,11,0,},},{{9,180,66,9,252,10,0,},{159,152,93,157,128,13,0,},},{{165,160,108,37,244,4,10,},},{{5,76,68,244,72,14,0,},
-{163,136,92,34,244,11,0,},},{{164,24,92,15,28,3,0,},{159,80,101,157,224,13,0,},},{{157,96,73,158,8,10,0,},},{{10,156,94,197,120,14,0,},},{{165,120,108,37,244,4,10,},
-{164,120,104,26,172,1,10,},},{{157,112,77,158,48,10,0,},},{{4,228,92,161,128,13,0,},{159,168,101,157,224,13,0,},},{{21,132,94,6,100,6,0,},},{{8,132,70,7,68,15,0,},
-{158,200,73,158,40,11,0,},{157,152,109,37,148,217,9,},},{{7,44,106,26,204,106,64,},{5,124,104,26,4,14,10,},{161,208,92,161,168,8,0,},},{{21,44,94,6,100,6,0,},
-{159,200,101,157,224,13,0,},},{{6,44,102,6,60,9,0,},{4,196,104,26,4,30,10,},{160,48,64,244,184,9,0,},},{{164,56,104,26,172,1,10,},},{{165,48,108,37,244,4,10,},},
-{{7,84,74,7,44,11,0,},{244,120,64,244,248,10,0,},{164,40,104,26,172,1,10,},},{{4,36,105,26,4,30,10,},},{{163,56,68,244,200,12,0,},{157,216,109,37,148,217,9,},},
-{{16,172,84,164,0,0,0,},{7,76,74,7,44,11,0,},{197,208,110,37,148,89,12,},},{{157,152,69,158,224,9,0,},},{{47,132,4,33,4,0,0,},{164,136,92,34,44,1,0,},},
-{{163,144,64,244,160,12,0,},},{{244,88,108,37,228,10,10,},{197,240,110,37,148,89,12,},},{{9,172,94,197,72,10,0,},{159,96,65,158,48,14,0,},},{{159,144,93,157,128,13,0,},},
-{{4,20,93,161,128,13,0,},{197,152,78,9,52,10,0,},},{{29,188,40,18,4,0,0,},{10,164,106,26,252,94,12,},{197,240,94,197,168,8,0,},},{{157,72,109,37,148,217,9,},},
-{{6,132,66,7,188,9,0,},{160,96,72,244,8,10,0,},},{{10,204,106,26,252,94,12,},},{{197,176,110,37,148,89,12,},},{{32,100,45,12,4,0,0,},{197,168,110,37,148,89,12,},},
-{{197,160,110,37,148,89,12,},{162,144,104,26,84,12,10,},},{0},{{9,164,70,9,20,11,0,},{158,104,109,37,228,218,9,},},{{7,36,66,7,252,10,0,},{161,200,92,161,168,8,0,},},
-{{157,120,65,158,184,9,0,},},{{164,64,68,244,80,2,0,},},{{165,160,100,160,136,4,0,},{158,72,109,37,228,218,9,},},{0},{{22,252,94,44,116,6,0,},{159,88,105,26,4,222,9,},},
-{{162,160,92,160,144,11,0,},{162,56,64,244,160,12,0,},},{0},{{5,164,104,26,4,14,10,},{244,112,100,160,168,10,0,},},{{157,40,105,26,108,217,9,},},{{19,108,92,160,96,6,0,},
-{162,88,64,244,160,12,0,},{159,120,101,157,224,13,0,},},{0},{{165,56,68,244,80,5,0,},{157,56,37,50,252,7,0,},},{{9,164,94,197,72,10,0,},{157,176,101,157,56,9,0,},},
-{{11,124,4,5,4,0,0,},{130,233,104,26,204,26,10,},{244,144,108,37,228,10,10,},},{{130,33,105,26,204,26,10,},{158,136,93,157,72,10,0,},},{{10,172,66,9,44,15,0,},
-{197,232,94,40,12,9,0,},},{{5,60,64,244,48,14,0,},{164,88,68,244,80,2,0,},},{{9,180,74,9,44,11,0,},{4,228,100,161,224,13,0,},{160,88,104,26,108,9,10,},},
-{{14,148,80,165,0,0,0,},{8,84,106,26,252,110,64,},{165,88,104,26,196,4,10,},},{{5,76,92,160,128,13,0,},{165,104,108,37,244,4,10,},{161,224,72,130,9,10,0,},},
-{{244,40,92,160,72,10,0,},},{{160,120,104,26,108,9,10,},{157,96,65,158,184,9,0,},},{0},{{10,212,110,37,20,95,12,},{163,120,108,37,124,12,10,},},{{13,164,92,165,96,6,0,},
-{7,60,106,26,204,106,64,},{5,108,104,26,4,14,10,},},{{130,225,92,161,72,10,0,},{159,168,109,37,28,222,9,},},{{130,233,92,161,72,10,0,},},{{14,76,80,165,0,0,0,},
-{8,132,94,6,124,14,0,},{165,136,92,34,84,4,0,},},{{130,249,92,161,72,10,0,},{159,216,73,158,96,14,0,},},{{39,4,43,22,4,0,0,},{159,200,109,37,28,222,9,},},
-{{6,44,110,37,148,105,64,},{130,201,92,161,72,10,0,},},{{10,164,70,9,68,15,0,},},{{244,104,108,37,228,10,10,},{163,72,64,244,160,12,0,},},{{7,84,66,7,252,10,0,},
-{244,120,72,244,40,11,0,},{161,16,73,130,9,10,0,},},{{19,100,92,160,96,6,0,},{130,9,93,30,140,10,0,},{130,193,104,26,204,26,10,},},{{197,192,74,9,12,10,0,},
-{163,56,92,160,144,11,0,},},{{9,12,106,26,204,90,12,},{244,72,108,37,228,10,10,},},{{13,252,93,165,96,6,0,},{163,104,108,37,124,12,10,},{157,152,77,158,48,10,0,},},
-{{159,96,93,157,128,13,0,},},{{14,172,80,165,0,0,0,},{158,144,93,157,72,10,0,},},{{10,180,106,26,252,94,12,},{10,12,102,197,216,14,0,},{160,96,104,26,108,9,10,},},
-{{164,48,92,160,168,0,0,},{162,72,72,244,240,12,0,},},{{160,64,64,244,184,9,0,},},{{4,20,69,130,73,14,0,},{160,88,64,244,184,9,0,},},{{5,68,92,160,128,13,0,},
-{160,64,72,244,8,10,0,},},{{165,8,100,14,180,5,0,},{157,72,101,157,56,9,0,},},{{162,96,72,244,240,12,0,},{159,160,93,157,128,13,0,},},{{19,156,92,47,116,6,0,},
-{165,96,104,26,196,4,10,},},{{158,120,109,37,228,218,9,},},{{22,164,94,197,96,6,0,},{130,201,104,26,204,26,10,},},{0},{{6,68,102,6,60,9,0,},{130,217,104,26,204,26,10,},},
-{{5,100,108,37,28,14,10,},{161,248,64,130,185,9,0,},},{{7,36,74,7,44,11,0,},{197,200,102,197,56,9,0,},},{{24,76,102,8,148,6,0,},{164,232,101,27,68,3,0,},
-{157,120,73,158,8,10,0,},},{{197,152,70,9,228,9,0,},},{{161,216,64,130,185,9,0,},},{{10,156,66,9,44,15,0,},},{0},{{48,116,6,41,4,0,0,},{159,112,105,26,4,222,9,},},
-{{244,96,72,244,40,11,0,},{163,48,92,160,144,11,0,},},{{16,228,85,164,0,0,0,},{244,112,108,37,228,10,10,},},{{4,212,72,130,97,14,0,},{157,144,109,37,148,217,9,},},
-{{130,249,104,26,204,26,10,},{159,120,93,157,128,13,0,},},{{6,148,106,26,108,105,64,},{165,40,104,26,196,4,10,},{158,168,101,157,168,10,0,},},{{197,216,94,197,168,8,0,},
-{160,48,92,160,168,8,0,},},{{164,56,92,160,168,0,0,},{157,176,109,37,148,217,9,},},{{160,72,104,26,108,9,10,},},{{8,68,106,26,252,110,64,},{165,72,104,26,196,4,10,},
-{158,136,101,157,168,10,0,},},{{10,172,74,9,92,15,0,},},{{5,60,72,244,96,14,0,},{157,216,73,158,8,10,0,},},{{7,76,102,6,172,10,0,},{160,104,104,26,108,9,10,},},
-{{157,200,73,158,8,10,0,},},{{165,104,100,160,136,4,0,},{161,224,64,130,185,9,0,},},{{22,172,94,197,96,6,0,},{159,136,105,26,4,222,9,},},{{164,104,104,26,172,1,10,},
-{157,200,93,157,168,8,0,},},{{7,100,70,7,20,11,0,},{158,112,73,158,40,11,0,},},{{5,92,108,37,28,14,10,},{163,120,100,160,32,12,0,},},{{157,112,93,157,168,8,0,},},
-{{4,228,108,37,28,30,10,},},{{8,52,66,7,44,15,0,},{6,60,110,37,148,105,64,},},{{6,132,94,6,172,8,0,},{158,96,93,157,72,10,0,},},{{164,72,68,244,80,2,0,},
-{159,216,65,158,48,14,0,},},{{197,176,66,9,188,9,0,},},{{197,168,74,9,12,10,0,},},{{197,176,106,26,108,89,12,},{161,16,105,26,108,25,10,},},{{244,104,100,160,168,10,0,},
-{163,72,72,244,240,12,0,},},{{40,4,47,22,4,0,0,},{162,48,92,160,144,11,0,},{160,144,100,160,56,9,0,},},{{160,160,104,26,108,9,10,},},{{197,192,66,9,188,9,0,},
-{165,232,101,27,28,6,0,},},{{244,48,104,26,204,10,10,},{197,208,94,197,168,8,0,},},{{9,204,110,37,228,90,12,},},{{8,60,70,7,68,15,0,},{165,48,68,244,80,5,0,},},
-{{161,184,76,130,49,10,0,},},{{10,12,110,37,20,95,12,},{163,160,108,37,124,12,10,},},{{9,172,110,37,228,90,12,},{164,48,100,160,104,1,0,},},{{4,188,100,161,224,13,0,},
-{130,233,68,130,17,11,0,},},{{25,140,5,159,0,0,0,},{15,68,88,165,0,0,0,},},{0},{0},{{6,28,94,6,172,8,0,},{157,192,93,32,12,9,0,},},{{8,36,102,6,220,14,0,},
-{6,36,94,6,172,8,0,},},{{165,112,92,160,224,3,0,},{158,120,101,157,168,10,0,},},{{6,52,94,6,172,8,0,},{157,104,93,157,168,8,0,},},{{6,84,74,7,12,10,0,},},
-{{34,164,44,19,4,0,0,},{6,68,110,37,148,105,64,},{4,252,104,26,4,30,10,},},{{7,52,102,6,172,10,0,},{161,248,72,130,9,10,0,},{158,104,93,157,72,10,0,},},
-{{22,212,94,197,96,6,0,},{161,200,76,130,49,10,0,},},{{165,64,92,160,224,3,0,},{160,136,92,34,12,9,0,},},{{8,100,102,6,220,14,0,},{158,192,93,32,140,10,0,},},
-{{10,236,94,40,188,14,0,},{161,216,72,130,9,10,0,},{160,96,64,244,184,9,0,},},{{22,244,94,197,96,6,0,},},{{13,228,93,165,96,6,0,},{162,248,127,162,0,32,10,},},
-{{12,212,93,49,116,6,0,},{158,48,101,157,168,10,0,},},{{10,4,107,26,252,94,12,},{5,148,92,160,128,13,0,},{244,96,64,244,248,10,0,},},{{197,0,107,26,108,89,12,},},
-{{162,40,100,160,32,12,0,},},{0},{{158,168,109,37,228,218,9,},},{{11,108,4,5,4,0,0,},{9,212,66,9,252,10,0,},},{{21,100,94,6,100,6,0,},{164,56,68,244,80,2,0,},
-{159,104,65,158,48,14,0,},},{{162,72,104,26,84,12,10,},},{{19,164,92,160,96,6,0,},{158,136,109,37,228,218,9,},},{{5,44,108,37,28,14,10,},{165,160,104,26,196,4,10,},},
-{{159,152,105,26,4,222,9,},},{{162,104,104,26,84,12,10,},},{0},{{7,28,110,37,228,106,64,},{5,76,108,37,28,14,10,},{165,104,92,160,224,3,0,},},{{18,188,92,161,96,6,0,},
-{157,80,101,157,56,9,0,},},{{12,84,93,157,96,6,0,},{158,176,101,157,168,10,0,},},{{12,92,93,157,96,6,0,},{158,112,65,158,248,10,0,},},{{12,68,93,157,96,6,0,},
-{161,32,105,26,108,25,10,},},{{12,76,93,157,96,6,0,},{244,160,72,244,40,11,0,},{157,112,101,157,56,9,0,},},{{159,168,93,157,128,13,0,},{157,144,105,26,108,217,9,},},
-{{6,60,102,6,60,9,0,},{158,216,69,158,16,11,0,},},{{197,8,110,37,148,89,12,},{160,48,68,244,224,9,0,},},{{11,228,4,4,4,0,0,},{164,72,92,160,168,0,0,},
-{163,56,72,244,240,12,0,},},{{165,48,104,26,196,4,10,},},{{8,148,106,26,252,110,64,},{6,44,94,6,172,8,0,},{164,40,100,160,104,1,0,},},{{158,64,101,157,168,10,0,},},
-{{157,136,73,158,8,10,0,},},{{4,212,92,161,128,13,0,},{160,56,104,26,108,9,10,},},{{6,84,66,7,188,9,0,},},{{8,44,74,7,92,15,0,},{163,56,108,37,124,12,10,},},
-{{7,68,102,6,172,10,0,},{197,208,70,9,228,9,0,},},{{9,204,102,197,168,10,0,},{157,152,93,157,168,8,0,},},{{43,20,102,45,132,6,0,},{10,156,102,197,216,14,0,},},
-{{8,76,74,7,92,15,0,},{165,64,72,244,128,5,0,},},{{16,60,84,164,0,0,0,},{244,88,68,244,16,11,0,},},{{22,196,94,197,96,6,0,},{9,172,102,197,168,10,0,},
-{164,48,108,37,228,1,10,},},{{130,225,104,26,204,26,10,},{159,144,69,158,72,14,0,},},{{5,52,64,244,48,14,0,},{163,144,72,244,240,12,0,},},{{4,220,100,161,224,13,0,},},
-{{10,212,102,197,216,14,0,},{162,128,93,25,100,11,0,},},{{6,100,106,26,108,105,64,},{159,176,69,158,72,14,0,},},{{197,160,106,26,108,89,12,},},{{30,252,44,18,4,0,0,},
-{4,252,68,130,73,14,0,},},{{9,156,94,197,72,10,0,},{8,148,94,6,124,14,0,},{164,96,68,244,80,2,0,},},{{4,236,68,130,73,14,0,},{160,112,104,26,108,9,10,},},
-{{14,172,81,165,0,0,0,},{130,185,72,130,41,11,0,},},{{8,140,94,48,156,14,0,},{158,104,69,158,16,11,0,},},{{161,200,68,130,225,9,0,},},{{6,52,66,7,188,9,0,},
-{4,36,65,130,49,14,0,},{4,204,68,130,73,14,0,},},{{33,164,40,19,4,0,0,},{165,144,64,244,32,5,0,},},{{9,4,111,37,228,90,12,},{163,64,100,160,32,12,0,},},
-{{25,108,5,159,0,0,0,},{165,248,127,162,16,32,10,},},{{13,52,92,165,96,6,0,},{9,244,110,37,228,90,12,},{160,32,0,13,188,6,0,},},{{16,148,84,164,0,0,0,},
-{130,17,109,37,228,26,10,},},{{16,124,84,164,0,0,0,},{5,148,68,244,72,14,0,},},{{8,52,94,6,124,14,0,},},{{162,40,108,37,124,12,10,},{157,144,93,157,168,8,0,},},
-{{6,36,102,6,60,9,0,},{162,88,104,26,84,12,10,},},{{5,124,64,244,48,14,0,},{158,48,105,26,204,218,9,},},{{9,212,74,9,44,11,0,},},{{8,28,94,6,124,14,0,},
-{159,104,73,158,96,14,0,},},{{130,233,64,130,249,10,0,},{164,88,64,244,24,2,0,},},{{164,64,72,244,136,2,0,},{162,96,64,244,160,12,0,},},{{18,36,93,161,96,6,0,},
-{5,44,100,160,224,13,0,},},{{162,120,68,244,200,12,0,},{160,88,92,160,168,8,0,},},{{19,60,92,160,96,6,0,},{244,48,68,244,16,11,0,},},{{8,84,66,7,44,15,0,},
-{165,88,64,244,32,5,0,},},{{7,28,102,6,172,10,0,},{5,76,100,160,224,13,0,},},{{157,80,109,37,148,217,9,},},{{160,120,0,13,188,6,0,},},{{165,120,64,244,32,5,0,},
-{158,216,93,157,72,10,0,},},{{244,56,72,244,40,11,0,},{161,240,104,26,108,25,10,},},{{244,160,64,244,248,10,0,},{157,112,109,37,148,217,9,},},{{164,120,64,244,24,2,0,},
-{161,208,64,130,185,9,0,},},{{10,196,66,9,44,15,0,},{161,192,76,130,49,10,0,},{158,200,101,157,168,10,0,},},{{5,124,92,160,128,13,0,},{197,8,102,197,56,9,0,},
-{161,208,104,26,108,25,10,},},{{10,164,74,9,92,15,0,},},{{159,200,69,158,72,14,0,},},{{6,148,74,7,12,10,0,},{4,196,72,130,97,14,0,},},{{8,28,106,26,252,110,64,},
-{7,60,70,7,20,11,0,},{158,64,109,37,228,218,9,},},{{9,4,71,9,20,11,0,},{5,100,100,160,224,13,0,},{157,136,65,158,184,9,0,},},{{6,132,70,7,228,9,0,},
-{4,212,68,130,73,14,0,},{130,209,92,161,72,10,0,},},{{4,36,73,130,97,14,0,},{130,193,64,130,249,10,0,},},{{8,44,66,7,44,15,0,},{163,56,100,160,32,12,0,},
-{158,176,69,158,16,11,0,},},{{7,68,110,37,228,106,64,},{163,128,93,25,100,11,0,},{160,120,108,37,148,9,10,},},{0},{{11,36,5,4,4,0,0,},{4,172,108,37,28,30,10,},
-{130,241,104,26,204,26,10,},},{{163,64,72,244,240,12,0,},{158,144,69,158,16,11,0,},},{{10,12,94,197,120,14,0,},{163,160,92,160,144,11,0,},{160,88,76,244,48,10,0,},},
-{{8,76,106,26,252,110,64,},},{{19,52,92,160,96,6,0,},},{{10,164,94,197,120,14,0,},{197,240,106,26,108,89,12,},{160,48,108,37,148,9,10,},},{{16,172,85,164,0,0,0,},
-{5,68,68,244,72,14,0,},},{{13,172,93,165,96,6,0,},{4,20,101,161,224,13,0,},},{{159,176,93,157,128,13,0,},},{{130,209,100,161,168,10,0,},{161,184,92,161,168,8,0,},},
-{{130,217,100,161,168,10,0,},{164,160,64,244,24,2,0,},},{{9,156,70,9,20,11,0,},{164,96,92,160,168,0,0,},{157,104,77,158,48,10,0,},},{{162,144,72,244,240,12,0,},
-{160,144,64,244,184,9,0,},},{{6,68,94,6,172,8,0,},{130,185,64,130,249,10,0,},},{{10,204,110,37,20,95,12,},{163,96,108,37,124,12,10,},{161,80,92,11,108,8,0,},},
-{{13,236,93,165,96,6,0,},{164,112,100,160,104,1,0,},},{{4,204,92,161,128,13,0,},{164,64,104,26,172,1,10,},},{{197,152,94,197,168,8,0,},{165,144,72,244,128,5,0,},},
-{{163,64,108,37,124,12,10,},{159,112,101,157,224,13,0,},},{{24,84,102,8,148,6,0,},},{{130,217,92,161,72,10,0,},{162,56,108,37,124,12,10,},},{{130,17,101,161,168,10,0,},
-{244,72,64,244,248,10,0,},},{{10,156,70,9,68,15,0,},{244,152,92,47,108,10,0,},{163,48,68,244,200,12,0,},},{{5,164,72,244,96,14,0,},},{{9,196,94,197,72,10,0,},
-{157,144,69,158,224,9,0,},},{{159,120,69,158,72,14,0,},},{{158,152,101,157,168,10,0,},{157,56,25,50,60,7,0,},},{{15,244,89,165,0,0,0,},{244,64,108,37,228,10,10,},},
-{{157,176,69,158,224,9,0,},},{{130,233,72,130,41,11,0,},{157,216,77,158,48,10,0,},},{{6,76,110,37,148,105,64,},{130,33,73,130,41,11,0,},},{{6,84,110,37,148,105,64,},
-{157,200,77,158,48,10,0,},},{{160,88,68,244,224,9,0,},{157,64,109,37,148,217,9,},},{0},{{8,84,74,7,92,15,0,},{165,88,72,244,128,5,0,},},{{7,100,66,7,252,10,0,},
-{161,224,104,26,108,25,10,},},{{160,120,68,244,224,9,0,},{157,96,109,37,148,217,9,},},{0},{{5,92,72,244,96,14,0,},{165,120,72,244,128,5,0,},},{{8,52,70,7,68,15,0,},
-{5,92,68,244,72,14,0,},},{{6,28,110,37,148,105,64,},{5,76,72,244,96,14,0,},},{{10,204,74,9,92,15,0,},{164,120,72,244,136,2,0,},},{{10,196,74,9,92,15,0,},
-{158,96,105,26,204,218,9,},},{{5,124,68,244,72,14,0,},{158,80,109,37,228,218,9,},},{{164,72,108,37,228,1,10,},{159,216,105,26,4,222,9,},},{{164,88,72,244,136,2,0,},},
-{{6,148,66,7,188,9,0,},{4,196,64,130,49,14,0,},},{0},{{9,4,95,197,72,10,0,},{244,120,100,160,168,10,0,},},{{162,48,68,244,200,12,0,},{159,64,105,26,4,222,9,},},
-{{130,193,72,130,41,11,0,},{244,56,108,37,228,10,10,},},{{158,176,93,157,72,10,0,},},{{157,48,101,157,56,9,0,},},{{159,96,105,26,4,222,9,},},{{8,60,94,6,124,14,0,},
-{4,172,100,161,224,13,0,},{165,48,92,160,224,3,0,},},{{34,52,44,19,4,0,0,},{161,184,100,161,56,9,0,},},{{10,180,74,9,92,15,0,},{163,160,68,244,200,12,0,},},
-{{13,92,92,165,96,6,0,},{11,220,4,4,4,0,0,},},{0},{{13,76,92,165,96,6,0,},{7,28,94,6,76,10,0,},},{{6,36,66,7,188,9,0,},},{{14,124,80,165,0,0,0,},
-{13,124,92,165,96,6,0,},{7,44,94,6,76,10,0,},},{{7,36,94,6,76,10,0,},{162,96,104,26,84,12,10,},},{{7,60,94,6,76,10,0,},{161,232,76,130,49,10,0,},},
-{{10,220,110,37,20,95,12,},{7,52,94,6,76,10,0,},{163,112,108,37,124,12,10,},},{{157,104,69,158,224,9,0,},},{{162,144,64,244,160,12,0,},},{{6,68,70,7,228,9,0,},
-{4,252,64,130,49,14,0,},{162,112,92,160,144,11,0,},},{{16,92,84,164,0,0,0,},{7,36,102,6,172,10,0,},{162,120,92,160,144,11,0,},},{{164,112,108,37,228,1,10,},
-{162,64,92,160,144,11,0,},},{{130,169,92,161,72,10,0,},{159,40,105,26,4,222,9,},},{{164,16,100,16,236,2,0,},{158,88,105,26,204,218,9,},},{{37,100,62,24,4,0,0,},
-{12,204,93,157,96,6,0,},{159,152,73,158,96,14,0,},},{{18,196,92,161,96,6,0,},},{{162,56,100,160,32,12,0,},},{0},{{10,4,67,9,44,15,0,},{244,96,104,26,204,10,10,},},
-{{14,252,81,165,0,0,0,},{5,164,64,244,48,14,0,},},{{160,48,104,26,108,9,10,},{157,144,77,158,48,10,0,},},{{8,36,94,6,124,14,0,},{165,40,92,160,224,3,0,},
-{161,184,68,130,225,9,0,},},{{10,172,102,197,216,14,0,},},{{15,164,88,165,0,0,0,},{244,64,100,160,168,10,0,},},{{16,108,84,164,0,0,0,},{157,176,77,158,48,10,0,},},
-{{162,72,64,244,160,12,0,},{160,72,72,244,8,10,0,},},{{7,148,94,6,76,10,0,},},{{16,68,84,164,0,0,0,},},{{9,180,110,37,228,90,12,},{4,28,93,42,164,13,0,},
-{157,64,101,157,56,9,0,},},{{162,104,64,244,160,12,0,},{160,104,72,244,8,10,0,},},{0},{{8,100,70,7,68,15,0,},{5,52,72,244,96,14,0,},{165,104,68,244,80,5,0,},},
-{{157,96,101,157,56,9,0,},},{{11,76,4,5,4,0,0,},},{{158,112,105,26,204,218,9,},},{{10,212,70,9,68,15,0,},{163,120,68,244,200,12,0,},{158,216,65,158,248,10,0,},},
-{{7,60,66,7,252,10,0,},{5,108,64,244,48,14,0,},{160,48,72,244,8,10,0,},},{{4,244,100,161,224,13,0,},},{{161,192,92,161,168,8,0,},},{{10,244,70,9,68,15,0,},
-{163,88,68,244,200,12,0,},{158,80,101,157,168,10,0,},},{{18,204,92,161,96,6,0,},{164,72,100,160,104,1,0,},},{{15,52,88,165,0,0,0,},{9,236,94,40,140,10,0,},
-{159,80,105,26,4,222,9,},},{{161,16,69,130,225,9,0,},},{{16,100,84,164,0,0,0,},{6,84,70,7,228,9,0,},},{{7,84,102,6,172,10,0,},{244,120,108,37,228,10,10,},},
-{{160,144,68,244,224,9,0,},{160,56,64,244,184,9,0,},},{{160,160,72,244,8,10,0,},},{{19,44,92,160,96,6,0,},},{{157,48,109,37,148,217,9,},},{{162,80,92,11,68,11,0,},
-{157,168,109,37,148,217,9,},},{{4,172,92,161,128,13,0,},{165,48,100,160,136,4,0,},},{{161,184,108,37,148,25,10,},},{{10,180,66,9,44,15,0,},{244,72,100,160,168,10,0,},
-{164,248,127,162,32,32,10,},},{{160,64,108,37,148,9,10,},},{{7,132,70,7,20,11,0,},{162,112,104,26,84,12,10,},},{{197,168,102,197,56,9,0,},},{{9,180,94,197,72,10,0,},
-{197,160,102,197,56,9,0,},},{{157,72,93,157,168,8,0,},},{{4,228,72,130,97,14,0,},},{{165,112,104,26,196,4,10,},{161,232,68,130,225,9,0,},},{{10,220,102,197,216,14,0,},
-{163,112,100,160,32,12,0,},},{{24,148,102,8,148,6,0,},{164,96,108,37,228,1,10,},},{{6,84,106,26,108,105,64,},{4,236,108,37,28,30,10,},},{{4,252,72,130,97,14,0,},},
-{{5,116,108,37,28,14,10,},},{{157,120,101,157,56,9,0,},},{{7,100,102,6,172,10,0,},{6,52,106,26,108,105,64,},{130,169,100,161,168,10,0,},},{{11,60,4,5,4,0,0,},
-{197,152,110,37,148,89,12,},},{{158,72,93,157,72,10,0,},},{{5,92,100,160,224,13,0,},},{{14,100,80,165,0,0,0,},},{{12,116,93,157,96,6,0,},{6,20,102,45,140,8,0,},
-{165,24,92,15,252,5,0,},},{{10,4,75,9,92,15,0,},{6,36,106,26,108,105,64,},},{{10,4,71,9,68,15,0,},{7,44,102,6,172,10,0,},{197,0,75,9,12,10,0,},},
-{{162,88,92,160,144,11,0,},},{{197,200,70,9,228,9,0,},},{{8,52,106,26,252,110,64,},{165,56,104,26,196,4,10,},},{{16,244,85,164,0,0,0,},{157,160,105,26,108,217,9,},},
-{{9,164,110,37,228,90,12,},{163,104,64,244,160,12,0,},{162,104,68,244,200,12,0,},},{{8,132,102,6,220,14,0,},{160,72,64,244,184,9,0,},},{{10,172,110,37,20,95,12,},
-{244,48,72,244,40,11,0,},},{{5,60,100,160,224,13,0,},{244,56,64,244,248,10,0,},},{{15,124,88,165,0,0,0,},{162,120,108,37,124,12,10,},{157,64,93,157,168,8,0,},},
-{{160,104,64,244,184,9,0,},},{{12,156,93,157,96,6,0,},{4,188,92,161,128,13,0,},},{{13,108,92,165,96,6,0,},{130,225,100,161,168,10,0,},{159,136,69,158,72,14,0,},},
-{{14,228,81,165,0,0,0,},{164,144,64,244,24,2,0,},},{{9,212,106,26,204,90,12,},{197,0,50,46,164,6,0,},},{{158,216,101,157,168,10,0,},},{{163,120,92,160,144,11,0,},
-{161,32,73,130,9,10,0,},},{{159,48,109,37,28,222,9,},},{{4,244,108,37,28,30,10,},{162,16,100,16,52,13,0,},},{0},{{197,160,74,9,12,10,0,},{158,80,93,157,72,10,0,},},
-{{159,64,101,157,224,13,0,},},{{7,52,66,7,252,10,0,},{159,200,93,157,128,13,0,},},{{12,124,93,157,96,6,0,},{197,176,78,9,52,10,0,},{161,16,77,130,49,10,0,},},
-{{244,104,72,244,40,11,0,},{163,72,100,160,32,12,0,},},{{7,84,94,6,76,10,0,},{157,136,105,26,108,217,9,},},{{21,60,94,6,100,6,0,},{160,144,76,244,48,10,0,},
-{160,56,72,244,8,10,0,},},{{160,160,64,244,184,9,0,},},{{163,40,100,160,32,12,0,},{161,168,108,37,148,25,10,},},{{9,204,74,9,44,11,0,},{159,112,93,157,128,13,0,},},
-{{9,220,110,37,228,90,12,},{8,68,102,6,220,14,0,},{157,168,101,157,56,9,0,},},{{8,60,110,37,20,111,64,},{158,160,105,26,204,218,9,},},{{165,64,104,26,196,4,10,},
-{158,144,109,37,228,218,9,},},{{9,172,74,9,44,11,0,},{164,48,64,244,24,2,0,},},{{162,64,108,37,124,12,10,},{160,64,100,160,56,9,0,},},{{4,20,105,26,4,30,10,},
-{163,48,100,160,32,12,0,},},{{197,240,66,9,188,9,0,},{160,40,104,26,108,9,10,},},{{5,68,108,37,28,14,10,},},{{15,100,88,165,0,0,0,},{164,160,68,244,80,2,0,},},
-{{165,96,68,244,80,5,0,},},{{158,120,73,158,40,11,0,},},{{10,220,94,197,120,14,0,},{163,112,92,160,144,11,0,},},{{164,96,100,160,104,1,0,},{159,160,105,26,4,222,9,},},
-{{4,236,100,161,224,13,0,},},{{7,52,74,7,44,11,0,},{5,100,72,244,96,14,0,},{161,248,100,161,56,9,0,},},{{11,164,4,5,4,0,0,},{161,200,104,26,108,25,10,},},
-{{157,120,109,37,148,217,9,},},{{244,88,92,160,72,10,0,},{159,192,93,32,196,13,0,},},{{244,64,92,160,72,10,0,},},{{244,72,92,160,72,10,0,},},{{4,220,72,130,97,14,0,},
-{164,80,92,11,60,0,0,},},{{7,132,110,37,228,106,64,},{162,160,104,26,84,12,10,},},{{244,96,92,160,72,10,0,},},{{10,156,110,37,20,95,12,},{5,148,100,160,224,13,0,},
-{163,48,108,37,124,12,10,},},{{244,112,92,160,72,10,0,},{197,0,67,9,188,9,0,},},{{130,249,68,130,17,11,0,},},{{197,200,94,197,168,8,0,},},{{4,12,93,30,196,13,0,},},
-{{16,164,84,164,0,0,0,},{7,76,110,37,228,106,64,},{6,76,106,26,108,105,64,},},{{9,164,102,197,168,10,0,},{164,56,108,37,228,1,10,},{157,176,93,157,168,8,0,},},
-{{158,136,65,158,248,10,0,},},{{7,84,110,37,228,106,64,},},{{7,132,106,26,204,106,64,},{5,60,108,37,28,14,10,},},{{162,120,100,160,32,12,0,},{159,152,65,158,48,14,0,},},
-{0},{{161,224,92,161,168,8,0,},},{0},{{164,104,68,244,80,2,0,},{160,120,92,160,168,8,0,},},{{6,28,106,26,108,105,64,},{130,33,101,161,168,10,0,},},{{161,32,109,37,148,25,10,},},
-{{5,92,92,160,128,13,0,},{244,56,104,26,204,10,10,},{161,32,65,130,185,9,0,},},{{197,168,66,9,188,9,0,},{159,48,101,157,224,13,0,},},{{164,128,93,25,108,0,0,},},
-{{8,132,74,7,92,15,0,},{158,96,65,158,248,10,0,},},{{197,160,66,9,188,9,0,},{161,208,72,130,9,10,0,},},{{25,100,5,159,0,0,0,},},{{8,148,70,7,68,15,0,},},
-{0},{{25,204,5,159,0,0,0,},{163,72,108,37,124,12,10,},},{{9,4,103,197,168,10,0,},{244,120,92,160,72,10,0,},},{{6,132,102,6,60,9,0,},{4,212,100,161,224,13,0,},
-{162,48,108,37,124,12,10,},},{{197,192,94,197,168,8,0,},{158,176,105,26,204,218,9,},},{{163,40,108,37,124,12,10,},{161,168,100,161,56,9,0,},},{{9,204,66,9,252,10,0,},
-{164,144,104,26,172,1,10,},},{{157,168,93,157,168,8,0,},},{{25,180,5,159,0,0,0,},},{{158,40,105,26,204,218,9,},},{{9,172,66,9,252,10,0,},{164,48,72,244,136,2,0,},},
-{{130,225,68,130,17,11,0,},{159,144,105,26,4,222,9,},},{{7,44,66,7,252,10,0,},{6,44,70,7,228,9,0,},},{{7,100,106,26,204,106,64,},{5,52,104,26,4,14,10,},
-{197,240,74,9,12,10,0,},},{{5,68,100,160,224,13,0,},},{{160,96,92,160,168,8,0,},{159,176,105,26,4,222,9,},},{{165,96,92,160,224,3,0,},{158,144,105,26,204,218,9,},},
-{{158,120,65,158,248,10,0,},},{{163,96,92,160,144,11,0,},{157,88,105,26,108,217,9,},},{{9,156,102,197,168,10,0,},{157,104,109,37,148,217,9,},},{{130,185,108,37,228,26,10,},
-{162,64,64,244,160,12,0,},},{{5,100,64,244,48,14,0,},{161,248,108,37,148,25,10,},},{{163,64,92,160,144,11,0,},},{{13,172,92,165,96,6,0,},{163,88,92,160,144,11,0,},},
-{{21,36,94,6,100,6,0,},{163,80,92,11,68,11,0,},{162,8,100,14,28,13,0,},},{{165,144,104,26,196,4,10,},{164,144,92,160,168,0,0,},},{{5,164,68,244,72,14,0,},
-{161,216,104,26,108,25,10,},},{{9,244,66,9,252,10,0,},{159,88,93,157,128,13,0,},},{{26,204,54,10,4,0,0,},{4,220,68,130,73,14,0,},},{{130,17,69,130,17,11,0,},},
-{{161,184,72,130,9,10,0,},},{{9,196,106,26,204,90,12,},{164,160,92,160,168,0,0,},{159,72,101,157,224,13,0,},},{{164,40,108,37,228,1,10,},{159,120,105,26,4,222,9,},},
-{{160,144,108,37,148,9,10,},},{{7,76,106,26,204,106,64,},{158,152,69,158,16,11,0,},},{{163,144,104,26,84,12,10,},},{{130,233,100,161,168,10,0,},{197,240,70,9,228,9,0,},},
-{{165,72,68,244,80,5,0,},{158,136,73,158,40,11,0,},},{{22,204,94,197,96,6,0,},{7,148,70,7,20,11,0,},},{{197,152,102,197,56,9,0,},{163,152,92,47,196,11,0,},},
-{{9,180,70,9,20,11,0,},{160,88,100,160,56,9,0,},},{0},{{5,76,64,244,48,14,0,},{162,88,100,160,32,12,0,},},{{244,40,104,26,204,10,10,},},{{160,120,100,160,56,9,0,},
-{157,96,77,158,48,10,0,},},{{160,48,76,244,48,10,0,},},{{40,156,46,22,4,0,0,},{165,120,104,26,196,4,10,},{160,56,76,244,48,10,0,},},{{244,160,108,37,228,10,10,},
-{157,112,65,158,184,9,0,},},{{164,120,100,160,104,1,0,},{160,176,1,13,188,6,0,},},{{31,100,41,12,4,0,0,},{6,60,66,7,188,9,0,},},{{10,196,106,26,252,94,12,},
-{163,104,104,26,84,12,10,},{158,96,73,158,40,11,0,},},{{10,244,110,37,20,95,12,},{197,8,94,197,168,8,0,},{163,88,108,37,124,12,10,},},{{164,88,100,160,104,1,0,},
-{159,80,93,157,128,13,0,},},{0},{{197,176,94,197,168,8,0,},{161,16,93,161,168,8,0,},},{0},{{244,120,68,244,16,11,0,},},{{6,132,110,37,148,105,64,},{162,48,100,160,32,12,0,},
-{160,144,92,160,168,8,0,},},{{8,44,102,6,220,14,0,},{163,56,64,244,160,12,0,},{159,112,69,158,72,14,0,},},{{10,244,94,197,120,14,0,},{7,68,66,7,252,10,0,},},
-{{10,252,94,44,156,14,0,},{157,152,65,158,184,9,0,},},{{4,212,108,37,28,30,10,},{159,96,73,158,96,14,0,},},{{10,204,94,197,120,14,0,},{4,220,108,37,28,30,10,},},
-{{31,180,41,12,4,0,0,},{10,212,94,197,120,14,0,},{7,132,66,7,252,10,0,},},{{4,204,108,37,28,30,10,},},{{4,188,72,130,97,14,0,},{244,104,64,244,248,10,0,},},
-{{29,252,40,18,4,0,0,},{11,20,5,4,4,0,0,},},{{10,164,102,197,216,14,0,},{163,8,100,14,28,13,0,},},{{157,72,105,26,108,217,9,},},{{24,132,102,8,148,6,0,},
-{162,96,92,160,144,11,0,},},{{35,36,46,21,4,0,0,},},{{42,4,5,29,4,0,0,},{163,232,101,27,108,13,0,},{161,232,108,37,148,25,10,},},{0},{{9,156,110,37,228,90,12,},
-{157,104,101,157,56,9,0,},},{{130,185,100,161,168,10,0,},},{{163,96,64,244,160,12,0,},},{{7,36,70,7,20,11,0,},},{{157,120,93,157,168,8,0,},},{{5,92,104,26,4,14,10,},
-{164,64,64,244,24,2,0,},},{{197,168,94,197,168,8,0,},{161,8,93,30,12,9,0,},},{{8,60,102,6,220,14,0,},{130,33,65,130,249,10,0,},},{{9,244,74,9,44,11,0,},
-{6,36,110,37,148,105,64,},},{{162,56,68,244,200,12,0,},{160,152,92,47,220,8,0,},},{{130,17,93,161,72,10,0,},{130,201,64,130,249,10,0,},},{{5,108,72,244,96,14,0,},},
-{{164,160,100,160,104,1,0,},{159,72,109,37,28,222,9,},},{{162,88,68,244,200,12,0,},},{{163,104,68,244,200,12,0,},{160,184,0,13,188,6,0,},},{{158,152,93,157,72,10,0,},
-{157,56,33,50,188,7,0,},},{{5,156,92,47,164,13,0,},{244,64,68,244,16,11,0,},},{{33,124,40,19,4,0,0,},{11,212,4,4,4,0,0,},{130,233,108,37,228,26,10,},},
-{{5,140,92,34,196,13,0,},{165,72,92,160,224,3,0,},},{{10,172,70,9,68,15,0,},{158,40,101,157,168,10,0,},},{{5,60,92,160,128,13,0,},},{{160,88,108,37,148,9,10,},},
-{{165,88,100,160,136,4,0,},{164,144,68,244,80,2,0,},},{{8,100,106,26,252,110,64,},{165,104,104,26,196,4,10,},{161,224,76,130,49,10,0,},},{{159,136,93,157,128,13,0,},},
-{{13,148,92,165,96,6,0,},{157,200,65,158,184,9,0,},{157,96,69,158,224,9,0,},},{{157,176,16,36,12,7,0,},},{{10,212,106,26,252,94,12,},{163,120,104,26,84,12,10,},},
-{{244,160,100,160,168,10,0,},{157,112,73,158,8,10,0,},},{{6,76,94,6,172,8,0,},{197,208,78,9,52,10,0,},{159,168,105,26,4,222,9,},},{{197,200,78,9,52,10,0,},},
-{{197,192,78,9,52,10,0,},},{{10,244,102,197,216,14,0,},{5,124,108,37,28,14,10,},{163,88,100,160,32,12,0,},},{{21,148,94,6,100,6,0,},{159,200,105,26,4,222,9,},},
-{{6,148,110,37,148,105,64,},{4,196,108,37,28,30,10,},},{{39,156,42,22,4,0,0,},{197,176,102,197,56,9,0,},{161,16,101,161,56,9,0,},},{{163,72,92,160,144,11,0,},},
-{{16,236,85,164,0,0,0,},{7,84,70,7,20,11,0,},{244,144,72,244,40,11,0,},},{{4,36,109,37,28,30,10,},{130,193,100,161,168,10,0,},},{{158,200,69,158,16,11,0,},},
-{{16,4,84,164,0,0,0,},{7,68,74,7,44,11,0,},{197,208,106,26,108,89,12,},},{{11,148,4,5,4,0,0,},{157,152,73,158,8,10,0,},},{{38,84,92,11,108,3,0,},},
-{{8,76,94,6,124,14,0,},{164,56,100,160,104,1,0,},{161,184,64,130,185,9,0,},},{{244,88,104,26,204,10,10,},},{{164,152,92,47,236,0,0,},{160,40,100,160,56,9,0,},},
-{{162,64,68,244,200,12,0,},{160,64,76,244,48,10,0,},},{{6,68,66,7,188,9,0,},{4,20,65,130,49,14,0,},},{{10,164,110,37,20,95,12,},{159,72,93,157,128,13,0,},},
-{{165,160,68,244,80,5,0,},{160,144,72,244,8,10,0,},},{{162,96,68,244,200,12,0,},{160,96,76,244,48,10,0,},},{{11,68,4,5,4,0,0,},{165,96,108,37,244,4,10,},},
-{{161,232,100,161,56,9,0,},{159,104,93,157,128,13,0,},},{{32,220,45,12,4,0,0,},{22,12,94,197,96,6,0,},},{{162,224,101,27,108,13,0,},{162,144,108,37,124,12,10,},},
-{{4,252,100,161,224,13,0,},{162,232,101,27,108,13,0,},},{{244,48,92,160,72,10,0,},{158,104,105,26,204,218,9,},},{0},{{10,196,102,197,216,14,0,},{157,120,69,158,224,9,0,},},
-{{14,68,80,165,0,0,0,},{10,204,102,197,216,14,0,},{197,152,66,9,188,9,0,},},{{26,212,54,10,4,0,0,},{161,216,92,161,168,8,0,},{158,72,105,26,204,218,9,},},
-{0},{{18,244,92,161,96,6,0,},{7,148,106,26,204,106,64,},{159,88,109,37,28,222,9,},},{{130,217,108,37,228,26,10,},{162,56,92,160,144,11,0,},},{{130,201,72,130,41,11,0,},},
-{{5,164,100,160,224,13,0,},{244,112,104,26,204,10,10,},},{{157,40,109,37,148,217,9,},},{{34,124,44,19,4,0,0,},{130,249,108,37,228,26,10,},{164,40,92,160,168,0,0,},},
-{{7,68,106,26,204,106,64,},{157,200,69,158,224,9,0,},},{{8,52,74,7,92,15,0,},{165,56,72,244,128,5,0,},},{{49,188,5,31,4,0,0,},{7,84,106,26,204,106,64,},},
-{{162,72,100,160,32,12,0,},{160,72,108,37,148,9,10,},},{{7,100,74,7,44,11,0,},{130,33,109,37,228,26,10,},},{0},{{5,60,68,244,72,14,0,},},{{162,104,100,160,32,12,0,},
-{160,104,108,37,148,9,10,},},{{8,84,110,37,20,111,64,},{197,248,94,44,220,8,0,},{165,88,108,37,244,4,10,},},{{161,224,68,130,225,9,0,},},{{159,136,101,157,224,13,0,},},
-{{164,104,108,37,228,1,10,},{157,96,93,157,168,8,0,},},{{197,168,70,9,228,9,0,},},{{244,56,92,160,72,10,0,},{197,160,70,9,228,9,0,},},{{45,4,58,46,4,0,0,},
-{5,108,108,37,28,14,10,},},{{6,76,102,6,60,9,0,},{4,228,104,26,4,30,10,},},{0},{{11,52,4,5,4,0,0,},{158,200,93,157,72,10,0,},},{{164,72,72,244,136,2,0,},},
-{{160,40,92,160,168,8,0,},},{{6,148,102,6,60,9,0,},{6,44,106,26,108,105,64,},{165,152,92,47,28,4,0,},},{{244,40,100,160,168,10,0,},{161,16,109,37,148,25,10,},},
-{{244,104,104,26,204,10,10,},{163,72,68,244,200,12,0,},},{{130,209,72,130,41,11,0,},{160,56,100,160,56,9,0,},},{{4,36,101,161,224,13,0,},{164,144,108,37,228,1,10,},},
-{{197,192,70,9,228,9,0,},},{{27,28,92,15,100,6,0,},{244,72,104,26,204,10,10,},},{{46,252,125,46,4,32,10,},{9,204,106,26,204,90,12,},},{{130,33,93,161,72,10,0,},},
-{{6,36,74,7,12,10,0,},{158,40,93,157,72,10,0,},},{{36,172,9,38,20,0,0,},{7,44,70,7,20,11,0,},{5,124,100,160,224,13,0,},},{{6,52,74,7,12,10,0,},
-{5,116,100,160,224,13,0,},},{{160,64,68,244,224,9,0,},},{{4,20,73,130,97,14,0,},{164,88,108,37,228,1,10,},},{{16,52,84,164,0,0,0,},{164,64,108,37,228,1,10,},
-{162,96,100,160,32,12,0,},},{{130,25,93,42,108,10,0,},{158,152,109,37,228,218,9,},},{{6,100,94,6,172,8,0,},{160,96,68,244,224,9,0,},},{{165,96,100,160,136,4,0,},},
-{{158,120,105,26,204,218,9,},},{{164,96,72,244,136,2,0,},{162,72,68,244,200,12,0,},},{{162,144,100,160,32,12,0,},},{{6,68,106,26,108,105,64,},{158,200,109,37,228,218,9,},},
-{{5,100,104,26,4,14,10,},{158,208,93,49,108,10,0,},},{{161,200,72,130,9,10,0,},{158,216,109,37,228,218,9,},},{{164,112,92,160,168,0,0,},{157,120,77,158,48,10,0,},},
-{{165,144,92,160,224,3,0,},},{{197,168,78,9,52,10,0,},{161,216,68,130,225,9,0,},},{{161,192,108,37,148,25,10,},},{{24,36,102,8,148,6,0,},{159,88,101,157,224,13,0,},},
-{{6,140,94,48,220,8,0,},{197,216,106,26,108,89,12,},{162,160,72,244,240,12,0,},},{{10,4,103,197,216,14,0,},{10,180,110,37,20,95,12,},},{{30,188,44,18,4,0,0,},
-{165,160,92,160,224,3,0,},},{{157,40,101,157,56,9,0,},},{{21,84,94,6,100,6,0,},{130,249,100,161,168,10,0,},},{{15,148,88,165,0,0,0,},{8,36,110,37,20,111,64,},
-{165,40,108,37,244,4,10,},},{{9,212,70,9,20,11,0,},},{{24,100,102,8,148,6,0,},{157,176,105,26,108,217,9,},},{{162,72,108,37,124,12,10,},{160,72,100,160,56,9,0,},},
-{{8,68,110,37,20,111,64,},{165,72,108,37,244,4,10,},},{{7,148,110,37,228,106,64,},{5,44,104,26,4,14,10,},},{{8,68,70,7,68,15,0,},{7,132,74,7,44,11,0,},},
-{{162,104,108,37,124,12,10,},{160,104,100,160,56,9,0,},},{{36,172,8,38,20,0,0,},},{{35,148,46,21,4,0,0,},{7,28,106,26,204,106,64,},{5,76,104,26,4,14,10,},},
-{{159,136,109,37,28,222,9,},},{{164,104,100,160,104,1,0,},},{{22,180,94,197,96,6,0,},{158,216,73,158,40,11,0,},},{{22,156,94,197,96,6,0,},{244,56,68,244,16,11,0,},
-{161,240,100,161,56,9,0,},},{{5,108,100,160,224,13,0,},{157,216,93,157,168,8,0,},},{{164,120,92,160,168,0,0,},{163,16,100,16,52,13,0,},},{{6,84,94,6,172,8,0,},
-{6,60,106,26,108,105,64,},},{{197,8,106,26,108,89,12,},{161,208,100,161,56,9,0,},},{{15,4,88,165,0,0,0,},{164,72,64,244,24,2,0,},{159,216,69,158,72,14,0,},},
-{0},{{8,148,102,6,220,14,0,},{6,148,94,6,172,8,0,},{4,196,92,161,128,13,0,},},{{6,124,94,35,12,9,0,},{165,16,100,16,212,5,0,},},{{22,4,95,197,96,6,0,},
-{159,112,65,158,48,14,0,},},{{160,144,104,26,108,9,10,},{160,56,108,37,148,9,10,},},{{160,160,108,37,148,9,10,},},{{163,56,104,26,84,12,10,},{158,176,73,158,40,11,0,},},
-{{26,244,54,10,4,0,0,},{4,220,104,26,4,30,10,},},{{157,48,93,157,168,8,0,},},{{8,60,66,7,44,15,0,},{165,48,64,244,32,5,0,},},{{9,180,102,197,168,10,0,},
-{158,144,73,158,40,11,0,},},{{10,180,102,197,216,14,0,},{10,12,106,26,252,94,12,},{163,160,104,26,84,12,10,},},{{4,228,64,130,49,14,0,},{164,48,104,26,172,1,10,},},
-{{160,64,92,160,168,8,0,},{159,144,73,158,96,14,0,},},{{5,52,68,244,72,14,0,},{197,240,102,197,56,9,0,},},{{12,180,93,157,96,6,0,},},{{5,148,108,37,28,14,10,},},
-{{6,100,102,6,60,9,0,},{159,176,73,158,96,14,0,},},{{9,244,102,197,168,10,0,},},{0},{{7,100,110,37,228,106,64,},{164,96,64,244,24,2,0,},{157,208,93,49,220,8,0,},},
-{{4,236,72,130,97,14,0,},{160,112,100,160,56,9,0,},},{{162,24,92,15,84,13,0,},},{{244,48,108,37,228,10,10,},{161,248,76,130,49,10,0,},},{{5,116,92,160,128,13,0,},
-{161,200,64,130,185,9,0,},},{{14,108,80,165,0,0,0,},{4,204,72,130,97,14,0,},},{{8,36,106,26,252,110,64,},{165,144,68,244,80,5,0,},{158,88,93,157,72,10,0,},},
-{{7,44,110,37,228,106,64,},{161,216,76,130,49,10,0,},},{{7,36,110,37,228,106,64,},},{{41,36,42,21,4,0,0,},{7,60,110,37,228,106,64,},},{{7,52,110,37,228,106,64,},
-{130,17,105,26,204,26,10,},},{{10,4,111,37,20,95,12,},{244,96,68,244,16,11,0,},},{{13,244,93,165,96,6,0,},{197,0,103,197,56,9,0,},{163,104,72,244,240,12,0,},},
-{{9,196,74,9,44,11,0,},{157,40,93,157,168,8,0,},},{{12,44,93,157,96,6,0,},{162,88,108,37,124,12,10,},{159,120,73,158,96,14,0,},},{{165,40,100,160,136,4,0,},
-{158,168,105,26,204,218,9,},},{0},{{9,164,74,9,44,11,0,},{159,104,69,158,72,14,0,},},{{4,188,68,130,73,14,0,},{160,72,92,160,168,8,0,},},{{19,76,92,160,96,6,0,},
-{165,72,100,160,136,4,0,},{158,136,105,26,204,218,9,},},{{10,172,94,197,120,14,0,},{164,144,72,244,136,2,0,},},{{14,236,81,165,0,0,0,},{162,120,72,244,240,12,0,},
-{159,152,109,37,28,222,9,},},{{19,148,92,160,96,6,0,},{162,160,64,244,160,12,0,},},{0},{{161,192,68,130,225,9,0,},},{{25,156,5,159,0,0,0,},{18,20,93,161,96,6,0,},},
-{{25,148,5,159,0,0,0,},{164,160,104,26,172,1,10,},},{{165,120,92,160,224,3,0,},{158,112,69,158,16,11,0,},},{{18,172,92,161,96,6,0,},{130,169,108,37,228,26,10,},
-{161,240,108,37,148,25,10,},},{{37,44,62,24,4,0,0,},{5,108,92,160,128,13,0,},{157,216,101,157,56,9,0,},},{{164,120,68,244,80,2,0,},{159,48,93,157,128,13,0,},},
-{{4,244,92,161,128,13,0,},},{{8,124,94,35,188,14,0,},{161,208,108,37,148,25,10,},},{{8,100,94,6,124,14,0,},{159,216,93,157,128,13,0,},},{{160,40,108,37,148,9,10,},
-{159,200,65,158,48,14,0,},},{{8,148,110,37,20,111,64,},{8,84,94,6,124,14,0,},},{{8,28,110,37,20,111,64,},{158,64,105,26,204,218,9,},},{{9,4,75,9,44,11,0,},
-{8,68,94,6,124,14,0,},{157,136,77,158,48,10,0,},},{{162,48,72,244,240,12,0,},{157,144,101,157,56,9,0,},},{{18,228,92,161,96,6,0,},{160,160,100,160,56,9,0,},},
-{{18,236,92,161,96,6,0,},{8,44,70,7,68,15,0,},{158,176,65,158,248,10,0,},},{{197,208,66,9,188,9,0,},{161,168,92,161,168,8,0,},},{{159,96,101,157,224,13,0,},},
-{{8,60,74,7,92,15,0,},{165,48,72,244,128,5,0,},},{{8,76,70,7,68,15,0,},{158,144,65,158,248,10,0,},},{{10,180,94,197,120,14,0,},{244,88,64,244,248,10,0,},
-{163,24,92,15,84,13,0,},},{{11,100,4,5,4,0,0,},{7,76,66,7,252,10,0,},{6,76,70,7,228,9,0,},},{{130,225,108,37,228,26,10,},{159,144,65,158,48,14,0,},},
-{{163,144,68,244,200,12,0,},},{{11,204,4,4,4,0,0,},{5,68,72,244,96,14,0,},},{{18,28,93,42,116,6,0,},},{{6,100,110,37,148,105,64,},{159,176,65,158,48,14,0,},},
-{0},{0},{{9,156,66,9,252,10,0,},{157,104,73,158,8,10,0,},},{{160,112,108,37,148,9,10,},},{{4,252,92,161,128,13,0,},{130,185,68,130,17,11,0,},},{{158,104,65,158,248,10,0,},},
-{{159,208,93,49,164,13,0,},},{{6,52,70,7,228,9,0,},{4,204,64,130,49,14,0,},},{{7,148,102,6,172,10,0,},},{{165,160,72,244,128,5,0,},},{{244,136,92,34,140,10,0,},},
-{{9,244,106,26,204,90,12,},},{0},{{10,156,74,9,92,15,0,},{5,148,64,244,48,14,0,},{163,48,72,244,240,12,0,},},{{197,0,95,197,168,8,0,},},{{30,36,45,18,4,0,0,},
-{9,196,66,9,252,10,0,},{162,40,104,26,84,12,10,},},{{159,120,65,158,48,14,0,},},{{7,76,70,7,20,11,0,},{197,216,102,197,56,9,0,},{158,48,109,37,228,218,9,},},
-{{15,92,88,165,0,0,0,},{157,160,93,157,168,8,0,},},{{9,164,66,9,252,10,0,},{164,56,72,244,136,2,0,},},{{26,156,54,10,4,0,0,},{162,72,92,160,144,11,0,},},
-{{130,33,69,130,17,11,0,},},{{16,252,85,164,0,0,0,},},{{162,120,64,244,160,12,0,},{159,152,101,157,224,13,0,},},{{161,32,101,161,56,9,0,},},{{8,84,70,7,68,15,0,},
-{165,88,68,244,80,5,0,},},{{8,100,74,7,92,15,0,},{165,104,72,244,128,5,0,},{161,224,108,37,148,25,10,},},{{157,80,105,26,108,217,9,},},{{4,252,108,37,28,30,10,},},
-{{165,120,68,244,80,5,0,},{158,112,93,157,72,10,0,},},{{5,92,64,244,48,14,0,},{163,120,72,244,240,12,0,},{161,32,93,161,168,8,0,},},{{11,188,4,4,4,0,0,},
-{244,160,68,244,16,11,0,},{157,112,105,26,108,217,9,},},{0},{{8,132,110,37,20,111,64,},{161,192,72,130,9,10,0,},{158,96,101,157,168,10,0,},},{{10,244,74,9,92,15,0,},
-{163,88,72,244,240,12,0,},{158,80,105,26,204,218,9,},},{{161,248,92,161,168,8,0,},},{{15,172,89,165,0,0,0,},{4,188,108,37,28,30,10,},{159,200,73,158,96,14,0,},},
-{{6,44,66,7,188,9,0,},{161,232,92,161,168,8,0,},},{{244,104,92,160,72,10,0,},},{{13,60,92,165,96,6,0,},{9,4,67,9,252,10,0,},{157,136,69,158,224,9,0,},},
-{{6,132,74,7,12,10,0,},{162,48,64,244,160,12,0,},{159,64,109,37,28,222,9,},},{{130,193,68,130,17,11,0,},{160,160,92,160,168,8,0,},},{{8,44,94,6,124,14,0,},
-{197,192,110,37,148,89,12,},{163,160,100,160,32,12,0,},},{{197,208,74,9,12,10,0,},{163,40,92,160,144,11,0,},},{{7,44,74,7,44,11,0,},{159,96,109,37,28,222,9,},},
-{{12,164,93,157,96,6,0,},{130,241,108,37,228,26,10,},},{{8,28,102,6,220,14,0,},{7,60,74,7,44,11,0,},},{{164,88,104,26,172,1,10,},},{0},{{163,104,100,160,32,12,0,},
-{158,152,105,26,204,218,9,},},{{10,164,66,9,44,15,0,},{163,96,100,160,32,12,0,},},{{5,68,64,244,48,14,0,},},{{162,64,72,244,240,12,0,},},{{8,84,102,6,220,14,0,},
-{160,96,108,37,148,9,10,},},{{165,112,100,160,136,4,0,},{158,120,93,157,72,10,0,},},{{158,200,105,26,204,218,9,},},{{9,156,74,9,44,11,0,},{157,104,65,158,184,9,0,},},
-{{26,164,54,10,4,0,0,},{158,216,105,26,204,218,9,},},{{130,185,92,161,72,10,0,},{197,0,111,37,148,89,12,},},{{163,96,104,26,84,12,10,},{158,104,73,158,40,11,0,},},
-{{9,196,70,9,20,11,0,},{164,112,104,26,172,1,10,},},{{161,192,104,26,108,25,10,},{159,40,101,157,224,13,0,},},{{158,88,109,37,228,218,9,},},{{165,160,64,244,32,5,0,},
-{163,64,104,26,84,12,10,},},{{15,236,89,165,0,0,0,},{162,136,92,34,244,11,0,},},{{197,200,110,37,148,89,12,},{162,56,104,26,84,12,10,},},{{130,201,100,161,168,10,0,},
-{163,224,101,27,108,13,0,},},{{5,148,72,244,96,14,0,},{163,48,64,244,160,12,0,},},{{197,240,78,9,52,10,0,},{159,104,105,26,4,222,9,},},{{160,48,100,160,56,9,0,},
-{157,144,65,158,184,9,0,},},{{12,172,93,157,96,6,0,},{197,200,74,9,12,10,0,},},{{197,216,110,37,148,89,12,},{157,56,29,50,124,7,0,},},{{9,212,94,197,72,10,0,},},
-{{157,176,65,158,184,9,0,},},{{4,212,64,130,49,14,0,},{160,72,76,244,48,10,0,},},{{8,76,66,7,44,15,0,},},{{162,40,92,160,144,11,0,},},{{9,12,110,37,228,90,12,},
-{164,144,100,160,104,1,0,},{157,64,105,26,108,217,9,},},{{165,56,64,244,32,5,0,},{160,104,76,244,48,10,0,},},{{11,252,4,4,4,0,0,},},{{8,100,66,7,44,15,0,},
-{165,104,64,244,32,5,0,},{161,224,100,161,56,9,0,},},{{157,200,109,37,148,217,9,},{157,96,105,26,108,217,9,},},{{26,172,54,10,4,0,0,},{157,216,65,158,184,9,0,},},
-{{14,92,80,165,0,0,0,},{7,76,94,6,76,10,0,},},{{10,212,66,9,44,15,0,},{163,120,64,244,160,12,0,},{161,240,92,161,168,8,0,},},{{244,160,92,160,72,10,0,},},
-{{13,4,92,165,96,6,0,},{6,60,94,6,172,8,0,},},{{161,192,64,130,185,9,0,},{158,96,109,37,228,218,9,},},{{10,244,66,9,44,15,0,},{5,124,72,244,96,14,0,},
-{163,88,64,244,160,12,0,},},{{164,72,104,26,172,1,10,},{159,216,109,37,28,222,9,},},{{159,80,109,37,28,222,9,},},{{6,148,70,7,228,9,0,},{6,44,74,7,12,10,0,},
-{4,196,68,130,73,14,0,},},{0},{{10,196,70,9,68,15,0,},{244,144,100,160,168,10,0,},{157,136,93,157,168,8,0,},},{{10,204,70,9,68,15,0,},{130,209,104,26,204,26,10,},
-{160,56,68,244,224,9,0,},},{{4,36,69,130,73,14,0,},{4,196,100,161,224,13,0,},},{{14,52,80,165,0,0,0,},{4,204,100,161,224,13,0,},{197,192,102,197,56,9,0,},},
-{{9,204,94,197,72,10,0,},{159,112,73,158,96,14,0,},{157,152,101,157,56,9,0,},},{{9,172,106,26,204,90,12,},{157,168,105,26,108,217,9,},},{{130,241,100,161,168,10,0,},
-{158,160,93,157,72,10,0,},},{{161,184,104,26,108,25,10,},},{{163,160,64,244,160,12,0,},},{{160,64,104,26,108,9,10,},},{0},{{7,100,94,6,76,10,0,},{5,52,92,160,128,13,0,},},
-{{161,248,68,130,225,9,0,},},{{24,28,102,43,148,6,0,},{13,100,92,165,96,6,0,},},{{162,96,108,37,124,12,10,},{160,96,100,160,56,9,0,},},{{15,76,88,165,0,0,0,},
-{165,112,108,37,244,4,10,},{161,232,64,130,185,9,0,},},{{10,220,106,26,252,94,12,},{163,112,104,26,84,12,10,},},{{24,60,102,8,148,6,0,},{164,96,104,26,172,1,10,},
-{159,160,101,157,224,13,0,},},{{162,144,68,244,200,12,0,},{160,112,92,160,168,8,0,},},{{15,108,88,165,0,0,0,},{6,68,74,7,12,10,0,},},{{5,68,104,26,4,14,10,},},
-{{8,44,110,37,20,111,64,},{244,144,64,244,248,10,0,},},{{164,64,100,160,104,1,0,},{159,40,109,37,28,222,9,},},{{197,152,106,26,108,89,12,},{158,88,101,157,168,10,0,},},
-{{12,100,93,157,96,6,0,},{7,52,106,26,204,106,64,},{161,216,100,161,56,9,0,},},{{15,60,88,165,0,0,0,},{157,128,93,25,60,8,0,},},{{162,104,72,244,240,12,0,},},
-{{12,220,93,157,96,6,0,},{130,201,108,37,228,26,10,},{165,64,68,244,80,5,0,},},{{8,100,110,37,20,111,64,},{244,96,108,37,228,10,10,},{160,120,64,244,184,9,0,},},
-{{5,164,92,160,128,13,0,},{197,0,79,9,52,10,0,},},{{157,144,73,158,8,10,0,},},{{197,200,66,9,188,9,0,},{158,168,93,157,72,10,0,},},{{8,52,102,6,220,14,0,},
-{4,188,64,130,49,14,0,},{165,56,100,160,136,4,0,},},{{9,212,102,197,168,10,0,},{157,160,109,37,148,217,9,},},{{9,220,94,197,72,10,0,},{157,176,73,158,8,10,0,},},
-{{160,72,68,244,224,9,0,},},{{7,124,94,35,140,10,0,},{5,44,92,160,128,13,0,},{162,160,68,244,200,12,0,},},{{7,132,102,6,172,10,0,},},{{9,180,106,26,204,90,12,},
-{9,12,102,197,168,10,0,},{160,88,72,244,8,10,0,},},{{130,209,64,130,249,10,0,},{160,104,68,244,224,9,0,},},{{19,124,92,160,96,6,0,},{164,160,108,37,228,1,10,},},
-{{19,116,92,160,96,6,0,},{159,136,65,158,48,14,0,},},{{160,120,72,244,8,10,0,},{157,200,101,157,56,9,0,},},{{19,68,92,160,96,6,0,},},{{158,112,109,37,228,218,9,},},
-{{161,32,77,130,49,10,0,},},{{41,148,42,21,4,0,0,},{5,108,68,244,72,14,0,},{158,160,109,37,228,218,9,},},{{4,244,104,26,4,30,10,},{164,120,108,37,228,1,10,},},
-{{162,64,100,160,32,12,0,},},{{12,108,93,157,96,6,0,},{197,160,78,9,52,10,0,},{161,208,68,130,225,9,0,},},{{24,68,102,8,148,6,0,},{164,224,101,27,68,3,0,},
-{159,216,101,157,224,13,0,},},{{157,152,105,26,108,217,9,},},{{161,16,65,130,185,9,0,},},{{25,116,5,159,0,0,0,},{18,252,92,161,96,6,0,},},{{9,252,94,44,108,10,0,},
-{244,120,104,26,204,10,10,},},{{6,28,102,6,60,9,0,},{159,64,93,157,128,13,0,},},{{25,220,5,159,0,0,0,},{4,36,93,161,128,13,0,},{160,160,76,244,48,10,0,},},
-{{14,4,80,165,0,0,0,},{161,168,104,26,108,25,10,},},{{157,48,105,26,108,217,9,},},{{9,220,106,26,204,90,12,},{157,216,105,26,108,217,9,},},{{11,236,4,4,4,0,0,},
-{130,241,92,161,72,10,0,},{158,160,101,157,168,10,0,},},{{8,76,110,37,20,111,64,},{165,64,108,37,244,4,10,},{157,200,105,26,108,217,9,},},{{32,180,45,12,4,0,0,},
-{10,180,70,9,68,15,0,},{163,160,72,244,240,12,0,},},{{162,64,104,26,84,12,10,},},{{163,248,127,162,8,32,10,},{162,112,108,37,124,12,10,},},{{5,52,100,160,224,13,0,},
-{165,128,93,25,172,3,0,},{163,144,108,37,124,12,10,},},{0},{{197,152,74,9,12,10,0,},},{{165,96,72,244,128,5,0,},},{{244,64,104,26,204,10,10,},},{{10,196,110,37,20,95,12,},
-{157,88,93,157,168,8,0,},},{{16,76,84,164,0,0,0,},{4,220,92,161,128,13,0,},{159,160,109,37,28,222,9,},},{{4,236,104,26,4,30,10,},{162,144,92,160,144,11,0,},},
-{{244,48,64,244,248,10,0,},{197,168,106,26,108,89,12,},},{{7,36,106,26,204,106,64,},{5,116,104,26,4,14,10,},},{{157,120,105,26,108,217,9,},},{{6,52,110,37,148,105,64,},
-{4,204,104,26,4,30,10,},{164,64,92,160,168,0,0,},},{{4,236,92,161,128,13,0,},{165,144,100,160,136,4,0,},},{{161,216,108,37,148,25,10,},},{{9,244,94,197,72,10,0,},},
-{{26,4,55,10,4,0,0,},{130,217,72,130,41,11,0,},{162,160,100,160,32,12,0,},},{{130,17,73,130,41,11,0,},},{{14,60,80,165,0,0,0,},{244,96,100,160,168,10,0,},
-{161,24,93,42,220,8,0,},},{{197,0,71,9,228,9,0,},},{{130,249,72,130,41,11,0,},},{{8,36,74,7,92,15,0,},},{{8,52,110,37,20,111,64,},{165,56,108,37,244,4,10,},},
-{{9,212,110,37,228,90,12,},{157,160,101,157,56,9,0,},},{{9,164,106,26,204,90,12,},{159,104,101,157,224,13,0,},},{{8,68,74,7,92,15,0,},{165,72,72,244,128,5,0,},
-{158,136,69,158,16,11,0,},},{{10,172,106,26,252,94,12,},{8,36,70,7,68,15,0,},},{{5,60,104,26,4,14,10,},{244,144,104,26,204,10,10,},},{{9,12,94,197,72,10,0,},
-{162,120,104,26,84,12,10,},},{{27,228,101,27,116,6,0,},{160,104,92,160,168,8,0,},},};
+{{182,154,12,209,192,67,1,},},{{159,49,9,158,204,1,0,},{157,170,11,157,21,1,0,},},{{230,144,0,216,0,0,0,},{181,151,12,209,89,67,1,},{168,146,12,209,152,64,1,},},
+{{185,210,8,185,98,1,0,},{174,137,8,174,98,1,0,},{162,147,11,230,120,1,0,},},{{158,59,12,157,85,1,0,},{158,174,12,209,89,59,1,},},{{184,207,11,218,33,1,0,},
+{161,164,8,181,60,1,0,},},{{196,61,11,168,0,0,0,},{159,38,13,220,195,59,1,},},{0},{{184,198,11,184,21,1,0,},{163,141,11,160,114,1,0,},},{{161,154,9,181,70,1,0,},},
+{{183,8,12,160,188,1,0,},{181,161,11,213,81,1,0,},},{{191,148,0,183,0,0,0,},{174,6,13,220,92,65,1,},},{{158,168,11,157,73,1,0,},},{{163,9,13,220,143,65,1,},},
+{{205,213,11,169,204,0,0,},{183,12,12,160,188,1,0,},},{{205,212,11,169,204,0,0,},{162,6,13,220,143,65,1,},},{{174,136,11,160,73,1,0,},{160,148,8,174,60,1,0,},},
+{{199,136,11,160,204,0,0,},{163,5,13,220,143,65,1,},{161,21,12,161,39,1,0,},},{{186,204,12,209,223,113,1,},},{{228,64,7,229,0,0,0,},{159,172,8,158,201,1,0,},},
+{{185,72,8,185,95,1,0,},{158,178,12,209,89,59,1,},},{{167,5,13,220,60,64,1,},{158,50,12,157,85,1,0,},},{{174,142,11,160,73,1,0,},{163,12,12,160,132,1,0,},},
+{{192,181,11,157,204,0,0,},{160,143,12,209,45,65,1,},},{{185,68,8,185,95,1,0,},{162,142,12,209,138,65,1,},},{{182,155,8,181,201,1,0,},{163,146,12,209,138,65,1,},},
+{{188,218,8,188,98,1,0,},{163,8,8,174,148,1,0,},},{{168,139,12,209,152,64,1,},{163,11,9,174,158,1,0,},},{{168,5,12,160,145,0,0,},},{{182,151,8,181,201,1,0,},
+{158,175,8,158,98,1,0,},},{{184,204,11,184,21,1,0,},{157,171,12,209,45,59,1,},},{{157,45,13,220,50,59,1,},},{{198,164,11,161,204,0,0,},{184,67,13,220,50,113,1,},},
+{{188,86,13,220,92,83,1,},{163,140,11,160,114,1,0,},{161,152,12,209,45,67,1,},},{{182,164,8,181,201,1,0,},},{{183,11,9,174,204,1,0,},},{{159,165,11,157,176,1,0,},},
+{{174,135,8,174,98,1,0,},{169,218,11,169,21,1,0,},},{{183,137,8,174,201,1,0,},{163,60,12,211,173,1,0,},},{{186,70,13,220,226,113,1,},{163,146,11,160,114,1,0,},},
+{0},{{184,72,12,184,39,1,0,},},{{197,139,10,167,0,0,0,},{184,67,12,184,39,1,0,},{163,6,13,220,143,65,1,},},{{185,196,11,184,73,1,0,},{159,41,12,157,188,1,0,},},
+{{185,195,11,184,73,1,0,},},{{174,18,8,174,95,1,0,},{168,60,12,211,195,0,0,},},{{184,71,12,184,39,1,0,},{158,51,9,158,101,1,0,},},{{195,53,10,168,0,0,0,},
+{190,90,9,188,235,1,0,},{169,89,13,220,50,83,1,},},{{191,159,0,182,0,0,0,},{183,18,12,160,188,1,0,},},{{182,28,9,181,204,1,0,},},{{190,216,8,188,232,1,0,},
+{184,73,9,185,65,1,0,},},{{215,182,5,192,0,0,0,},{186,82,13,220,226,113,1,},{169,85,13,220,50,83,1,},},{{162,15,12,160,132,1,0,},{159,179,8,158,201,1,0,},},
+{{162,141,11,160,114,1,0,},},{{157,187,8,158,60,1,0,},},{{181,154,12,209,89,67,1,},},{{207,82,12,186,210,0,0,},{182,29,9,181,204,1,0,},},{{185,71,9,185,101,1,0,},
+{157,150,1,219,219,0,0,},},{{181,159,8,181,98,1,0,},{168,134,8,174,170,0,0,},},{{169,224,9,188,70,1,0,},{157,174,8,158,60,1,0,},},{{159,38,12,157,188,1,0,},},
+{{194,181,11,168,204,0,0,},{185,210,11,184,73,1,0,},},{{158,57,8,158,95,1,0,},{158,172,8,158,98,1,0,},},{{167,13,8,174,67,0,0,},{163,11,13,220,143,65,1,},},
+{{186,204,11,184,207,1,0,},{181,155,11,161,73,1,0,},},{{174,6,12,160,85,1,0,},},{{185,76,13,220,92,113,1,},{167,131,11,196,99,0,0,},},{{186,207,11,218,215,1,0,},
+{186,72,12,184,219,1,0,},},{{157,177,12,209,45,59,1,},},{{162,6,12,160,132,1,0,},{160,135,11,160,21,1,0,},},{{186,202,11,184,207,1,0,},{167,20,12,160,45,0,0,},},
+{{190,219,11,169,207,1,0,},{167,7,13,220,60,64,1,},},{{212,23,5,198,0,0,0,},{185,74,13,220,92,113,1,},},{{185,73,12,184,85,1,0,},},{{194,146,11,168,204,0,0,},},
+{{190,217,12,209,223,83,1,},{169,218,8,188,60,1,0,},},{{183,6,8,174,198,1,0,},},{{174,145,11,217,81,1,0,},{159,178,12,209,192,59,1,},},{{174,140,8,174,98,1,0,},
+{158,166,11,157,73,1,0,},},{{163,1,12,195,163,1,0,},{161,29,9,181,65,1,0,},},{{184,202,11,184,21,1,0,},},{{159,182,12,209,192,59,1,},},{{185,80,13,220,92,113,1,},
+{185,70,12,184,85,1,0,},},{{188,84,13,220,92,83,1,},{161,29,13,220,50,67,1,},},{{190,214,8,188,232,1,0,},},{{195,63,10,168,0,0,0,},{157,45,12,157,39,1,0,},},
+{{174,136,8,174,98,1,0,},},{{199,134,11,160,204,0,0,},{163,140,8,174,153,1,0,},{158,173,12,209,89,59,1,},},{{161,153,12,209,45,67,1,},},{{181,154,11,161,73,1,0,},},
+{{174,140,12,209,89,65,1,},{162,1,12,195,163,1,0,},},{{163,136,8,174,153,1,0,},{158,169,12,209,89,59,1,},},{{163,12,9,174,158,1,0,},},{{183,15,8,174,198,1,0,},
+{160,143,9,174,70,1,0,},},{{218,210,5,201,0,0,0,},{162,7,9,174,158,1,0,},},{{167,1,12,195,88,0,0,},},{{163,6,12,160,132,1,0,},},{{158,38,12,157,85,1,0,},},
+{{162,11,9,174,158,1,0,},},{{168,145,11,217,138,0,0,},},{{184,71,13,220,50,113,1,},{158,51,8,158,95,1,0,},},{{195,15,10,168,0,0,0,},{169,89,12,169,39,1,0,},
+{167,146,8,174,74,0,0,},},{{222,83,5,205,0,0,0,},{174,146,11,160,73,1,0,},},{{208,187,0,159,0,0,0,},{174,141,12,209,89,65,1,},},{{184,73,8,185,55,1,0,},
+{181,36,12,161,85,1,0,},},{{197,128,10,167,0,0,0,},{186,199,12,209,223,113,1,},{169,85,12,169,39,1,0,},},{{159,179,11,157,176,1,0,},},{{209,222,6,190,0,0,0,},
+{160,18,12,160,39,1,0,},},{{197,149,10,167,0,0,0,},{163,145,11,217,126,1,0,},},{{186,70,8,185,229,1,0,},},{{160,15,12,160,39,1,0,},{157,44,9,158,65,1,0,},},
+{{185,198,8,185,98,1,0,},},{{174,15,8,174,95,1,0,},{167,143,12,209,53,64,1,},},{{190,211,12,209,223,83,1,},{167,142,12,209,53,64,1,},{157,174,9,158,70,1,0,},},
+{{159,181,12,209,192,59,1,},},{{168,8,13,220,158,64,1,},},{{158,57,9,158,101,1,0,},},{{188,211,11,169,73,1,0,},{163,11,12,160,132,1,0,},{161,154,11,161,21,1,0,},},
+{{183,14,13,220,195,65,1,},{159,185,12,209,192,59,1,},},{{188,88,9,188,101,1,0,},{160,6,8,174,55,1,0,},},{{185,76,12,184,85,1,0,},{168,140,12,209,152,64,1,},},
+{{188,94,13,220,92,83,1,},{186,72,13,220,226,113,1,},},{{181,159,12,209,89,67,1,},{169,94,12,169,39,1,0,},},{{221,176,11,208,199,0,0,},{192,177,11,157,204,0,0,},
+{190,84,8,188,229,1,0,},},{{167,20,13,220,60,64,1,},{158,182,12,209,89,59,1,},},{{182,159,12,209,192,67,1,},{167,7,12,160,45,0,0,},},{{220,204,7,207,0,0,0,},
+{157,179,8,158,60,1,0,},},{{217,148,5,199,0,0,0,},{190,88,12,169,219,1,0,},},{{163,18,8,174,148,1,0,},},{{183,13,13,220,195,65,1,},{169,218,9,188,70,1,0,},},
+{{190,224,12,209,223,83,1,},{169,84,9,188,65,1,0,},{159,44,8,158,198,1,0,},},{{185,202,12,209,89,113,1,},{168,18,12,160,145,0,0,},{159,178,11,157,176,1,0,},},
+{{185,68,12,184,85,1,0,},},{{191,162,0,182,0,0,0,},{188,96,12,169,85,1,0,},{188,88,12,169,85,1,0,},},{0},{{160,12,9,174,65,1,0,},},{{185,70,13,220,92,113,1,},},
+{{208,173,0,159,0,0,0,},{188,193,12,209,89,83,1,},{161,29,12,161,39,1,0,},},{{190,214,11,169,207,1,0,},{186,196,12,209,223,113,1,},},{{198,151,11,161,204,0,0,},
+{168,135,8,174,170,0,0,},{162,18,13,220,143,65,1,},},{{168,148,8,174,170,0,0,},},{{190,96,9,188,235,1,0,},},{{207,68,12,186,210,0,0,},{197,135,10,167,0,0,0,},
+{161,153,11,161,21,1,0,},},{{157,47,8,158,55,1,0,},},{{190,214,12,209,223,83,1,},},{{182,36,13,220,195,67,1,},},{{186,208,12,209,223,113,1,},{186,73,8,185,229,1,0,},
+{181,34,8,181,95,1,0,},},{{233,150,2,219,2,0,0,},{201,204,11,184,204,0,0,},{159,43,13,220,195,59,1,},},{{162,148,11,160,114,1,0,},{162,7,8,174,148,1,0,},},
+{{194,141,11,168,204,0,0,},{168,143,11,160,124,0,0,},},{{201,201,11,184,204,0,0,},{184,69,13,220,50,113,1,},},{{211,61,12,211,206,0,0,},{201,200,11,184,204,0,0,},
+{157,37,13,220,50,59,1,},},{{162,11,8,174,148,1,0,},{159,175,12,209,192,59,1,},},{{167,134,12,209,53,64,1,},},{{182,158,11,161,176,1,0,},{157,167,4,233,255,0,0,},},
+{{183,146,11,160,176,1,0,},{157,182,12,209,45,59,1,},},{{194,188,11,168,204,0,0,},},{{158,177,11,157,73,1,0,},},{{188,224,11,169,73,1,0,},{167,8,8,174,67,0,0,},},
+{0},{{183,135,8,174,201,1,0,},{160,11,13,220,50,65,1,},},{{168,18,13,220,158,64,1,},},{{188,85,9,188,101,1,0,},{182,152,12,209,192,67,1,},{161,28,9,181,65,1,0,},},
+{{195,9,10,168,0,0,0,},{186,197,8,185,232,1,0,},{159,49,12,157,188,1,0,},},{{195,62,10,168,0,0,0,},{160,15,13,220,50,65,1,},{157,44,8,158,55,1,0,},},
+{{209,216,6,190,0,0,0,},{174,137,11,160,73,1,0,},},{0},{{169,224,11,169,21,1,0,},{169,83,8,188,55,1,0,},},{{192,170,11,157,204,0,0,},{169,211,9,188,70,1,0,},},
+{{168,8,12,160,145,0,0,},},{{167,18,13,220,60,64,1,},},{{181,27,12,161,85,1,0,},{159,59,9,158,204,1,0,},},{{183,14,12,160,188,1,0,},{182,162,12,209,192,67,1,},},
+{0},{{168,140,11,160,124,0,0,},{161,34,12,161,39,1,0,},},{{163,9,8,174,148,1,0,},},{{169,94,13,220,50,83,1,},{161,34,9,181,65,1,0,},},{{195,7,10,168,0,0,0,},},
+{{163,135,11,160,114,1,0,},},{{182,159,11,161,176,1,0,},},{{169,88,8,188,55,1,0,},{157,179,9,158,70,1,0,},},{{223,224,5,205,0,0,0,},{201,210,11,184,204,0,0,},
+{159,172,11,157,176,1,0,},},{{188,222,8,188,98,1,0,},{158,178,11,157,73,1,0,},},{{184,70,12,184,39,1,0,},{160,12,13,220,50,65,1,},},{{169,84,8,188,55,1,0,},
+{162,9,9,174,158,1,0,},},{{174,14,12,160,85,1,0,},{160,8,8,174,55,1,0,},},{{185,68,13,220,92,113,1,},{160,11,8,174,55,1,0,},},{{184,82,8,185,55,1,0,},
+{184,74,12,184,39,1,0,},{160,8,9,174,65,1,0,},},{{157,169,12,209,45,59,1,},},{{198,153,11,161,204,0,0,},{162,12,9,174,158,1,0,},{159,180,11,157,176,1,0,},},
+{{185,209,11,231,77,1,0,},{182,25,12,161,188,1,0,},},{{167,136,12,209,53,64,1,},},{{192,182,11,157,204,0,0,},{167,20,9,174,81,0,0,},{161,24,12,161,39,1,0,},},
+{{192,171,11,157,204,0,0,},{162,18,12,160,132,1,0,},},{{192,180,11,157,204,0,0,},{168,9,9,174,176,0,0,},},{{188,86,8,188,95,1,0,},{161,31,8,181,55,1,0,},},
+{{184,204,8,185,60,1,0,},{183,8,13,220,195,65,1,},},{{192,179,11,157,204,0,0,},{157,47,9,158,65,1,0,},},{{167,12,8,174,67,0,0,},},{{161,27,8,181,55,1,0,},},
+{{186,73,9,185,235,1,0,},{183,137,11,160,176,1,0,},{181,34,9,181,101,1,0,},},{{191,134,0,183,0,0,0,},{181,164,8,181,98,1,0,},{159,43,12,157,188,1,0,},},
+{{174,5,12,160,85,1,0,},{159,46,13,220,195,59,1,},},{{190,94,9,188,235,1,0,},{163,134,11,160,114,1,0,},},{{191,155,0,182,0,0,0,},{184,69,12,184,39,1,0,},
+{174,146,8,174,98,1,0,},},{{162,133,11,160,114,1,0,},{157,37,12,157,39,1,0,},},{{201,209,11,231,206,0,0,},{174,148,12,209,89,65,1,},{159,175,11,157,176,1,0,},},
+{{158,181,12,209,89,59,1,},},{{192,166,11,157,204,0,0,},{184,208,12,209,45,113,1,},},{{167,7,8,174,67,0,0,},},{{162,9,12,160,132,1,0,},{160,9,13,220,50,65,1,},},
+{{182,28,12,161,188,1,0,},{158,177,12,209,89,59,1,},},{{188,89,8,188,95,1,0,},},{{157,59,9,158,65,1,0,},},{{198,154,11,161,204,0,0,},{174,11,9,174,101,1,0,},
+{160,13,13,220,50,65,1,},},{{157,57,9,158,65,1,0,},},{{188,85,8,188,95,1,0,},{161,28,8,181,55,1,0,},},{{186,80,9,185,235,1,0,},{182,159,8,181,201,1,0,},
+{159,49,13,220,195,59,1,},},{{181,151,8,181,98,1,0,},{157,185,11,157,21,1,0,},},{{158,46,9,158,101,1,0,},},{{216,15,5,199,0,0,0,},{163,143,12,209,138,65,1,},},
+{{169,83,9,188,65,1,0,},{157,174,11,157,21,1,0,},},{{183,18,13,220,195,65,1,},},{{185,67,12,184,85,1,0,},},{{167,18,12,160,45,0,0,},{158,172,11,157,73,1,0,},},
+{{181,27,13,220,92,67,1,},{159,59,8,158,198,1,0,},},{0},{{174,6,9,174,101,1,0,},},{{161,34,13,220,50,67,1,},},{{185,204,8,185,98,1,0,},{163,9,9,174,158,1,0,},},
+{{162,134,11,160,114,1,0,},{160,7,12,160,39,1,0,},},{{194,191,11,168,204,0,0,},{160,20,13,220,50,65,1,},},{{185,201,12,209,89,113,1,},},{{190,219,12,209,223,83,1,},
+{185,200,12,209,89,113,1,},},{{205,217,11,169,204,0,0,},{186,204,8,185,232,1,0,},},{0},{{167,133,11,160,21,0,0,},{161,151,9,181,70,1,0,},},{{184,70,13,220,50,113,1,},
+{169,212,8,188,60,1,0,},},{{191,137,0,183,0,0,0,},{183,6,13,220,195,65,1,},},{{184,68,9,185,65,1,0,},},{{174,140,11,160,73,1,0,},{168,148,12,209,152,64,1,},},
+{{185,208,12,209,89,113,1,},{184,74,13,220,50,113,1,},},{{169,86,12,169,39,1,0,},},{{157,184,11,215,33,1,0,},},{{182,25,13,220,195,67,1,},{181,151,11,161,73,1,0,},
+{168,7,13,220,158,64,1,},},{{182,151,12,209,192,67,1,},{158,175,12,209,89,59,1,},},{{157,173,11,157,21,1,0,},},{{174,8,8,174,95,1,0,},{160,14,12,160,39,1,0,},},
+{{168,9,8,174,164,0,0,},},{{188,86,9,188,101,1,0,},{161,31,9,181,65,1,0,},{158,173,11,157,73,1,0,},},{{161,153,9,181,70,1,0,},},{{174,14,13,220,92,65,1,},
+{160,145,11,217,33,1,0,},},{{167,12,9,174,81,0,0,},{158,184,11,215,81,1,0,},},{{161,27,9,181,65,1,0,},{160,12,8,174,55,1,0,},},{{181,28,13,220,92,67,1,},
+{168,13,13,220,158,64,1,},},{{183,15,13,220,195,65,1,},{181,164,11,161,73,1,0,},{162,255,15,162,0,68,1,},},{{174,5,13,220,92,65,1,},{158,166,12,209,89,59,1,},},
+{{190,94,8,188,229,1,0,},{184,195,11,184,21,1,0,},{169,83,13,220,50,83,1,},},{0},{{205,216,11,169,204,0,0,},{162,133,12,209,138,65,1,},{161,27,12,161,39,1,0,},},
+{{167,18,8,174,67,0,0,},},{{182,34,8,181,198,1,0,},},{{207,76,12,186,210,0,0,},{169,217,11,169,21,1,0,},},{{169,91,12,169,39,1,0,},{159,45,8,158,198,1,0,},},
+{{185,201,8,185,98,1,0,},{162,9,13,220,143,65,1,},{160,9,12,160,39,1,0,},},{{174,141,11,160,73,1,0,},{169,91,13,220,50,83,1,},},{{184,73,13,220,50,113,1,},
+{169,90,12,169,39,1,0,},{160,146,12,209,45,65,1,},},{{159,51,13,220,195,59,1,},},{{185,80,8,185,95,1,0,},{162,13,13,220,143,65,1,},{160,13,12,160,39,1,0,},},
+{{188,219,11,169,73,1,0,},{186,199,8,185,232,1,0,},{182,26,8,181,198,1,0,},},{{185,70,8,185,95,1,0,},},{{181,21,13,220,92,67,1,},{157,170,12,209,45,59,1,},},
+{0},{{167,9,9,174,81,0,0,},{158,46,8,158,95,1,0,},},{{161,36,13,220,50,67,1,},{161,30,12,161,39,1,0,},},{{181,25,13,220,92,67,1,},{157,174,12,209,45,59,1,},},
+{{159,181,11,157,176,1,0,},{157,50,13,220,50,59,1,},},{{185,67,13,220,92,113,1,},{158,187,8,158,98,1,0,},},{{188,83,12,169,85,1,0,},{161,26,12,161,39,1,0,},
+{160,134,8,174,60,1,0,},},{{207,69,12,186,210,0,0,},{183,136,8,174,201,1,0,},{163,7,9,174,158,1,0,},},{{181,157,12,209,89,67,1,},{167,6,12,160,45,0,0,},},
+{{215,172,5,192,0,0,0,},{174,6,8,174,95,1,0,},},{{185,76,9,185,101,1,0,},{158,168,12,209,89,59,1,},},{{207,73,12,186,210,0,0,},{182,155,11,161,176,1,0,},
+{157,49,9,158,65,1,0,},},{{182,156,11,161,176,1,0,},{160,7,13,220,50,65,1,},},{{181,25,8,181,95,1,0,},{157,57,12,157,39,1,0,},},{{190,216,12,209,223,83,1,},
+{167,20,8,174,67,0,0,},},{{184,68,13,220,50,113,1,},{167,7,9,174,81,0,0,},},{{157,179,11,157,21,1,0,},},{{184,72,8,185,55,1,0,},},{{182,29,8,181,198,1,0,},},
+{{190,217,8,188,232,1,0,},{169,218,12,209,45,83,1,},},{{188,224,12,209,89,83,1,},{183,6,12,160,188,1,0,},},{{174,18,12,160,85,1,0,},{159,178,8,158,201,1,0,},},
+{{182,27,13,220,195,67,1,},{163,18,9,174,158,1,0,},},{{188,90,12,169,85,1,0,},},{{169,193,12,209,45,83,1,},{162,176,11,208,108,1,0,},},{{159,182,8,158,201,1,0,},},
+{{168,176,11,208,117,0,0,},},{{190,86,13,220,226,83,1,},{186,74,13,220,226,113,1,},},{{209,217,6,190,0,0,0,},{207,70,12,186,210,0,0,},},{{174,8,9,174,101,1,0,},
+{160,14,13,220,50,65,1,},},{{198,162,11,161,204,0,0,},},{{158,173,8,158,98,1,0,},},{{161,153,8,181,60,1,0,},},{{186,80,13,220,226,113,1,},{182,30,12,161,188,1,0,},},
+{{168,11,12,160,145,0,0,},{167,147,11,230,29,0,0,},},{{182,36,8,181,198,1,0,},{163,136,12,209,138,65,1,},},{{181,28,12,161,85,1,0,},},{{183,15,12,160,188,1,0,},
+{181,158,11,161,73,1,0,},{160,4,0,194,215,0,0,},},{{168,15,12,160,145,0,0,},},{{182,34,13,220,195,67,1,},},{{169,223,11,227,27,1,0,},},{{157,178,11,157,21,1,0,},},
+{{182,23,13,220,195,67,1,},{162,11,13,220,143,65,1,},},{{184,199,8,185,60,1,0,},{182,30,13,220,195,67,1,},{158,38,13,220,92,59,1,},},{0},{{159,45,9,158,204,1,0,},},
+{{196,53,11,168,0,0,0,},{174,11,13,220,92,65,1,},},{{174,141,8,174,98,1,0,},{162,12,8,174,148,1,0,},},{{188,224,8,188,98,1,0,},{184,73,12,184,39,1,0,},},
+{{162,143,8,174,153,1,0,},{159,51,12,157,188,1,0,},},{{185,197,11,184,73,1,0,},},{{191,140,0,183,0,0,0,},{188,219,12,209,89,83,1,},},{{182,152,11,161,176,1,0,},
+{169,86,13,220,50,83,1,},{167,139,8,174,74,0,0,},},{{186,197,11,184,207,1,0,},{183,5,13,220,195,65,1,},{161,31,13,220,50,67,1,},},{{174,9,12,160,85,1,0,},
+{160,15,0,194,215,0,0,},},{{181,162,8,181,98,1,0,},{158,187,11,157,73,1,0,},},{{190,85,9,188,235,1,0,},{161,30,13,220,50,67,1,},},{{169,224,12,209,45,83,1,},
+{157,59,13,220,50,59,1,},},{{208,174,0,159,0,0,0,},{195,60,10,168,0,0,0,},{161,26,8,181,55,1,0,},},{{163,13,8,174,148,1,0,},{158,44,12,157,85,1,0,},},
+{{197,181,10,167,0,0,0,},{188,83,13,220,92,83,1,},{161,26,13,220,50,67,1,},},{0},{{159,185,8,158,201,1,0,},},{0},{{185,76,8,185,95,1,0,},{168,140,8,174,170,0,0,},},
+{{169,222,11,169,21,1,0,},{157,49,8,158,55,1,0,},},{{159,40,12,157,188,1,0,},},{{167,13,12,160,45,0,0,},},{{217,143,5,199,0,0,0,},{163,135,12,209,138,65,1,},
+{158,182,8,158,98,1,0,},},{{163,176,11,208,108,1,0,},{162,143,12,209,138,65,1,},},{{159,44,12,157,188,1,0,},},{0},{{163,8,9,174,158,1,0,},{158,178,8,158,98,1,0,},},
+{{163,148,11,160,114,1,0,},{160,139,9,174,70,1,0,},},{{184,210,8,185,60,1,0,},{169,84,13,220,50,83,1,},},{{174,12,12,160,85,1,0,},{167,5,12,160,45,0,0,},},
+{{182,27,12,161,188,1,0,},{162,134,12,209,138,65,1,},},{{216,6,5,199,0,0,0,},{188,90,13,220,92,83,1,},{163,7,12,160,132,1,0,},},{{186,198,11,184,207,1,0,},
+{182,152,8,181,201,1,0,},{169,193,11,169,21,1,0,},},{{162,12,12,160,132,1,0,},{159,182,11,157,176,1,0,},},{{185,70,9,185,101,1,0,},{161,151,11,161,21,1,0,},},
+{{190,86,12,169,219,1,0,},},{{181,24,9,181,101,1,0,},{157,173,9,158,70,1,0,},},{{162,18,9,174,158,1,0,},{160,18,8,174,55,1,0,},},{{183,139,12,209,192,65,1,},},
+{{161,138,11,191,13,1,0,},},{{185,199,12,209,89,113,1,},},{{185,198,12,209,89,113,1,},{159,37,12,157,188,1,0,},},{{191,151,0,182,0,0,0,},{174,7,12,160,85,1,0,},
+{168,11,13,220,158,64,1,},},{{182,36,9,181,204,1,0,},{159,174,12,209,192,59,1,},},{{195,0,10,168,0,0,0,},{186,73,12,184,219,1,0,},{181,34,12,161,85,1,0,},},
+{0},{{168,15,13,220,158,64,1,},},{{190,193,11,169,207,1,0,},{182,34,12,161,188,1,0,},{163,134,8,174,153,1,0,},},{{184,69,9,185,65,1,0,},},{{162,60,12,211,173,1,0,},
+{157,178,8,158,60,1,0,},},{{159,175,8,158,201,1,0,},},{{188,223,11,227,77,1,0,},{158,179,12,209,89,59,1,},{157,39,3,233,231,0,0,},},{{169,217,9,188,70,1,0,},},
+{{190,84,12,169,219,1,0,},{157,182,8,158,60,1,0,},},{{196,15,11,168,0,0,0,},{157,187,9,158,70,1,0,},},{{207,67,12,226,210,0,0,},},{{186,71,9,185,235,1,0,},
+{169,213,9,188,70,1,0,},{157,185,9,158,70,1,0,},},{{183,7,13,220,195,65,1,},{160,139,8,174,60,1,0,},},{{194,128,11,168,204,0,0,},{182,31,8,181,198,1,0,},},
+{{186,82,8,185,229,1,0,},},{{167,139,11,160,21,0,0,},{161,28,13,220,50,67,1,},},{{183,148,12,209,192,65,1,},{160,143,8,174,60,1,0,},{157,57,13,220,50,59,1,},},
+{{185,82,13,220,92,113,1,},{174,9,13,220,92,65,1,},},{{208,177,0,159,0,0,0,},{183,146,12,209,192,65,1,},{168,6,13,220,158,64,1,},},{{195,8,10,168,0,0,0,},},
+{{190,211,11,169,207,1,0,},{169,83,12,169,39,1,0,},},{0},{{196,18,11,168,0,0,0,},{158,44,13,220,92,59,1,},},{{199,147,11,230,206,0,0,},{167,141,12,209,53,64,1,},},
+{{186,74,9,185,235,1,0,},{181,27,8,181,95,1,0,},{159,59,13,220,195,59,1,},},{{160,5,12,160,39,1,0,},},{{199,148,11,160,204,0,0,},{190,96,13,220,226,83,1,},},
+{{186,200,8,185,232,1,0,},},{{181,31,8,181,95,1,0,},{169,222,8,188,60,1,0,},},{{162,134,8,174,153,1,0,},{159,40,13,220,195,59,1,},},{0},{{194,190,11,168,204,0,0,},
+{158,182,11,157,73,1,0,},},{{157,166,12,209,45,59,1,},},{{159,44,13,220,195,59,1,},},{0},{{188,222,12,209,89,83,1,},{161,151,12,209,45,67,1,},},{{199,142,11,160,204,0,0,},
+{184,70,8,185,55,1,0,},{163,148,8,174,153,1,0,},},{{185,80,12,184,85,1,0,},{169,84,12,169,39,1,0,},},{{174,12,13,220,92,65,1,},{168,131,11,196,191,0,0,},},
+{{184,200,11,184,21,1,0,},{183,20,8,174,198,1,0,},},{{184,74,8,185,55,1,0,},{167,138,11,191,7,0,0,},},{{205,223,11,227,206,0,0,},{199,133,11,160,204,0,0,},},
+{{167,9,13,220,60,64,1,},{160,12,12,160,39,1,0,},},{{199,135,11,160,204,0,0,},{161,157,9,181,70,1,0,},},{{186,68,8,185,229,1,0,},{184,76,13,220,50,113,1,},
+{167,11,13,220,60,64,1,},},{{181,24,8,181,95,1,0,},{157,173,8,158,60,1,0,},},{{167,13,9,174,81,0,0,},{162,18,8,174,148,1,0,},},{{168,9,13,220,158,64,1,},
+{162,142,11,160,114,1,0,},},{{191,164,0,182,0,0,0,},{162,143,11,160,114,1,0,},},{{188,214,11,169,73,1,0,},{162,136,11,160,114,1,0,},},{{192,175,11,157,204,0,0,},
+{168,141,12,209,152,64,1,},{159,37,13,220,195,59,1,},},{{188,212,11,169,73,1,0,},{158,43,13,220,92,59,1,},},{{158,185,12,209,89,59,1,},},{{186,73,13,220,226,113,1,},
+{181,34,13,220,92,67,1,},{167,145,11,217,37,0,0,},},{{221,138,11,191,109,0,0,},{174,133,11,160,73,1,0,},{162,135,12,209,138,65,1,},},{{208,182,0,159,0,0,0,},},
+{{190,193,12,209,223,83,1,},{184,66,12,228,17,1,0,},{167,146,11,160,21,0,0,},},{{197,141,10,167,0,0,0,},{184,69,8,185,55,1,0,},{182,162,8,181,201,1,0,},},
+{{160,6,13,220,50,65,1,},{157,178,9,158,70,1,0,},},{{167,6,9,174,81,0,0,},{161,151,8,181,60,1,0,},},{0},{{190,218,12,209,223,83,1,},{169,217,8,188,60,1,0,},},
+{{183,136,11,160,176,1,0,},{157,182,9,158,70,1,0,},},{{198,158,11,161,204,0,0,},{174,15,13,220,92,65,1,},{160,9,9,174,65,1,0,},},{{199,146,11,160,204,0,0,},
+{184,201,11,184,21,1,0,},},{{186,71,8,185,229,1,0,},{169,213,8,188,60,1,0,},},{{183,140,11,160,176,1,0,},{157,168,12,209,45,59,1,},},{{162,13,8,174,148,1,0,},
+{160,13,9,174,65,1,0,},},{{182,26,13,220,195,67,1,},},{{188,85,12,169,85,1,0,},{161,28,12,161,39,1,0,},},{{188,84,12,169,85,1,0,},{157,172,12,209,45,59,1,},},
+{{188,85,13,220,92,83,1,},{160,11,12,160,39,1,0,},},{{192,185,11,157,204,0,0,},{167,9,12,160,45,0,0,},{158,46,13,220,92,59,1,},},{{229,191,15,229,0,68,1,},
+{163,143,8,174,153,1,0,},{158,59,8,158,95,1,0,},},{{207,71,12,186,210,0,0,},{160,6,9,174,65,1,0,},},{{192,172,11,157,204,0,0,},{188,89,9,188,101,1,0,},},
+{{197,134,10,167,0,0,0,},{167,15,9,174,81,0,0,},{161,152,11,161,21,1,0,},},{{163,139,8,174,153,1,0,},{158,170,12,209,89,59,1,},},{{190,84,9,188,235,1,0,},
+{181,27,9,181,101,1,0,},{159,59,12,157,188,1,0,},},{{190,85,8,188,229,1,0,},{159,42,13,220,195,59,1,},},{{190,86,9,188,235,1,0,},{161,162,8,181,60,1,0,},},
+{{181,153,8,181,98,1,0,},{157,185,12,209,45,59,1,},},{{209,224,6,190,0,0,0,},{181,31,9,181,101,1,0,},{169,222,9,188,70,1,0,},},{{160,146,8,174,60,1,0,},
+{160,7,8,174,55,1,0,},},{{168,14,12,160,145,0,0,},{160,20,9,174,65,1,0,},},{{184,200,8,185,60,1,0,},{183,12,13,220,195,65,1,},},{{159,174,8,158,201,1,0,},
+{157,51,13,220,50,59,1,},},{{162,138,11,191,104,1,0,},{159,46,9,158,204,1,0,},},{{198,159,11,161,204,0,0,},{158,52,12,157,85,1,0,},},{{174,146,12,209,89,65,1,},},
+{{190,217,11,169,207,1,0,},{184,70,9,185,65,1,0,},},{{185,74,8,185,95,1,0,},{168,146,8,174,170,0,0,},{162,136,12,209,138,65,1,},},{{168,20,9,174,176,0,0,},
+{162,14,13,220,143,65,1,},},{{209,213,6,190,0,0,0,},{188,216,8,188,98,1,0,},},{{231,206,0,224,0,0,0,},{184,74,9,185,65,1,0,},{183,7,12,160,188,1,0,},},
+{{168,148,11,160,124,0,0,},{157,169,11,157,21,1,0,},},{{182,153,8,181,201,1,0,},},{{188,212,8,188,98,1,0,},{161,157,8,181,60,1,0,},},{{219,53,1,221,2,0,0,},
+{184,76,12,184,39,1,0,},{163,142,12,209,138,65,1,},},{{159,52,12,157,188,1,0,},},{{196,20,11,168,0,0,0,},{174,8,12,160,85,1,0,},},{{182,158,12,209,192,67,1,},
+{168,9,12,160,145,0,0,},},{{181,31,13,220,92,67,1,},},{{181,26,12,161,85,1,0,},{157,175,12,209,45,59,1,},},{{181,29,13,220,92,67,1,},},{{158,43,12,157,85,1,0,},},
+{{158,169,11,157,73,1,0,},},{{183,143,11,160,176,1,0,},{181,36,13,220,92,67,1,},{181,30,12,161,85,1,0,},},{{194,143,11,168,204,0,0,},{168,141,11,160,124,0,0,},
+{162,20,12,160,132,1,0,},},{{183,20,13,220,195,65,1,},{168,134,11,160,124,0,0,},},{{190,94,12,169,219,1,0,},{168,135,11,160,124,0,0,},},{{199,139,11,160,204,0,0,},
+{184,208,11,184,21,1,0,},},{{174,20,8,174,95,1,0,},{162,139,11,160,114,1,0,},},{{167,6,8,174,67,0,0,},},{{184,199,11,184,21,1,0,},{167,11,8,174,67,0,0,},},
+{{190,218,11,169,207,1,0,},{157,52,13,220,50,59,1,},},{{191,136,0,183,0,0,0,},{159,45,12,157,188,1,0,},},{{192,178,11,157,204,0,0,},{174,15,12,160,85,1,0,},
+{160,9,8,174,55,1,0,},},{{188,217,12,209,89,83,1,},{185,200,8,185,98,1,0,},},{{191,157,0,182,0,0,0,},{186,210,11,184,207,1,0,},{169,213,11,169,21,1,0,},},
+{{159,51,9,158,204,1,0,},{157,168,11,157,21,1,0,},},{{162,13,9,174,158,1,0,},{160,13,8,174,55,1,0,},},{{182,26,12,161,188,1,0,},{169,212,12,209,45,83,1,},},
+{{186,69,12,184,219,1,0,},{181,149,11,161,73,1,0,},{159,177,8,158,201,1,0,},},{{181,23,12,161,85,1,0,},},{0},{{158,187,12,209,89,59,1,},{158,46,12,157,85,1,0,},},
+{{190,85,12,169,219,1,0,},{161,36,9,181,65,1,0,},},{{214,54,5,192,0,0,0,},{161,152,9,181,70,1,0,},},{{197,189,10,167,0,0,0,},{168,136,8,174,170,0,0,},},
+{{219,21,1,221,2,0,0,},{197,188,10,167,0,0,0,},{160,20,12,160,39,1,0,},},{{188,83,8,188,95,1,0,},{158,170,11,157,73,1,0,},},{{183,136,12,209,192,65,1,},
+{159,168,12,209,192,59,1,},},{{201,199,11,184,204,0,0,},{181,157,8,181,98,1,0,},{159,42,12,157,188,1,0,},},{{214,44,5,192,0,0,0,},{161,162,9,181,70,1,0,},},
+{{191,141,0,183,0,0,0,},{163,137,12,209,138,65,1,},},{{184,209,11,231,27,1,0,},{157,49,13,220,50,59,1,},},{{160,146,9,174,70,1,0,},{160,7,9,174,65,1,0,},},
+{{160,20,8,174,55,1,0,},},{{184,196,11,184,21,1,0,},{163,133,12,209,138,65,1,},},{{186,76,12,184,219,1,0,},{159,174,11,157,176,1,0,},},{{157,181,12,209,45,59,1,},},
+{{184,82,9,185,65,1,0,},{158,52,13,220,92,59,1,},},{{167,133,12,209,53,64,1,},{158,37,12,157,85,1,0,},},{{205,224,11,169,204,0,0,},{169,212,11,169,21,1,0,},},
+{{185,74,9,185,101,1,0,},{160,136,12,209,45,65,1,},},{{185,196,8,185,98,1,0,},{168,20,8,174,164,0,0,},{162,14,12,160,132,1,0,},},{{182,27,9,181,204,1,0,},
+{182,25,8,181,198,1,0,},{160,5,13,220,50,65,1,},},{{188,90,8,188,95,1,0,},{182,26,9,181,204,1,0,},},{{186,198,8,185,232,1,0,},{183,145,11,217,184,1,0,},
+{169,86,9,188,65,1,0,},},{{168,133,12,209,152,64,1,},},{{182,23,9,181,204,1,0,},{158,47,9,158,101,1,0,},},{{163,142,11,160,114,1,0,},{157,43,12,157,39,1,0,},},
+{{186,198,12,209,223,113,1,},{159,52,13,220,195,59,1,},},{{174,8,13,220,92,65,1,},},{{190,212,8,188,232,1,0,},{188,214,12,209,89,83,1,},{161,159,12,209,45,67,1,},},
+{{195,61,10,168,0,0,0,},{185,69,13,220,92,113,1,},{161,25,13,220,50,67,1,},},{{181,26,13,220,92,67,1,},{159,46,12,157,188,1,0,},},{{201,198,11,184,204,0,0,},
+{159,184,11,215,184,1,0,},},{{174,7,9,174,101,1,0,},{168,11,8,174,164,0,0,},},{{232,183,0,214,0,0,0,},{183,9,8,174,198,1,0,},},{{181,30,13,220,92,67,1,},
+{174,148,11,160,73,1,0,},},{{162,20,13,220,143,65,1,},},{{211,131,11,196,204,0,0,},{168,15,8,174,164,0,0,},},{{182,34,9,181,204,1,0,},},{0},{{174,20,9,174,101,1,0,},},
+{{190,212,12,209,223,83,1,},},{{220,197,7,207,0,0,0,},{184,82,12,184,39,1,0,},{184,199,12,209,45,113,1,},},{{157,52,12,157,39,1,0,},},{{181,25,12,161,85,1,0,},
+{157,182,11,157,21,1,0,},},{{182,156,8,181,201,1,0,},{158,49,8,158,95,1,0,},},{{195,13,10,168,0,0,0,},{190,88,8,188,229,1,0,},{188,96,13,220,92,83,1,},},
+{{186,210,8,185,232,1,0,},},{{169,224,8,188,60,1,0,},{159,51,8,158,198,1,0,},},{{185,82,8,185,95,1,0,},{181,28,9,181,101,1,0,},},{{188,213,11,169,73,1,0,},
+{161,156,11,161,21,1,0,},},{{186,69,13,220,226,113,1,},{183,133,11,160,176,1,0,},},{{181,23,13,220,92,67,1,},{160,143,11,160,21,1,0,},},{{185,199,8,185,98,1,0,},
+{174,9,8,174,95,1,0,},{174,134,11,160,73,1,0,},},{{168,6,8,174,164,0,0,},},{{190,85,13,220,226,83,1,},{185,207,11,218,81,1,0,},{161,36,8,181,55,1,0,},},
+{{159,166,12,209,192,59,1,},},{{168,136,11,160,124,0,0,},},{{158,185,8,158,98,1,0,},{158,44,8,158,95,1,0,},},{{167,141,11,160,21,0,0,},{161,26,9,181,65,1,0,},},
+{{205,214,11,169,204,0,0,},{185,202,11,184,73,1,0,},},{{214,59,5,192,0,0,0,},{185,201,11,184,73,1,0,},},{{182,163,11,225,180,1,0,},{168,12,13,220,158,64,1,},},
+{{195,18,10,168,0,0,0,},{186,200,11,184,207,1,0,},{181,163,11,225,77,1,0,},},{{190,221,11,223,215,1,0,},{157,49,12,157,39,1,0,},},{{211,60,12,211,206,0,0,},},
+{{167,148,12,209,53,64,1,},{158,54,13,220,92,59,1,},},{{184,71,9,185,65,1,0,},{161,149,12,209,45,67,1,},},{{186,76,13,220,226,113,1,},{184,68,8,185,55,1,0,},},
+{{157,181,11,157,21,1,0,},},{{185,200,11,184,73,1,0,},{174,147,11,230,77,1,0,},},{{182,29,13,220,195,67,1,},{158,37,13,220,92,59,1,},},{{183,134,8,174,201,1,0,},},
+{{174,7,13,220,92,65,1,},{159,50,13,220,195,59,1,},},{{196,8,11,168,0,0,0,},{174,12,8,174,95,1,0,},},{{184,200,12,209,45,113,1,},{182,27,8,181,198,1,0,},
+{163,18,12,160,132,1,0,},},{{197,148,10,167,0,0,0,},{188,90,9,188,101,1,0,},},{{160,140,11,160,21,1,0,},{159,54,13,220,195,59,1,},},{{160,54,0,194,215,0,0,},
+{158,50,13,220,92,59,1,},},{{182,23,8,181,198,1,0,},{167,8,9,174,81,0,0,},{158,47,8,158,95,1,0,},},{{157,43,13,220,50,59,1,},},{{181,24,13,220,92,67,1,},
+{163,143,11,160,114,1,0,},},{{194,139,11,168,204,0,0,},{168,137,11,160,124,0,0,},{162,8,8,174,148,1,0,},},{{168,13,12,160,145,0,0,},{167,14,12,160,45,0,0,},},
+{{163,136,11,160,114,1,0,},{161,25,12,161,39,1,0,},},{{208,178,0,159,0,0,0,},{163,139,11,160,114,1,0,},{158,57,12,157,85,1,0,},},{{163,138,11,191,104,1,0,},},
+{{168,11,9,174,176,0,0,},},{{186,201,11,184,207,1,0,},{181,162,11,161,73,1,0,},{161,27,13,220,50,67,1,},},{{207,72,12,186,210,0,0,},{159,171,11,157,176,1,0,},},
+{{184,195,12,209,45,113,1,},},{{168,15,9,174,176,0,0,},},{{163,134,12,209,138,65,1,},{161,23,9,181,65,1,0,},},{{159,169,12,209,192,59,1,},},{{192,165,11,157,204,0,0,},
+{159,47,13,220,195,59,1,},},{{213,151,5,198,0,0,0,},{169,90,13,220,50,83,1,},},{{184,82,13,220,50,113,1,},{158,179,8,158,98,1,0,},},{{169,88,13,220,50,83,1,},
+{163,18,13,220,143,65,1,},},{{183,13,8,174,198,1,0,},{174,143,11,160,73,1,0,},},{{158,49,9,158,101,1,0,},},{{185,69,8,185,95,1,0,},{184,201,8,185,60,1,0,},},
+{{186,71,13,220,226,113,1,},{163,147,11,230,120,1,0,},},{{183,7,9,174,204,1,0,},{160,139,12,209,45,65,1,},},{{196,11,11,168,0,0,0,},{188,212,12,209,89,83,1,},},
+{{226,66,12,228,208,0,0,},{188,213,12,209,89,83,1,},{162,139,12,209,138,65,1,},},{{184,210,12,209,45,113,1,},},{{183,148,8,174,201,1,0,},{157,172,9,158,70,1,0,},},
+{{185,82,9,185,101,1,0,},{174,9,9,174,101,1,0,},{160,134,9,174,70,1,0,},},{{168,6,9,174,176,0,0,},{160,135,9,174,70,1,0,},},{{190,83,13,220,226,83,1,},
+{169,96,9,188,65,1,0,},{157,46,8,158,55,1,0,},},{{198,163,11,225,206,0,0,},{159,53,12,157,188,1,0,},},{0},{{163,13,13,220,143,65,1,},{158,44,9,158,101,1,0,},},
+{{167,141,8,174,74,0,0,},},{{159,57,12,157,188,1,0,},{159,170,11,157,176,1,0,},},{{186,208,11,184,207,1,0,},{174,134,12,209,89,65,1,},},{{168,12,12,160,145,0,0,},
+{161,162,11,161,21,1,0,},},{{186,200,12,209,223,113,1,},},{{181,31,12,161,85,1,0,},{169,222,12,209,45,83,1,},},{{160,146,11,160,21,1,0,},},{{163,7,8,174,148,1,0,},
+{158,54,12,157,85,1,0,},},{{186,67,13,220,226,113,1,},{182,31,13,220,195,67,1,},},{{157,51,8,158,55,1,0,},},{{159,44,9,158,204,1,0,},},{{194,189,11,168,204,0,0,},},
+{{195,12,10,168,0,0,0,},{190,89,12,169,219,1,0,},{169,90,8,188,55,1,0,},},{{190,96,12,169,219,1,0,},{183,134,11,160,176,1,0,},{169,212,9,188,70,1,0,},},
+{{168,146,11,160,124,0,0,},{159,50,12,157,188,1,0,},},{{186,74,12,184,219,1,0,},{174,12,9,174,101,1,0,},},{0},{{168,18,8,174,164,0,0,},{157,41,13,220,50,59,1,},},
+{{162,140,11,160,114,1,0,},{159,54,12,157,188,1,0,},},{{182,153,11,161,176,1,0,},},{{188,65,13,220,92,83,1,},},{{186,68,12,184,219,1,0,},{184,76,9,185,65,1,0,},},
+{{205,211,11,169,204,0,0,},{181,24,12,161,85,1,0,},{157,173,12,209,45,59,1,},},{{186,82,12,184,219,1,0,},},{{163,12,8,174,148,1,0,},{158,45,12,157,85,1,0,},},
+{{185,210,12,209,89,113,1,},},{{183,139,8,174,201,1,0,},{157,175,11,157,21,1,0,},},{{196,62,11,168,0,0,0,},{183,146,8,174,201,1,0,},},{{161,161,11,213,33,1,0,},
+{158,41,12,157,85,1,0,},},{{186,201,8,185,232,1,0,},{181,156,11,161,73,1,0,},{168,6,12,160,145,0,0,},},{{183,143,8,174,201,1,0,},{182,23,12,161,188,1,0,},
+{174,7,8,174,95,1,0,},},{{225,160,0,212,0,0,0,},{162,135,8,174,153,1,0,},{160,147,11,230,27,1,0,},},{0},{{184,80,13,220,50,113,1,},},{{174,11,12,160,85,1,0,},
+{160,134,11,160,21,1,0,},},{{162,139,8,174,153,1,0,},{159,47,12,157,188,1,0,},},{{191,153,0,182,0,0,0,},{163,141,8,174,153,1,0,},{160,23,0,194,215,0,0,},},
+{{158,179,11,157,73,1,0,},{157,39,4,233,247,0,0,},},{{190,218,8,188,232,1,0,},{186,67,12,184,219,1,0,},{169,217,12,209,45,83,1,},},{{168,147,11,230,131,0,0,},},
+{{174,13,12,160,85,1,0,},},{0},{{186,210,12,209,223,113,1,},{186,71,12,184,219,1,0,},{169,213,12,209,45,83,1,},},{{183,7,8,174,198,1,0,},},{{182,154,11,161,176,1,0,},},
+{{182,24,12,161,188,1,0,},{161,156,9,181,70,1,0,},},{{159,177,11,157,176,1,0,},},{{157,57,8,158,55,1,0,},{157,172,8,158,60,1,0,},},{{192,168,11,157,204,0,0,},
+{157,22,2,219,225,0,0,},},{{182,36,12,161,188,1,0,},{163,15,13,220,143,65,1,},},{{190,83,12,169,219,1,0,},{169,211,11,169,21,1,0,},{157,46,9,158,65,1,0,},},
+{{183,9,9,174,204,1,0,},{159,41,13,220,195,59,1,},},{{186,196,8,185,232,1,0,},{183,8,8,174,198,1,0,},},{{201,208,11,184,204,0,0,},{167,15,13,220,60,64,1,},},
+{{163,139,12,209,138,65,1,},},{{183,142,12,209,192,65,1,},{167,13,13,220,60,64,1,},{159,57,13,220,195,59,1,},},{{167,12,12,160,45,0,0,},},{{185,204,11,184,73,1,0,},
+{161,162,12,209,45,67,1,},},{{163,137,11,160,114,1,0,},},{{168,141,8,174,170,0,0,},},{0},{{157,51,12,157,39,1,0,},},{{182,31,12,161,188,1,0,},{167,135,12,209,53,64,1,},},
+{{169,216,8,188,60,1,0,},{157,51,9,158,65,1,0,},},{{201,197,11,184,204,0,0,},},{{188,94,8,188,95,1,0,},{161,23,8,181,55,1,0,},},{{190,89,13,220,226,83,1,},
+{169,90,9,188,65,1,0,},},{{190,211,8,188,232,1,0,},{160,133,12,209,45,65,1,},},{{185,74,12,184,85,1,0,},{162,136,8,174,153,1,0,},{160,136,9,174,70,1,0,},},
+{{198,155,11,161,204,0,0,},{168,20,13,220,158,64,1,},{157,59,12,157,39,1,0,},},{{191,143,0,183,0,0,0,},{188,216,12,209,89,83,1,},{159,169,11,157,176,1,0,},},
+{{157,41,12,157,39,1,0,},},{{162,140,8,174,153,1,0,},{160,140,9,174,70,1,0,},},{{182,153,12,209,192,67,1,},{169,216,9,188,70,1,0,},},{{188,65,12,169,85,1,0,},
+{161,157,12,209,45,67,1,},{159,173,11,157,176,1,0,},},{{186,68,13,220,226,113,1,},{184,76,8,185,55,1,0,},},{{168,7,8,174,164,0,0,},},{{224,68,5,201,0,0,0,},},
+{{190,212,11,169,207,1,0,},{182,21,13,220,195,67,1,},{158,45,13,220,92,59,1,},},{0},{{183,139,11,160,176,1,0,},{181,26,8,181,95,1,0,},{157,175,8,158,60,1,0,},},
+{{167,140,8,174,74,0,0,},},{{161,155,11,161,21,1,0,},{158,41,13,220,92,59,1,},},{0},{{181,36,9,181,101,1,0,},},{{174,133,12,209,89,65,1,},{162,135,11,160,114,1,0,},},
+{{159,185,11,157,176,1,0,},},{{190,84,13,220,226,83,1,},{184,80,12,184,39,1,0,},{184,197,12,209,45,113,1,},},{{183,141,12,209,192,65,1,},{157,50,12,157,39,1,0,},},
+{{174,20,12,160,85,1,0,},},{{218,196,5,201,0,0,0,},{181,153,12,209,89,67,1,},{157,185,8,158,60,1,0,},},{{208,185,0,159,0,0,0,},{190,88,9,188,235,1,0,},
+{181,152,12,209,89,67,1,},},{{190,89,8,188,229,1,0,},{157,54,12,157,39,1,0,},},{{185,73,9,185,101,1,0,},{162,137,12,209,138,65,1,},},{{174,13,13,220,92,65,1,},
+{169,96,8,188,55,1,0,},},{{188,217,8,188,98,1,0,},{181,156,8,181,98,1,0,},},{0},{{190,94,13,220,226,83,1,},{185,69,9,185,101,1,0,},{162,141,12,209,138,65,1,},},
+{{207,74,12,186,210,0,0,},},{{188,213,8,188,98,1,0,},{182,24,13,220,195,67,1,},{161,156,8,181,60,1,0,},},{{186,69,8,185,229,1,0,},{159,177,12,209,192,59,1,},},
+{{181,23,8,181,95,1,0,},{157,172,11,157,21,1,0,},},{{213,159,5,198,0,0,0,},{185,199,11,184,73,1,0,},},{{190,213,11,169,207,1,0,},{163,15,12,160,132,1,0,},},
+{{205,193,11,169,204,0,0,},{183,6,9,174,204,1,0,},{169,211,8,188,60,1,0,},},{0},{{196,63,11,168,0,0,0,},{168,136,12,209,152,64,1,},},{{167,15,12,160,45,0,0,},
+{158,185,11,157,73,1,0,},},{{196,21,11,168,0,0,0,},{181,155,12,209,89,67,1,},},{{160,133,11,160,21,1,0,},},{0},{0},{{163,137,8,174,153,1,0,},},{{196,0,11,168,0,0,0,},
+{160,135,12,209,45,65,1,},},{{194,140,11,168,204,0,0,},{184,196,8,185,60,1,0,},{168,142,11,160,124,0,0,},},{{197,140,10,167,0,0,0,},{192,187,11,157,204,0,0,},
+{184,197,8,185,60,1,0,},},{{190,91,13,220,226,83,1,},{167,135,11,160,21,0,0,},},{{186,76,8,185,229,1,0,},{169,216,11,169,21,1,0,},},{{183,20,9,174,204,1,0,},},
+{{188,94,9,188,101,1,0,},{182,157,11,161,176,1,0,},{158,165,11,157,73,1,0,},},{{184,198,12,209,45,113,1,},{163,20,12,160,132,1,0,},},{{191,156,0,182,0,0,0,},},
+{{174,142,12,209,89,65,1,},{160,136,8,174,60,1,0,},},{{168,20,12,160,145,0,0,},{167,11,12,160,45,0,0,},},{{184,202,12,209,45,113,1,},{162,140,12,209,138,65,1,},},
+{{169,65,13,220,50,83,1,},{163,13,12,160,132,1,0,},},{{192,174,11,157,204,0,0,},{160,140,8,174,60,1,0,},},{{185,198,11,184,73,1,0,},{167,15,8,174,67,0,0,},},
+{{167,8,12,160,45,0,0,},{158,47,13,220,92,59,1,},},{{181,152,11,161,73,1,0,},{162,137,8,174,153,1,0,},},{{168,7,9,174,176,0,0,},{162,146,12,209,138,65,1,},},
+{{168,137,8,174,170,0,0,},{160,139,11,160,21,1,0,},},{{188,214,8,188,98,1,0,},{158,186,11,232,77,1,0,},},{{192,169,11,157,204,0,0,},{161,25,9,181,65,1,0,},},
+{{181,26,9,181,101,1,0,},{157,175,9,158,70,1,0,},},{{182,161,11,213,184,1,0,},},{{182,162,11,161,176,1,0,},{161,155,8,181,60,1,0,},},{{183,9,12,160,188,1,0,},
+{167,148,8,174,74,0,0,},},{{181,36,8,181,95,1,0,},{159,171,12,209,192,59,1,},},{{162,20,9,174,158,1,0,},},{{183,137,12,209,192,65,1,},},{{163,61,12,211,173,1,0,},},
+{{198,152,11,161,204,0,0,},{157,165,12,209,45,59,1,},},{{174,20,13,220,92,65,1,},{169,216,12,209,45,83,1,},},{{183,141,8,174,201,1,0,},{158,53,12,157,85,1,0,},},
+{{186,195,11,184,207,1,0,},{183,140,8,174,201,1,0,},},{{198,156,11,161,204,0,0,},{185,197,8,185,98,1,0,},{157,54,13,220,50,59,1,},},{{185,73,8,185,95,1,0,},
+{174,143,8,174,98,1,0,},{160,137,12,209,45,65,1,},},{{167,60,12,211,104,0,0,},{158,49,12,157,85,1,0,},},{{188,96,9,188,101,1,0,},{188,217,11,169,73,1,0,},
+{174,18,9,174,101,1,0,},},{{162,11,12,160,132,1,0,},},{{174,139,8,174,98,1,0,},{160,141,12,209,45,65,1,},},{0},{{167,11,9,174,81,0,0,},},{{186,69,9,185,235,1,0,},
+{163,135,8,174,153,1,0,},},{{191,146,0,183,0,0,0,},{183,148,11,160,176,1,0,},{181,23,9,181,101,1,0,},},{{167,137,8,174,74,0,0,},{158,59,9,158,101,1,0,},},
+{{190,213,8,188,232,1,0,},{161,158,12,209,45,67,1,},},{{157,187,11,157,21,1,0,},},{{190,86,8,188,229,1,0,},},{{185,195,12,209,89,113,1,},{181,153,11,161,73,1,0,},},
+{{188,211,12,209,89,83,1,},{186,80,8,185,229,1,0,},{161,154,12,209,45,67,1,},},{{186,202,12,209,223,113,1,},{159,187,8,158,201,1,0,},},{{196,6,11,168,0,0,0,},
+{190,90,12,169,219,1,0,},{181,29,12,161,85,1,0,},},{{181,157,11,161,73,1,0,},},{{168,12,9,174,176,0,0,},{158,40,12,157,85,1,0,},},{{159,46,8,158,198,1,0,},},
+{{186,195,12,209,223,113,1,},{160,18,13,220,50,65,1,},},{0},{{163,7,13,220,143,65,1,},{158,54,9,158,101,1,0,},},{{190,91,12,169,219,1,0,},{169,64,6,229,212,0,0,},},
+{{186,76,9,185,235,1,0,},{157,166,11,157,21,1,0,},},{{185,72,13,220,92,113,1,},},{{182,157,8,181,201,1,0,},{158,50,9,158,101,1,0,},},{{205,219,11,169,204,0,0,},
+{163,20,13,220,143,65,1,},},{{183,134,12,209,192,65,1,},},{{160,136,11,160,21,1,0,},{159,50,9,158,204,1,0,},},{{197,146,10,167,0,0,0,},{185,73,13,220,92,113,1,},
+{184,72,9,185,65,1,0,},},{0},{{186,70,12,184,219,1,0,},{169,65,12,169,39,1,0,},},{{169,86,8,188,55,1,0,},{159,54,9,158,204,1,0,},},{{194,135,11,168,204,0,0,},
+{168,133,11,160,124,0,0,},},{{167,8,13,220,60,64,1,},{158,47,12,157,85,1,0,},},{{157,186,11,232,27,1,0,},},{{185,82,12,184,85,1,0,},{160,142,12,209,45,65,1,},},
+{{162,131,11,196,170,1,0,},},{{161,159,9,181,70,1,0,},},{{182,149,11,161,176,1,0,},{161,25,8,181,55,1,0,},},{{223,211,5,205,0,0,0,},{168,134,12,209,152,64,1,},},
+{{168,135,12,209,152,64,1,},{158,171,11,157,73,1,0,},},{{197,137,10,167,0,0,0,},{161,155,9,181,70,1,0,},},{{181,156,12,209,89,67,1,},{181,21,12,161,85,1,0,},},
+{{169,221,11,223,33,1,0,},},{{168,143,12,209,152,64,1,},},{{190,222,8,188,232,1,0,},},{{163,13,9,174,158,1,0,},},{{168,142,12,209,152,64,1,},{157,165,11,157,21,1,0,},},
+{{208,175,0,159,0,0,0,},{159,47,9,158,204,1,0,},},{{158,53,13,220,92,59,1,},},{{205,218,11,169,204,0,0,},},{{183,18,9,174,204,1,0,},{169,219,12,209,45,83,1,},
+{159,173,8,158,201,1,0,},},{{160,137,11,160,21,1,0,},},{{158,49,13,220,92,59,1,},},{{190,88,13,220,226,83,1,},{184,201,12,209,45,113,1,},{184,68,12,184,39,1,0,},},
+{{162,15,9,174,158,1,0,},},{{185,208,11,184,73,1,0,},{174,139,11,160,73,1,0,},{162,20,8,174,148,1,0,},},{{182,154,8,181,201,1,0,},},{{167,176,11,208,13,0,0,},
+{161,152,8,181,60,1,0,},},{{182,164,12,209,192,67,1,},{157,42,12,157,39,1,0,},},{{185,71,12,184,85,1,0,},{174,137,12,209,89,65,1,},},{{158,174,8,158,98,1,0,},},
+{{186,68,9,185,235,1,0,},{161,164,12,209,45,67,1,},},{{190,83,9,188,235,1,0,},{169,96,13,220,50,83,1,},{157,46,12,157,39,1,0,},},{{208,179,0,159,0,0,0,},
+{159,166,11,157,176,1,0,},},{{168,1,12,195,182,0,0,},},{{197,136,10,167,0,0,0,},},{{174,15,9,174,101,1,0,},{159,187,11,157,176,1,0,},},{{159,57,8,158,198,1,0,},},
+{{174,134,8,174,98,1,0,},{168,13,8,174,164,0,0,},},{{168,12,8,174,164,0,0,},{158,40,13,220,92,59,1,},},{{183,12,8,174,198,1,0,},{157,177,9,158,70,1,0,},},
+{{162,6,9,174,158,1,0,},{157,178,12,209,45,59,1,},},{{160,148,12,209,45,65,1,},},{{184,80,8,185,55,1,0,},{158,54,8,158,95,1,0,},},{{182,31,9,181,204,1,0,},
+{161,149,11,161,21,1,0,},},{{212,36,5,198,0,0,0,},{188,94,12,169,85,1,0,},{159,172,12,209,192,59,1,},},{{191,139,0,183,0,0,0,},{185,72,12,184,85,1,0,},
+{182,25,9,181,204,1,0,},},{{158,50,8,158,95,1,0,},},{{163,131,11,196,170,1,0,},{157,187,12,209,45,59,1,},},{{190,96,8,188,229,1,0,},{181,154,8,181,98,1,0,},},
+{{159,50,8,158,198,1,0,},},{{182,155,12,209,192,67,1,},{163,146,8,174,153,1,0,},},{{188,218,12,209,89,83,1,},{169,88,9,188,65,1,0,},},{{183,13,12,160,188,1,0,},},
+{{159,54,8,158,198,1,0,},},{{185,69,12,184,85,1,0,},},{{162,61,12,211,173,1,0,},},{{209,218,6,190,0,0,0,},{157,45,9,158,65,1,0,},},{0},{{198,149,11,161,204,0,0,},},
+{{158,45,8,158,95,1,0,},},{{201,196,11,184,204,0,0,},{183,5,12,160,188,1,0,},{159,186,11,232,180,1,0,},},{{196,7,11,168,0,0,0,},},{{174,135,12,209,89,65,1,},
+{167,140,11,160,21,0,0,},},{{209,211,6,190,0,0,0,},{163,8,12,160,132,1,0,},},{{195,21,10,168,0,0,0,},{186,201,12,209,223,113,1,},{181,162,12,209,89,67,1,},},
+{{183,143,12,209,192,65,1,},},{0},{{190,222,11,169,207,1,0,},{182,156,12,209,192,67,1,},{163,6,9,174,158,1,0,},},{{209,214,6,190,0,0,0,},{184,80,9,185,65,1,0,},
+{182,157,12,209,192,67,1,},},{{183,141,11,160,176,1,0,},{162,5,13,220,143,65,1,},},{{159,47,8,158,198,1,0,},},{{197,143,10,167,0,0,0,},{184,71,8,185,55,1,0,},
+{158,51,13,220,92,59,1,},},{{190,90,13,220,226,83,1,},{169,89,9,188,65,1,0,},{157,180,11,157,21,1,0,},},{{183,18,8,174,198,1,0,},{181,28,8,181,95,1,0,},},
+{{162,137,11,160,114,1,0,},},{{185,80,9,185,101,1,0,},{174,13,8,174,95,1,0,},},{{186,82,9,185,235,1,0,},{182,149,12,209,192,67,1,},{169,85,9,188,65,1,0,},},
+{{162,15,8,174,148,1,0,},{159,179,12,209,192,59,1,},},{{217,134,5,199,0,0,0,},{194,149,11,168,204,0,0,},},{{188,91,12,169,85,1,0,},{174,136,12,209,89,65,1,},},
+{{182,24,8,181,198,1,0,},{167,9,8,174,67,0,0,},},{{194,148,11,168,204,0,0,},{181,149,12,209,89,67,1,},{157,42,13,220,50,59,1,},},{{186,74,8,185,229,1,0,},
+{185,71,13,220,92,113,1,},},{{158,174,11,157,73,1,0,},},{{163,15,9,174,158,1,0,},{161,164,11,161,21,1,0,},},{{190,83,8,188,229,1,0,},{169,96,12,169,39,1,0,},
+{157,46,13,220,50,59,1,},},{{191,154,0,182,0,0,0,},},{{215,187,5,192,0,0,0,},{161,24,9,181,65,1,0,},{158,172,12,209,89,59,1,},},{{169,214,12,209,45,83,1,},
+{158,42,13,220,92,59,1,},},{{183,8,9,174,204,1,0,},{161,159,11,161,21,1,0,},},{{159,57,9,158,204,1,0,},},{{161,157,11,161,21,1,0,},},{{190,223,11,227,211,1,0,},
+{186,72,8,185,229,1,0,},},{{183,12,9,174,204,1,0,},{181,159,11,161,73,1,0,},{157,177,8,158,60,1,0,},},{{167,146,12,209,53,64,1,},{162,6,8,174,148,1,0,},},
+{{197,191,10,167,0,0,0,},{160,148,11,160,21,1,0,},},{{197,190,10,167,0,0,0,},{191,152,0,182,0,0,0,},{163,148,12,209,138,65,1,},},{{184,196,12,209,45,113,1,},
+{167,135,8,174,74,0,0,},{163,133,11,160,114,1,0,},},{0},{{194,134,11,168,204,0,0,},},{{168,2,12,197,186,0,0,},{161,23,12,161,39,1,0,},},{{190,89,9,188,235,1,0,},
+{174,11,8,174,95,1,0,},{167,139,12,209,53,64,1,},},{{162,12,13,220,143,65,1,},},{{163,141,12,209,138,65,1,},{162,13,12,160,132,1,0,},},{{167,61,12,211,104,0,0,},
+{163,140,12,209,138,65,1,},},{{167,143,8,174,74,0,0,},},{{186,209,11,231,211,1,0,},{169,214,11,169,21,1,0,},{162,8,9,174,158,1,0,},},{{162,9,8,174,148,1,0,},},
+{{188,84,9,188,101,1,0,},{182,151,11,161,176,1,0,},{158,175,11,157,73,1,0,},},{{195,6,10,168,0,0,0,},{186,196,11,184,207,1,0,},},{{201,202,11,184,204,0,0,},
+{181,152,8,181,98,1,0,},{157,45,8,158,55,1,0,},},{{162,5,12,160,132,1,0,},},{{192,173,11,157,204,0,0,},{188,88,13,220,92,83,1,},{160,6,12,160,39,1,0,},},
+{{163,12,13,220,143,65,1,},{158,45,9,158,101,1,0,},},{{183,11,12,160,188,1,0,},},{{161,24,13,220,50,67,1,},{159,165,12,209,192,59,1,},},{{174,135,11,160,73,1,0,},
+{167,140,12,209,53,64,1,},},{{163,8,13,220,143,65,1,},},{{183,9,13,220,195,65,1,},{162,145,11,217,126,1,0,},},{{168,13,9,174,176,0,0,},{162,7,13,220,143,65,1,},},
+{{216,20,5,199,0,0,0,},{183,11,13,220,195,65,1,},},{{163,6,8,174,148,1,0,},},{{183,13,9,174,204,1,0,},{159,45,13,220,195,59,1,},},{{160,134,12,209,45,65,1,},
+{157,50,8,158,55,1,0,},},{{213,164,5,198,0,0,0,},{183,15,9,174,204,1,0,},},{{158,51,12,157,85,1,0,},{157,167,3,233,239,0,0,},},{{188,96,8,188,95,1,0,},
+{169,89,8,188,55,1,0,},},{{157,54,8,158,55,1,0,},},{{174,18,13,220,92,65,1,},{160,137,9,174,70,1,0,},},{{174,13,9,174,101,1,0,},},{{195,11,10,168,0,0,0,},
+{169,85,8,188,55,1,0,},{159,53,13,220,195,59,1,},},{{196,9,11,168,0,0,0,},{188,216,11,169,73,1,0,},{157,40,13,220,50,59,1,},},{{162,141,8,174,153,1,0,},
+{160,141,9,174,70,1,0,},},{{188,222,11,169,73,1,0,},{188,91,13,220,92,83,1,},},{{182,24,9,181,204,1,0,},{161,156,12,209,45,67,1,},},{{183,20,12,160,188,1,0,},
+{157,44,13,220,50,59,1,},},{{188,221,11,223,81,1,0,},{157,59,8,158,55,1,0,},},{{212,31,5,198,0,0,0,},{208,172,0,159,0,0,0,},{163,2,12,197,166,1,0,},},
+{{163,15,8,174,148,1,0,},{161,158,11,161,21,1,0,},},{{207,80,12,186,210,0,0,},{186,208,8,185,232,1,0,},{169,211,12,209,45,83,1,},},{{168,8,9,174,176,0,0,},},
+{{199,141,11,160,204,0,0,},{161,24,8,181,55,1,0,},{158,57,13,220,92,59,1,},},{{163,11,8,174,148,1,0,},{158,42,12,157,85,1,0,},},{{195,20,10,168,0,0,0,},
+{181,155,8,181,98,1,0,},},{{183,142,11,160,176,1,0,},{181,29,9,181,101,1,0,},},{{194,136,11,168,204,0,0,},{168,138,11,191,112,0,0,},},{{186,72,9,185,235,1,0,},},
+{{169,94,8,188,55,1,0,},{157,177,11,157,21,1,0,},},{{160,135,8,174,60,1,0,},},{{168,61,12,211,195,0,0,},},{{167,148,11,160,21,0,0,},},{{157,179,12,209,45,59,1,},
+{157,38,12,157,39,1,0,},},{{196,12,11,168,0,0,0,},{157,53,13,220,50,59,1,},},{{190,224,11,169,207,1,0,},{158,180,11,157,73,1,0,},},{{168,18,9,174,176,0,0,},
+{161,23,13,220,50,67,1,},},{{184,198,8,185,60,1,0,},{163,20,8,174,148,1,0,},},{{185,202,8,185,98,1,0,},{162,8,12,160,132,1,0,},{160,8,13,220,50,65,1,},},
+{0},{{199,140,11,160,204,0,0,},{188,88,8,188,95,1,0,},{168,255,15,162,2,68,1,},},{{184,202,8,185,60,1,0,},{161,159,8,181,60,1,0,},},{{186,70,9,185,235,1,0,},
+{169,214,8,188,60,1,0,},},{{160,140,12,209,45,65,1,},},{{188,84,8,188,95,1,0,},{167,136,11,160,21,0,0,},{161,29,8,181,55,1,0,},},{{183,147,11,230,180,1,0,},
+{163,14,13,220,143,65,1,},},{{159,180,12,209,192,59,1,},},{{162,146,8,174,153,1,0,},{160,142,11,160,21,1,0,},},{{222,96,5,205,0,0,0,},{168,137,12,209,152,64,1,},},
+{{168,7,12,160,145,0,0,},},{{196,60,11,168,0,0,0,},{157,47,12,157,39,1,0,},},{{192,186,11,232,206,0,0,},{167,137,11,160,21,0,0,},},{{194,137,11,168,204,0,0,},
+{168,139,11,160,124,0,0,},{158,171,12,209,89,59,1,},},{{161,155,12,209,45,67,1,},},{{181,158,12,209,89,67,1,},{157,176,11,208,7,1,0,},},{{188,83,9,188,101,1,0,},
+{162,7,12,160,132,1,0,},},{{168,14,13,220,158,64,1,},},{{190,65,12,169,219,1,0,},{167,143,11,160,21,0,0,},{160,15,8,174,55,1,0,},},{{184,197,11,184,21,1,0,},
+{167,142,11,160,21,0,0,},},{{157,50,9,158,65,1,0,},},{{167,134,8,174,74,0,0,},{158,181,11,157,73,1,0,},},{0},{0},{{169,219,11,169,21,1,0,},{157,54,9,158,65,1,0,},},
+{{174,143,12,209,89,65,1,},{160,137,8,174,60,1,0,},},{{199,143,11,160,204,0,0,},{188,89,13,220,92,83,1,},{162,148,8,174,153,1,0,},},{{186,199,11,184,207,1,0,},},
+{{183,135,12,209,192,65,1,},{160,11,9,174,65,1,0,},{157,40,12,157,39,1,0,},},{{174,139,12,209,89,65,1,},{160,141,8,174,60,1,0,},},{0},{{186,197,12,209,223,113,1,},
+{159,49,8,158,198,1,0,},},{{160,15,9,174,65,1,0,},{157,44,12,157,39,1,0,},},{{183,11,8,174,198,1,0,},},{{167,137,12,209,53,64,1,},{158,59,13,220,92,59,1,},},
+{{190,213,12,209,223,83,1,},{185,71,8,185,95,1,0,},{161,164,9,181,70,1,0,},},{{167,12,13,220,60,64,1,},},{{224,82,5,201,0,0,0,},{168,8,8,174,164,0,0,},
+{162,2,12,197,166,1,0,},},{{167,18,9,174,81,0,0,},{167,14,13,220,60,64,1,},},{{188,211,8,188,98,1,0,},{161,154,8,181,60,1,0,},},{{186,202,8,185,232,1,0,},
+{159,187,12,209,192,59,1,},},{{181,29,8,181,95,1,0,},{159,170,12,209,192,59,1,},},{{161,34,8,181,55,1,0,},},{{163,9,12,160,132,1,0,},},{{191,135,0,183,0,0,0,},
+{184,208,8,185,60,1,0,},{169,94,9,188,65,1,0,},},{{160,18,9,174,65,1,0,},{159,168,11,157,176,1,0,},},{{167,6,13,220,60,64,1,},{160,148,9,174,70,1,0,},},
+{{163,5,12,160,132,1,0,},{161,21,13,220,50,67,1,},},{{201,195,11,184,204,0,0,},{169,88,12,169,39,1,0,},{157,38,13,220,50,59,1,},},{{157,53,12,157,39,1,0,},},
+{{185,72,9,185,101,1,0,},{158,180,12,209,89,59,1,},},{{181,25,9,181,101,1,0,},{158,165,12,209,89,59,1,},},{{163,20,9,174,158,1,0,},},{{198,157,11,161,204,0,0,},
+{162,8,13,220,143,65,1,},{160,8,12,160,39,1,0,},},{{185,68,9,185,101,1,0,},{163,255,15,162,1,68,1,},},{{184,72,13,220,50,113,1,},{183,140,12,209,192,65,1,},},
+{{188,218,11,169,73,1,0,},{185,197,12,209,89,113,1,},},{{185,196,12,209,89,113,1,},{169,214,9,188,70,1,0,},},{{168,5,13,220,158,64,1,},{167,255,15,162,4,68,1,},},
+{{188,193,11,169,73,1,0,},{167,136,8,174,74,0,0,},},{{184,204,12,209,45,113,1,},{163,14,12,160,132,1,0,},{157,171,11,157,21,1,0,},},{0},{{183,133,12,209,192,65,1,},
+{162,146,11,160,114,1,0,},},{{188,86,12,169,85,1,0,},{161,31,12,161,39,1,0,},},{0},{{185,204,12,209,89,113,1,},{157,47,13,220,50,59,1,},},{{190,224,8,188,232,1,0,},},
+{{168,139,8,174,170,0,0,},},{{182,164,11,161,176,1,0,},{167,2,12,197,93,0,0,},},{{209,212,6,190,0,0,0,},{182,28,13,220,195,67,1,},{181,164,12,209,89,67,1,},},
+{{182,29,12,161,188,1,0,},{162,148,12,209,138,65,1,},},{{186,80,12,184,219,1,0,},{168,143,8,174,170,0,0,},},{{190,222,12,209,223,83,1,},{190,65,13,220,226,83,1,},
+{161,163,11,225,27,1,0,},},{{190,90,8,188,229,1,0,},},{{196,13,11,168,0,0,0,},{174,148,8,174,98,1,0,},},{{167,134,11,160,21,0,0,},},{{199,137,11,160,204,0,0,},
+{184,210,11,184,21,1,0,},},{{185,208,8,185,98,1,0,},{157,180,12,209,45,59,1,},},{{182,21,12,161,188,1,0,},{159,173,12,209,192,59,1,},},{{182,28,8,181,198,1,0,},
+{158,177,8,158,98,1,0,},},{{190,216,11,169,207,1,0,},{188,89,12,169,85,1,0,},{161,36,12,161,39,1,0,},},{{205,222,11,169,204,0,0,},},{{183,135,11,160,176,1,0,},
+{162,15,13,220,143,65,1,},},{{227,220,0,222,0,0,0,},{160,141,11,160,21,1,0,},},};
 
 struct action_table_key {
     uint8_t bytes[3];
@@ -2925,10 +2884,9 @@ struct action_table_key {
 static inline struct action_table_key encode_key(uint32_t target_nfa_state, uint32_t dfa_state, uint32_t dfa_symbol) {
     struct action_table_key key = {0};
     key.bytes[0] |= (target_nfa_state >> 0) & 255;
-    key.bytes[1] |= (target_nfa_state >> 8) & 7;
-    key.bytes[1] |= (dfa_state << 3) & 255;
-    key.bytes[2] |= (dfa_state >> 5) & 3;
-    key.bytes[2] |= (dfa_symbol << 2) & 127;
+    key.bytes[1] |= (dfa_state >> 0) & 127;
+    key.bytes[1] |= (dfa_symbol << 7) & 255;
+    key.bytes[2] |= (dfa_symbol >> 1) & 15;
     return key;
 }
 struct action_table_entry {
@@ -2939,11 +2897,10 @@ struct action_table_entry {
 static struct action_table_entry decode_entry(const uint8_t *bytes) {
     struct action_table_entry entry = {0};
     entry.nfa_state |= ((uint32_t)bytes[3] & 255) << 0;
-    entry.nfa_state |= ((uint32_t)bytes[4] & 7) << 8;
-    entry.actions |= ((uint32_t)bytes[4] & 255) >> 3;
-    entry.actions |= ((uint32_t)bytes[5] & 15) << 5;
-    entry.push_nfa_state |= ((uint32_t)bytes[5] & 255) >> 4;
-    entry.push_nfa_state |= ((uint32_t)bytes[6] & 127) << 4;
+    entry.actions |= ((uint32_t)bytes[4] & 255) << 0;
+    entry.actions |= ((uint32_t)bytes[5] & 1) << 8;
+    entry.push_nfa_state |= ((uint32_t)bytes[5] & 255) >> 1;
+    entry.push_nfa_state |= ((uint32_t)bytes[6] & 1) << 7;
     return entry;
 }
 static struct action_table_entry action_table_lookup(uint32_t nfa_state, uint32_t dfa_state, uint32_t token) {
@@ -2988,7 +2945,7 @@ static size_t build_parse_tree(struct owl_default_tokenizer *tokenizer, struct o
             size_t end = offset;
             size_t len = 0;
             struct action_table_entry entry = action_table_lookup(nfa_state, run->states[i], run->tokens[i]);
-            if (run->tokens[i] < 26)
+            if (run->tokens[i] < 25)
                 len = decode_token_length(run, &length_offset, &offset);
             else {
                 if (stack_depth >= stack_capacity) {
@@ -3233,31 +3190,31 @@ static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context) {
         case 0: return 11;
         case 1: return 11;
         case 2: return 11;
-        case 3: return 13;
+        case 3: return 12;
         case 4: return 7;
-        case 5: return 13;
-        case 6: return 13;
+        case 5: return 12;
+        case 6: return 12;
         case 7: return 7;
         default: break;
         }
         break;
     case 8:
         switch (slot) {
-        case 0: return 13;
+        case 0: return 12;
         case 1: return 9;
         default: break;
         }
         break;
     case 9:
         switch (slot) {
-        case 0: return 13;
+        case 0: return 12;
         default: break;
         }
         break;
     case 10:
         switch (slot) {
         case 0: return 11;
-        case 1: return 13;
+        case 1: return 12;
         default: break;
         }
         break;
@@ -3309,7 +3266,6 @@ static size_t number_of_slots_lookup(uint32_t rule, void *context) {
     case 10: return 2;
     case 11: return 0;
     case 12: return 0;
-    case 13: return 0;
     default: return 0;
     }
 }
@@ -3376,11 +3332,6 @@ static void left_right_operand_slots_lookup(uint32_t rule, uint32_t *left, uint3
         *operand = 4294967295U;
         break;
     case 12:
-        *left = 4294967295U;
-        *right = 4294967295U;
-        *operand = 4294967295U;
-        break;
-    case 13:
         *left = 4294967295U;
         *right = 4294967295U;
         *operand = 4294967295U;
