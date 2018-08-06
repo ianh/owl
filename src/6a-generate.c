@@ -12,6 +12,9 @@
 #define WRITE_CUSTOM_TOKEN %%write-custom-token
 #define ALLOCATE_STRING allocate_string_contents
 #define ALLOW_DASHES_IN_IDENTIFIERS(...) %%allow-dashes-in-identifiers
+#define IF_NUMBER_TOKEN_ENABLED IF_NUMBER_TOKEN_ENABLED
+#define IF_STRING_TOKEN_ENABLED IF_STRING_TOKEN_ENABLED
+#define IF_IDENTIFIER_TOKEN_ENABLED IF_IDENTIFIER_TOKEN_ENABLED
 #define IDENTIFIER_TOKEN %%identifier-token
 #define NUMBER_TOKEN %%number-token
 #define STRING_TOKEN %%string-token
@@ -717,6 +720,9 @@ void generate(struct generator *gen)
     set_literal_substitution(out, "write-number-token", "IGNORE_TOKEN_WRITE");
     set_literal_substitution(out, "write-string-token", "IGNORE_TOKEN_WRITE");
     set_literal_substitution(out, "write-custom-token", "IGNORE_TOKEN_WRITE");
+    set_literal_substitution(out, "if-identifier-token", "(0)");
+    set_literal_substitution(out, "if-number-token", "(0)");
+    set_literal_substitution(out, "if-string-token", "(0)");
     output_line(out, "#define IGNORE_TOKEN_READ(...) (0)");
     if (has_custom_tokens) {
         output_line(out, "#define CUSTOM_TOKEN_DATA(identifier) uint64_t identifier = 0");
@@ -744,17 +750,23 @@ void generate(struct generator *gen)
         switch (rule->token_type) {
         case RULE_TOKEN_IDENTIFIER:
             set_unsigned_number_substitution(out, "identifier-token", i);
+            set_literal_substitution(out, "if-identifier-token", "__VA_ARGS__");
             break;
         case RULE_TOKEN_NUMBER:
             set_unsigned_number_substitution(out, "number-token", i);
+            set_literal_substitution(out, "if-number-token", "__VA_ARGS__");
             break;
         case RULE_TOKEN_STRING:
             set_unsigned_number_substitution(out, "string-token", i);
+            set_literal_substitution(out, "if-string-token", "__VA_ARGS__");
             break;
         case RULE_TOKEN_CUSTOM:
             break;
         }
     }
+    output_line(out, "#define IF_IDENTIFIER_TOKEN_ENABLED(...) %%if-identifier-token");
+    output_line(out, "#define IF_NUMBER_TOKEN_ENABLED(...) %%if-number-token");
+    output_line(out, "#define IF_STRING_TOKEN_ENABLED(...) %%if-string-token");
     output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info);");
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = gen->grammar->rules[i];
