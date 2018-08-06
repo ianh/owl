@@ -283,9 +283,9 @@ If `has_escapes` is true, the string data is owned by the `owl_tree`—otherwise
 
 ## <a id="user-defined-tokens">user-defined tokens</a>
 
-[User-defined tokens](grammar-reference.md#user-defined-tokens) match their contents by calling a function pointer you provide.
+If you need more than the built-in `identifier`, `number`, and `string` token types, you can define [your own token types](grammar-reference.md#user-defined-tokens) using `.token`.
 
-If a grammar has any custom tokens, `owl_tree_create_with_options` accepts two extra parameters in its `owl_tree_options` struct:
+If a grammar has any of these user-defined tokens, `owl_tree_create_with_options` accepts two extra parameters in its `owl_tree_options` struct:
 
 ```C
 struct owl_tree_options {
@@ -295,22 +295,13 @@ struct owl_tree_options {
 };
 ```
 
-The first parameter is the tokenize function itself, of type
-
-```C
-typedef struct owl_token (*owl_token_func_t)(const char *string, void *info)
-```
-
-Each time Owl's tokenizer steps forward, it calls the tokenize function with the remaining zero-terminated input `string` as its first parameter.  The second parameter is the `tokenize_info` pointer from `owl_tree_options`, which can be used to store context information.
-
-Let's look at an example.  Say you want to define a token representing a single numeric digit.
+The `tokenize` function matches a user-defined token.  For example, if your grammar needs to match individual digits:
 
 ```
-.token digit '1' '9' '0'
-input = digit*
+.token digit '7' '3'
 ```
 
-The tokenize function matches each digit:
+…then you might write this tokenize function:
 
 ```C
 struct owl_token match_digit(const char *string, void *info)
@@ -326,7 +317,18 @@ struct owl_token match_digit(const char *string, void *info)
 }
 ```
 
-Its return value is an `owl_token` struct representing details about the match.
+…and pass it into `owl_tree_create_with_options` like this:
+
+```C
+struct owl_tree_options options = {
+    .string = "2",
+    .tokenize = match_digit,
+};
+struct owl_tree *tree = owl_tree_create_with_options(options);
+// ...
+```
+
+Each time Owl's tokenizer steps forward, it calls the tokenize function (if it's not `NULL`), passing the remaining zero-terminated input as `string`.  The tokenize function then returns an `owl_token` struct representing details about the match:
 
 ```C
 struct owl_token {
@@ -340,9 +342,9 @@ struct owl_token {
 };
 ```
 
-A return value of `owl_token_no_match` (or any value with the `length` field set to zero) indicates no match.  Otherwise, the `length` field indicates how long the match is, and `type` indicates which type of token it is (`OWL_TOKEN_...`).
+A return value of `owl_token_no_match` (or any value with the `length` field set to zero) indicates no match.  Otherwise, the `length` field indicates how long the match is, and `type` indicates which type of token it is.  Each user-defined token type (like `.token digit`) corresponds to a value in the `owl_token_type` enum (like `OWL_TOKEN_DIGIT`).
 
-If there's a conflict between a user-defined token and a keyword, the longest match will be chosen, with ties going to the keyword.
+If there's a conflict between a user-defined token match and another token match, the longest match will be chosen, with ties going to keywords first, then user-defined token types, then other token types (like `identifier` and so on).
 
 User-defined tokens can be unpacked into `parsed_...` structs just like rules and built-in tokens.
 

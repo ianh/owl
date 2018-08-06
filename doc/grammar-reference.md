@@ -160,41 +160,48 @@ A *line comment token* will cause the rest of the line on which it appears to be
 
 ## <a id="user-defined-tokens">user-defined tokens</a>
 
-A *user-defined token* is a token that uses custom code to match its contents.  The `.token` keyword creates a new one:
+To define your own type of token, use `.token`:
 
 ```
-.token hex-color '#fff' '#DEFACE'
+.token hex-color
 ```
 
-The name which follows `.token` becomes a pattern that matches the token.
+Like rule names, the names of these *user-defined tokens* can also be used as patterns.
 
 ```
-color = hex-color | 'rgb' '(' number ',' number ',' number ')'
+color = hex-color | ...
 ```
-
-To see how to write the code that matches these tokens, check out the [user-defined tokens](generated-parser.md#user-defined-tokens) section in the generated parser documentation.
 
 ### exemplar strings
 
-In interpreter mode, Owl can't match user-defined tokens precisely—the code to match them isn't available.  But for testing, a few concrete examples are usually enough to get the idea.
+User-defined tokens are matched by [code you write](generated-parser.md#user-defined-tokens).  Owl's interpreter mode doesn't have access to this code, so it can't match user-defined tokens precisely.
 
-Any strings following the token name (`'#fff'` and `'#DEFACE'` in the original example) become *exemplar strings*, which stand in for the user-defined token in interpreter mode:
+Any strings following the token name become *exemplar strings*:
+
+```
+.token hex-color '#fff' '#DEFACE'
+input = hex-color*
+```
+
+which stand in for the user-defined token in interpreter mode.
 
 ```shell
-$ echo "#fff" | owl -g ".token hex-color '#fff'  input = hex-color"
-. #fff  
-  input 
+$ owl hex-color.owl
+#fff #fff #DEFACE
+^D
+. #fff #fff #DEFACE
+  input------------
 ```
 
 If you don't provide any exemplar strings, the token name itself becomes the exemplar:
 
 ```shell
-$ echo "hex-color" | owl -g ".token hex-color  input = hex-color"
+$ owl -g ".token hex-color  input = hex-color*"
+hex-color
+^D
 . hex-color
   input----
 ```
-
-Exemplar strings are also used to show ambiguities.
 
 ## versioning
 
