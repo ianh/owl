@@ -27,13 +27,13 @@
 
 #define IF_NUMBER_TOKEN(cond, ...) \
  if ((((struct tokenizer_info *)tokenizer->info)->number_symbol \
- != SYMBOL_EPSILON) && cond) __VA_ARGS__
+ != SYMBOL_EPSILON) && (cond)) __VA_ARGS__
 #define IF_STRING_TOKEN(cond, ...) \
  if ((((struct tokenizer_info *)tokenizer->info)->string_symbol \
- != SYMBOL_EPSILON) && cond) __VA_ARGS__
+ != SYMBOL_EPSILON) && (cond)) __VA_ARGS__
 #define IF_IDENTIFIER_TOKEN(cond, ...) \
  if ((((struct tokenizer_info *)tokenizer->info)->identifier_symbol \
- != SYMBOL_EPSILON) && cond) __VA_ARGS__
+ != SYMBOL_EPSILON) && (cond)) __VA_ARGS__
 
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
  const char *text, void *info);
