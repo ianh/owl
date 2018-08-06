@@ -130,8 +130,8 @@ void generate(struct generator *gen)
     struct generator_output *out = output_create(gen->output);
 
     set_substitution(out, "root-rule",
-     gen->grammar->rules[gen->grammar->root_rule].name,
-     gen->grammar->rules[gen->grammar->root_rule].name_length,
+     gen->grammar->rules[gen->grammar->root_rule]->name,
+     gen->grammar->rules[gen->grammar->root_rule]->name_length,
      LOWERCASE_WITH_UNDERSCORES);
     set_unsigned_number_substitution(out, "root-rule-index",
      gen->grammar->root_rule);
@@ -139,8 +139,8 @@ void generate(struct generator *gen)
     uint32_t n = gen->grammar->number_of_rules;
     bool has_custom_tokens = false;
     for (uint32_t i = 0; i < n; ++i) {
-        if (gen->grammar->rules[i].is_token &&
-         gen->grammar->rules[i].token_type == RULE_TOKEN_CUSTOM) {
+        if (gen->grammar->rules[i]->is_token &&
+         gen->grammar->rules[i]->token_type == RULE_TOKEN_CUSTOM) {
             has_custom_tokens = true;
             break;
         }
@@ -253,7 +253,7 @@ void generate(struct generator *gen)
     uint32_t choices_allocated_bytes = 0;
     uint32_t choice_index = 0;
     for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         for (uint32_t j = 0; j < rule->number_of_choices; ++j) {
             uint32_t k = choice_index++;
             if (k == UINT32_MAX)
@@ -284,7 +284,7 @@ void generate(struct generator *gen)
     }
     free(choices);
     for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
         output_line(out, "");
@@ -324,7 +324,7 @@ void generate(struct generator *gen)
     }
     output_line(out, "");
     for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
         output_line(out, "struct parsed_%%rule parsed_%%rule_get(struct owl_ref);");
@@ -335,7 +335,7 @@ void generate(struct generator *gen)
         for (uint32_t i = gen->combined->number_of_keyword_tokens;
          i < gen->combined->number_of_tokens; ++i) {
             struct token *token = &gen->combined->tokens[i];
-            struct rule *rule = &gen->grammar->rules[token->rule_index];
+            struct rule *rule = gen->grammar->rules[token->rule_index];
             if (rule->token_type != RULE_TOKEN_CUSTOM)
                 continue;
             set_substitution(out, "name", token->string, token->length,
@@ -379,7 +379,7 @@ void generate(struct generator *gen)
     output_line(out, "    struct source_range error_range;");
     output_line(out, "    size_t root_offset;");
     for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         if (!rule->is_token)
             continue;
         set_substitution(out, "rule", rule->name, rule->name_length,
@@ -436,7 +436,7 @@ void generate(struct generator *gen)
     output_line(out, "    tree->parse_tree[tree->next_offset++] = value & 0x7f;");
     output_line(out, "}");
     for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         set_unsigned_number_substitution(out, "rule-index", i);
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
@@ -517,7 +517,7 @@ void generate(struct generator *gen)
     output_line(out, "    write_tree(tree, end_location - start_location);");
     output_line(out, "    switch (rule) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         if (rule->is_token)
             continue;
         set_unsigned_number_substitution(out, "rule-index", i);
@@ -552,7 +552,7 @@ void generate(struct generator *gen)
     output_line(out, "    write_tree(tree, next_sibling ? offset - next_sibling : 0);");
     output_line(out, "    switch (rule) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         if (!rule->is_token)
             continue;
         set_unsigned_number_substitution(out, "rule-index", i);
@@ -602,14 +602,14 @@ void generate(struct generator *gen)
     struct bitset printable_rules = bitset_create_empty(n);
     bitset_add(&printable_rules, gen->grammar->root_rule);
     for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         for (uint32_t j = 0; j < rule->number_of_slots; ++j)
             bitset_add(&printable_rules, rule->slots[j].rule_index);
     }
     for (uint32_t i = 0; i < n; ++i) {
         if (!bitset_contains(&printable_rules, i))
             continue;
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
         output_line(out, "static void parsed_%%rule_print(struct owl_tree *tree, struct owl_ref ref, const char *slot_name, int indent);");
@@ -617,7 +617,7 @@ void generate(struct generator *gen)
     for (uint32_t i = 0; i < n; ++i) {
         if (!bitset_contains(&printable_rules, i))
             continue;
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
         output_line(out, "static void parsed_%%rule_print(struct owl_tree *tree, struct owl_ref ref, const char *slot_name, int indent) {");
@@ -661,7 +661,7 @@ void generate(struct generator *gen)
             struct slot slot = rule->slots[j];
             set_substitution(out, "slot-name", slot.name, slot.name_length,
              LOWERCASE_WITH_UNDERSCORES);
-            struct rule *slot_rule = &gen->grammar->rules[slot.rule_index];
+            struct rule *slot_rule = gen->grammar->rules[slot.rule_index];
             set_substitution(out, "slot-rule", slot_rule->name,
              slot_rule->name_length, LOWERCASE_WITH_UNDERSCORES);
             output_line(out, "        parsed_%%slot-rule_print(tree, it.%%slot-name, \"%%slot-name\", indent + 1);");
@@ -740,7 +740,7 @@ void generate(struct generator *gen)
     for (uint32_t i = gen->combined->number_of_keyword_tokens;
      i < gen->combined->number_of_tokens; ++i) {
         uint32_t rule_index = gen->combined->tokens[i].rule_index;
-        struct rule *rule = &gen->grammar->rules[rule_index];
+        struct rule *rule = gen->grammar->rules[rule_index];
         switch (rule->token_type) {
         case RULE_TOKEN_IDENTIFIER:
             set_unsigned_number_substitution(out, "identifier-token", i);
@@ -757,7 +757,7 @@ void generate(struct generator *gen)
     }
     output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info);");
     for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         if (!rule->is_token)
             continue;
         set_substitution(out, "rule", rule->name, rule->name_length,
@@ -1155,7 +1155,7 @@ void generate(struct generator *gen)
     output_line(out, "static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context) {");
     output_line(out, "    switch (parent) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         if (rule->number_of_slots == 0)
             continue;
         set_unsigned_number_substitution(out, "rule-index", i);
@@ -1178,7 +1178,7 @@ void generate(struct generator *gen)
     output_line(out, "static void fixity_associativity_precedence_lookup(int *fixity_associativity, int *precedence, uint32_t rule, uint32_t choice, void *context) {");
     output_line(out, "    switch (rule) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         if (rule->first_operator_choice == rule->number_of_choices)
             continue;
         set_unsigned_number_substitution(out, "rule-index", i);
@@ -1215,7 +1215,7 @@ void generate(struct generator *gen)
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
         set_unsigned_number_substitution(out, "rule-index", i);
         set_unsigned_number_substitution(out, "number-of-slots",
-         gen->grammar->rules[i].number_of_slots);
+         gen->grammar->rules[i]->number_of_slots);
         output_line(out, "    case %%rule-index: return %%number-of-slots;");
     }
     output_line(out, "    default: return 0;");
@@ -1224,7 +1224,7 @@ void generate(struct generator *gen)
     output_line(out, "static void left_right_operand_slots_lookup(uint32_t rule, uint32_t *left, uint32_t *right, uint32_t *operand, void *context) {");
     output_line(out, "    switch (rule) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
-        struct rule *rule = &gen->grammar->rules[i];
+        struct rule *rule = gen->grammar->rules[i];
         set_unsigned_number_substitution(out, "rule-index", i);
         set_unsigned_number_substitution(out, "left-slot",
          rule->left_slot_index);

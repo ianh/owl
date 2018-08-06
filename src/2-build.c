@@ -76,11 +76,11 @@ void build(struct grammar *grammar, struct owl_tree *tree,
             errorf("there are multiple rules named '%.*s'", (int)name.length,
              name.identifier);
             uint32_t other = find_rule(&context, name.identifier, name.length);
-            error.ranges[0] = grammar->rules[other].name_range;
+            error.ranges[0] = grammar->rules[other]->name_range;
             error.ranges[1] = name.range;
             exit_with_error();
         }
-        grammar->rules[index].name_range = name.range;
+        grammar->rules[index]->name_range = name.range;
     }
     if (grammar->number_of_rules == 0) {
         errorf("an owl grammar needs at least one rule of the form "
@@ -98,11 +98,11 @@ void build(struct grammar *grammar, struct owl_tree *tree,
             errorf("the rule '%.*s' has the same name as a token",
              (int)name.length, name.identifier);
             uint32_t other = find_rule(&context, name.identifier, name.length);
-            error.ranges[0] = grammar->rules[other].name_range;
+            error.ranges[0] = grammar->rules[other]->name_range;
             error.ranges[1] = name.range;
             exit_with_error();
         }
-        struct rule *rule = &context.grammar->rules[index];
+        struct rule *rule = context.grammar->rules[index];
         rule->is_token = true;
         rule->token_type = RULE_TOKEN_CUSTOM;
         rule->name_range = name.range;
@@ -137,7 +137,7 @@ void build(struct grammar *grammar, struct owl_tree *tree,
     for (r = g.rule; !r.empty; r = owl_next(r), rule_index++) {
         struct parsed_rule parsed_rule = parsed_rule_get(r);
         assert(rule_index < grammar->number_of_rules);
-        struct rule *rule = &grammar->rules[rule_index];
+        struct rule *rule = grammar->rules[rule_index];
         struct parsed_body body = parsed_body_get(parsed_rule.body);
         if (body.identifier.empty) {
             // This is a simple rule with no choices -- there's nothing we need
@@ -220,7 +220,7 @@ void build(struct grammar *grammar, struct owl_tree *tree,
     rule_index = 0;
     for (r = g.rule; !r.empty; r = owl_next(r), rule_index++) {
         struct parsed_rule parsed_rule = parsed_rule_get(r);
-        struct rule *rule = &grammar->rules[rule_index];
+        struct rule *rule = grammar->rules[rule_index];
 
         // Store the rule index in our context object so we don't have to pass
         // it around everywhere while we're building the rule's automata.
@@ -359,7 +359,7 @@ static void build_body_expression(struct context *ctx,
         error.ranges[0] = expr.range;
         exit_with_errorf("operators are nested too deeply");
     }
-    struct rule *rule = &ctx->grammar->rules[ctx->rule_index];
+    struct rule *rule = ctx->grammar->rules[ctx->rule_index];
     switch (expr.type) {
     case PARSED_CHOICE:
         for (; !expr.operand.empty; expr.operand = owl_next(expr.operand))
@@ -394,7 +394,7 @@ static void build_body_expression(struct context *ctx,
             error.ranges[0] = ident.range;
             exit_with_error();
         }
-        struct rule *referent = &ctx->grammar->rules[rule_index];
+        struct rule *referent = ctx->grammar->rules[rule_index];
         if (ctx->bracket_nesting == 0 && rule_index <= ctx->rule_index) {
             if (rule_index == ctx->rule_index) {
                 errorf("outside of guard brackets [ ], the rule '%.*s' cannot "
@@ -613,7 +613,7 @@ static uint32_t add_slot(struct context *ctx, struct rule *rule,
          sizeof(struct slot_choice_set) * slot->number_of_choice_sets);
         slot->choice_sets[0].symbol = symbol;
         slot->choice_sets[0].excluded_choices = bitset_create_empty(ctx->
-         grammar->rules[referenced_rule_index].number_of_choices);
+         grammar->rules[referenced_rule_index]->number_of_choices);
     }
     return slot_index;
 }
@@ -677,7 +677,7 @@ static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
         // Check for overlap with custom tokens (so exemplar generation in
         // ambiguity checking works properly).
         for (uint32_t i = 0; i < ctx->grammar->number_of_rules; ++i) {
-            struct rule *rule = &ctx->grammar->rules[i];
+            struct rule *rule = ctx->grammar->rules[i];
             if (!rule->is_token)
                 continue;
             if (rule->token_type != RULE_TOKEN_CUSTOM)
@@ -728,12 +728,13 @@ static uint32_t add_rule(struct context *ctx, const char *name, size_t len)
         abort();
     ctx->grammar->rules = grow_array(ctx->grammar->rules,
      &ctx->grammar->rules_allocated_bytes,
-     sizeof(struct rule) * ctx->grammar->number_of_rules);
-    ctx->grammar->rules[index].name = name;
-    ctx->grammar->rules[index].name_length = len;
-    ctx->grammar->rules[index].operand_slot_index = UINT32_MAX;
-    ctx->grammar->rules[index].left_slot_index = UINT32_MAX;
-    ctx->grammar->rules[index].right_slot_index = UINT32_MAX;
+     sizeof(struct rule *) * ctx->grammar->number_of_rules);
+    ctx->grammar->rules[index] = calloc(1, sizeof(struct rule));
+    ctx->grammar->rules[index]->name = name;
+    ctx->grammar->rules[index]->name_length = len;
+    ctx->grammar->rules[index]->operand_slot_index = UINT32_MAX;
+    ctx->grammar->rules[index]->left_slot_index = UINT32_MAX;
+    ctx->grammar->rules[index]->right_slot_index = UINT32_MAX;
     return index;
 }
 
@@ -747,14 +748,14 @@ static void add_token_rule(struct context *ctx, const char *name, size_t len,
         // reason to stop them from doing it.
         return;
     }
-    ctx->grammar->rules[index].is_token = true;
-    ctx->grammar->rules[index].token_type = type;
+    ctx->grammar->rules[index]->is_token = true;
+    ctx->grammar->rules[index]->token_type = type;
 }
 
 static uint32_t find_rule(struct context *ctx, const char *name, size_t len)
 {
     for (uint32_t i = 0; i < ctx->grammar->number_of_rules; ++i) {
-        struct rule *rule = &ctx->grammar->rules[i];
+        struct rule *rule = ctx->grammar->rules[i];
         if (rule->name_length != len)
             continue;
         if (memcmp(rule->name, name, len))
@@ -779,22 +780,23 @@ static void check_version(struct grammar_version version,
 void grammar_destroy(struct grammar *grammar)
 {
     for (uint32_t i = 0; i < grammar->number_of_rules; ++i) {
-        struct rule r = grammar->rules[i];
-        for (uint32_t j = 0; j < r.number_of_choices; ++j)
-            automaton_destroy(&r.choices[j].automaton);
-        free(r.choices);
-        for (uint32_t j = 0; j < r.number_of_brackets; ++j)
-            automaton_destroy(&r.brackets[j].automaton);
-        free(r.brackets);
-        for (uint32_t j = 0; j < r.number_of_slots; ++j) {
-            for (uint32_t k = 0; k < r.slots[j].number_of_choice_sets; ++k)
-                bitset_destroy(&r.slots[j].choice_sets[k].excluded_choices);
-            free(r.slots[j].choice_sets);
+        struct rule *r = grammar->rules[i];
+        for (uint32_t j = 0; j < r->number_of_choices; ++j)
+            automaton_destroy(&r->choices[j].automaton);
+        free(r->choices);
+        for (uint32_t j = 0; j < r->number_of_brackets; ++j)
+            automaton_destroy(&r->brackets[j].automaton);
+        free(r->brackets);
+        for (uint32_t j = 0; j < r->number_of_slots; ++j) {
+            for (uint32_t k = 0; k < r->slots[j].number_of_choice_sets; ++k)
+                bitset_destroy(&r->slots[j].choice_sets[k].excluded_choices);
+            free(r->slots[j].choice_sets);
         }
-        free(r.slots);
-        free(r.keyword_tokens);
-        free(r.token_exemplars);
-        automaton_destroy(&r.automaton);
+        free(r->slots);
+        free(r->keyword_tokens);
+        free(r->token_exemplars);
+        automaton_destroy(&r->automaton);
+        free(r);
     }
     free(grammar->rules);
     free(grammar->comment_tokens);

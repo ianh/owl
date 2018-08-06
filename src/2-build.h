@@ -34,7 +34,7 @@ void build(struct grammar *grammar, struct owl_tree *tree,
 void grammar_destroy(struct grammar *grammar);
 
 struct grammar {
-    struct rule *rules;
+    struct rule **rules;
     uint32_t rules_allocated_bytes;
     uint32_t number_of_rules;
 

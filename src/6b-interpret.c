@@ -303,7 +303,7 @@ void output_ambiguity(struct interpreter *interpreter,
             token_labels[i * 2].text = token.string;
             token_labels[i * 2].length = token.length;
         } else {
-            struct rule *rule = &interpreter->grammar->rules[token.rule_index];
+            struct rule *rule = interpreter->grammar->rules[token.rule_index];
             char *text = 0;
             size_t length = 0;
             do {
@@ -480,7 +480,7 @@ static void fill_rows(struct interpret_context *ctx,
         (*offset)++;
     }
     struct slot *s = node->slot;
-    struct rule *rule = &ctx->grammar->rules[node->rule_index];
+    struct rule *rule = ctx->grammar->rules[node->rule_index];
     uint32_t j = ctx->document.rows[depth + 1].number_of_labels++;
 
     char *str = 0;
@@ -596,7 +596,7 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
 #endif
     adjust_locations(&context, root);
     enum root_mode root_mode = root->depth > 1 &&
-     grammar->rules[grammar->root_rule].number_of_choices == 0 ?
+     grammar->rules[grammar->root_rule]->number_of_choices == 0 ?
      HIDE_ROOT_NODE : PRINT_ROOT_NODE;
     uint32_t n = context.next_action_offset;
     initialize_document(&context, root, n / 2, root_mode);
@@ -806,7 +806,7 @@ static symbol_id token_symbol(struct combined_grammar *combined,
 {
     for (uint32_t i = combined->number_of_keyword_tokens;
      i < combined->number_of_tokens; ++i) {
-        struct rule *rule = &grammar->rules[combined->tokens[i].rule_index];
+        struct rule *rule = grammar->rules[combined->tokens[i].rule_index];
         if (rule->token_type == type)
             return i;
     }
@@ -956,7 +956,7 @@ static bool read_custom_token(uint32_t *token, size_t *token_length,
     bool matched = false;
     for (uint32_t i = combined->number_of_keyword_tokens;
      i < combined->number_of_tokens; ++i) {
-        struct rule *r = &ctx->grammar->rules[combined->tokens[i].rule_index];
+        struct rule *r = ctx->grammar->rules[combined->tokens[i].rule_index];
         if (r->token_type != RULE_TOKEN_CUSTOM)
             continue;
         if (r->number_of_token_exemplars > 0) {
@@ -1056,7 +1056,7 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
     node->start_location = start_location;
     node->end_location = end_location;
     node->order = context->next_node_order++;
-    node->number_of_slots = context->grammar->rules[rule].number_of_slots;
+    node->number_of_slots = context->grammar->rules[rule]->number_of_slots;
     node->slots = calloc(node->number_of_slots,
      sizeof(struct interpret_node *));
     memcpy(node->slots, slots,
@@ -1068,7 +1068,7 @@ static struct interpret_node *finish_node(uint32_t rule, uint32_t choice,
         for (; slot; slot = slot->next_sibling) {
             if (slot->type != NODE_RULE)
                 continue;
-            struct rule *r = &context->grammar->rules[rule];
+            struct rule *r = context->grammar->rules[rule];
             if (i != r->operand_slot_index && i != r->left_slot_index &&
              i != r->right_slot_index)
                 slot->slot = &r->slots[i];
@@ -1111,9 +1111,9 @@ static struct interpret_node *finish_token(uint32_t rule,
 static uint32_t rule_lookup(uint32_t parent, uint32_t slot,
  struct interpret_context *context)
 {
-    if (slot >= context->grammar->rules[parent].number_of_slots)
+    if (slot >= context->grammar->rules[parent]->number_of_slots)
         abort();
-    return context->grammar->rules[parent].slots[slot].rule_index;
+    return context->grammar->rules[parent]->slots[slot].rule_index;
 }
 
 static uint32_t root_rule(struct interpret_context *context)
@@ -1124,7 +1124,7 @@ static uint32_t root_rule(struct interpret_context *context)
 static int fixity_associativity_lookup(uint32_t rule_index, uint32_t choice,
  struct interpret_context *context)
 {
-    struct rule *rule = &context->grammar->rules[rule_index];
+    struct rule *rule = context->grammar->rules[rule_index];
     assert(choice >= rule->first_operator_choice);
     struct choice op = rule->choices[choice];
     switch (op.fixity) {
@@ -1149,7 +1149,7 @@ static int fixity_associativity_lookup(uint32_t rule_index, uint32_t choice,
 static int precedence_lookup(uint32_t rule_index, uint32_t choice,
  struct interpret_context *context)
 {
-    struct rule *rule = &context->grammar->rules[rule_index];
+    struct rule *rule = context->grammar->rules[rule_index];
     assert(choice >= rule->first_operator_choice);
     return rule->choices[choice].precedence;
 }
@@ -1157,13 +1157,13 @@ static int precedence_lookup(uint32_t rule_index, uint32_t choice,
 static size_t number_of_slots_lookup(uint32_t rule,
  struct interpret_context *context)
 {
-    return context->grammar->rules[rule].number_of_slots;
+    return context->grammar->rules[rule]->number_of_slots;
 }
 
 static void left_right_operand_slots_lookup(uint32_t rule_index, uint32_t *left,
  uint32_t *right, uint32_t *operand, struct interpret_context *context)
 {
-    struct rule *rule = &context->grammar->rules[rule_index];
+    struct rule *rule = context->grammar->rules[rule_index];
     *left = rule->left_slot_index;
     *right = rule->right_slot_index;
     *operand = rule->operand_slot_index;

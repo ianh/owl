@@ -32,14 +32,14 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     symbol_id **bracket_symbols_for_rule = calloc(n, sizeof(symbol_id *));
     uint32_t tokens_allocated_bytes = 0;
 
-    struct rule *root = &grammar->rules[grammar->root_rule];
+    struct rule *root = grammar->rules[grammar->root_rule];
     result->root_rule_is_expression = root->number_of_choices >
      root->first_operator_choice;
 
     // First pass: collect all the keyword tokens into the `tokens` result
     // array, making sure to combine duplicates using `find_token`.
     for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &grammar->rules[i];
+        struct rule *rule = grammar->rules[i];
         // Allocate enough space for keyword renames and bracket renames.
         renames_for_rule[i] = calloc(rule->number_of_keyword_tokens +
          rule->number_of_brackets, sizeof(struct rename));
@@ -73,7 +73,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     // Second pass: add the "token class" tokens which are represented as rules
     // (like identifier, number, and so on) to the `tokens` result array.
     for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &grammar->rules[i];
+        struct rule *rule = grammar->rules[i];
         if (!rule->is_token)
             continue;
         symbol_id symbol = result->number_of_tokens++;
@@ -97,7 +97,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     // Third pass: build the rule automata.  We build the automata bottom-up by
     // visiting each rule in reverse order.
     for (uint32_t i = n - 1; i < n; --i) {
-        struct rule *rule = &grammar->rules[i];
+        struct rule *rule = grammar->rules[i];
         if (rule->is_token)
             continue;
         struct automaton automaton = {0};
@@ -226,7 +226,7 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
     struct automaton combined_bracket_automaton = {0};
     automaton_set_start_state(&combined_bracket_automaton, 0);
     for (uint32_t i = 0; i < n; ++i) {
-        struct rule *rule = &grammar->rules[i];
+        struct rule *rule = grammar->rules[i];
         if (rule->is_token || rule->number_of_brackets == 0)
             continue;
 
@@ -361,7 +361,7 @@ static void substitute_slots(struct grammar *grammar, struct rule *rule,
                         continue;
                     if (slot->rule_index < min_rule_index)
                         abort();
-                    struct rule *slot_rule = &grammar->rules[slot->rule_index];
+                    struct rule *slot_rule = grammar->rules[slot->rule_index];
                     uint16_t begin_action = 0;
                     uint16_t end_action = 0;
                     // Mark this slot in the action list.
