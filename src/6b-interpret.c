@@ -25,6 +25,16 @@
 #define BRACKET_SYMBOL_TOKEN 0xffffffff
 #define COMMENT_TOKEN 0xffffffff
 
+#define IF_NUMBER_TOKEN_ENABLED(...) \
+ ((((struct tokenizer_info *)tokenizer->info)->number_symbol \
+ != SYMBOL_EPSILON) && (__VA_ARGS__))
+#define IF_STRING_TOKEN_ENABLED(...) \
+ ((((struct tokenizer_info *)tokenizer->info)->string_symbol \
+ != SYMBOL_EPSILON) && (__VA_ARGS__))
+#define IF_IDENTIFIER_TOKEN_ENABLED(...) \
+ ((((struct tokenizer_info *)tokenizer->info)->identifier_symbol \
+ != SYMBOL_EPSILON) && (__VA_ARGS__))
+
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
  const char *text, void *info);
 static bool read_custom_token(uint32_t *token, size_t *token_length,

@@ -43,8 +43,8 @@ static symbol_id add_keyword_token(struct context *ctx, struct rule *rule,
  struct owl_ref string_ref, enum token_type type);
 
 static uint32_t add_rule(struct context *ctx, const char *name, size_t len);
-static void add_token_rule(struct context *ctx, const char *name, size_t len,
- enum rule_token_type type);
+static bool add_token_rule(struct context *ctx, enum rule_token_type type,
+ uint32_t *index, struct parsed_identifier ident);
 static uint32_t find_rule(struct context *ctx, const char *name, size_t len);
 
 enum version_capability {
@@ -123,12 +123,6 @@ void build(struct grammar *grammar, struct owl_tree *tree,
             rule->token_exemplars[index].range = string.range;
         }
     }
-
-    // Add rules for all built-in token types.
-    add_token_rule(&context, "identifier", strlen("identifier"),
-     RULE_TOKEN_IDENTIFIER);
-    add_token_rule(&context, "number", strlen("number"), RULE_TOKEN_NUMBER);
-    add_token_rule(&context, "string", strlen("string"), RULE_TOKEN_STRING);
 
     // Now we fill in the choices for each rule.  We need to do this in a
     // separate pass in case there are "exception" specifiers which exclude
@@ -390,9 +384,13 @@ static void build_body_expression(struct context *ctx,
         }
         uint32_t rule_index = find_rule(ctx, rule_name, rule_name_length);
         if (rule_index == UINT32_MAX) {
-            errorf("unknown rule or token");
-            error.ranges[0] = ident.range;
-            exit_with_error();
+            if (!add_token_rule(ctx, RULE_TOKEN_IDENTIFIER, &rule_index, ident)
+             && !add_token_rule(ctx, RULE_TOKEN_NUMBER, &rule_index, ident)
+             && !add_token_rule(ctx, RULE_TOKEN_STRING, &rule_index, ident)) {
+                errorf("unknown rule or token");
+                error.ranges[0] = ident.range;
+                exit_with_error();
+            }
         }
         struct rule *referent = ctx->grammar->rules[rule_index];
         if (ctx->bracket_nesting == 0 && rule_index <= ctx->rule_index) {
@@ -738,18 +736,25 @@ static uint32_t add_rule(struct context *ctx, const char *name, size_t len)
     return index;
 }
 
-static void add_token_rule(struct context *ctx, const char *name, size_t len,
- enum rule_token_type type)
+static bool add_token_rule(struct context *ctx, enum rule_token_type type,
+ uint32_t *index, struct parsed_identifier ident)
 {
-    uint32_t index = add_rule(ctx, name, len);
-    if (index == UINT32_MAX) {
-        // Just skip this token rule if there's already an explicit rule with
-        // that name.  If the user wants to name a rule 'identifier', there's no
-        // reason to stop them from doing it.
-        return;
+    const char *name;
+    switch (type) {
+    case RULE_TOKEN_IDENTIFIER: name = "identifier"; break;
+    case RULE_TOKEN_NUMBER: name = "number"; break;
+    case RULE_TOKEN_STRING: name = "string"; break;
+    default: return false;
     }
-    ctx->grammar->rules[index]->is_token = true;
-    ctx->grammar->rules[index]->token_type = type;
+    size_t len = strlen(name);
+    if (ident.length != len || memcmp(ident.identifier, name, len) != 0)
+        return false;
+    *index = add_rule(ctx, name, len);
+    if (*index == UINT32_MAX)
+        return false;
+    ctx->grammar->rules[*index]->is_token = true;
+    ctx->grammar->rules[*index]->token_type = type;
+    return true;
 }
 
 static uint32_t find_rule(struct context *ctx, const char *name, size_t len)

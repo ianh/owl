@@ -30,6 +30,16 @@
 #define CUSTOM_TOKEN_DATA(...) do { } while (0)
 #endif
 
+#ifndef IF_NUMBER_TOKEN_ENABLED
+#define IF_NUMBER_TOKEN_ENABLED(...) __VA_ARGS__
+#endif
+#ifndef IF_STRING_TOKEN_ENABLED
+#define IF_STRING_TOKEN_ENABLED(...) __VA_ARGS__
+#endif
+#ifndef IF_IDENTIFIER_TOKEN_ENABLED
+#define IF_IDENTIFIER_TOKEN_ENABLED(...) __VA_ARGS__
+#endif
+
 #ifndef WRITE_NUMBER_TOKEN
 #define WRITE_NUMBER_TOKEN(...)
 #endif
@@ -215,8 +225,9 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
             custom_token = true;
             end_token = false;
             comment = false;
-        } else if (char_is_numeric(c) ||
-         (c == '.' && char_is_numeric(text[offset + 1]))) {
+        }
+        if (IF_NUMBER_TOKEN_ENABLED(char_is_numeric(c) ||
+         (c == '.' && char_is_numeric(text[offset + 1])))) {
             // Number.
             const char *start = (const char *)text + offset;
             char *rest = 0;
@@ -228,7 +239,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
                 comment = false;
                 token = NUMBER_TOKEN;
             }
-        } else if (c == '\'' || c == '"') {
+        } else if (IF_STRING_TOKEN_ENABLED(c == '\'' || c == '"')) {
             // String.
             size_t string_offset = offset + 1;
             while (text[string_offset] != '\0') {
@@ -248,7 +259,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
                 }
                 string_offset++;
             }
-        } else if (char_starts_identifier(c)) {
+        } else if (IF_IDENTIFIER_TOKEN_ENABLED(char_starts_identifier(c))) {
             // Identifier.
             size_t identifier_offset = offset + 1;
             while (char_continues_identifier(text[identifier_offset],
