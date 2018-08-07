@@ -423,7 +423,7 @@ static struct val eval_expr(struct owl_ref expr_ref)
         if (left.type == TYPE_STRING || right.type == TYPE_STRING) {
             int left_size = val_snprint(NULL, 0, left);
             int right_size = val_snprint(NULL, 0, right);
-            table_id string = alloc_string(left_size + right_size);
+            table_id string = alloc_string(left_size + right_size + 1);
             val_snprint(get_string(string), left_size + 1, left);
             val_snprint(get_string(string) + left_size, right_size + 1, right);
             get_string(string)[left_size + right_size] = '\0';
