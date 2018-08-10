@@ -203,11 +203,11 @@ It turns out there's a [body of research](http://madhu.cs.illinois.edu/vpa/) whi
 
 - Rajeev Alur and P. Madhusudan. 2004. [Visibly Pushdown Languages](http://madhu.cs.illinois.edu/stoc04.pdf). [[doi](https://doi.org/10.1145/1007352.1007390)]
 
-(or, as it has been called earlier, an input-driven pushdown language:
+or, as it has been called earlier, an input-driven pushdown language:
 
-- Kurt Mehlhorn. 1980. [Pebbling Mountain Ranges and its Application to DCFL-Recognition](https://pdfs.semanticscholar.org/1c9b/c1ae6b2484b236bf9d674b8d10bdaad95eb1.pdf). [[doi](https://dx.doi.org/10.1007/3-540-10003-2_89)])
+- Kurt Mehlhorn. 1980. [Pebbling Mountain Ranges and its Application to DCFL-Recognition](https://pdfs.semanticscholar.org/1c9b/c1ae6b2484b236bf9d674b8d10bdaad95eb1.pdf). [[doi](https://dx.doi.org/10.1007/3-540-10003-2_89)]
 
-These languages share a lot of nice properties with regular languages, including closure under union and concatenation (which are useful for composing VPLs out of atomic pieces).
+These languages share a lot of nice properties with regular languages, including closure under union and concatenation (which are useful for composing VPL/IDPLs out of atomic pieces).
 
 VPLs are often used for program analysis, where the nesting tokens represent calls and returns in an execution trace.  There haven't been many attempts to apply this theory to text parsing, though.  This presentation about visibly pushdown applicative parser combinators in Haskell is the only one I've found:
 
