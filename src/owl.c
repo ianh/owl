@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
         case NO_PARAMETER:
             if (!strcmp(short_name, "h") || !strcmp(long_name, "help"))
                 needs_help = true;
-            if (!strcmp(short_name, "V") || !strcmp(long_name, "version")) {
+            else if (!strcmp(short_name, "V") || !strcmp(long_name, "version")) {
                 fprintf(stderr, "%s\n", version_string);
                 return 0;
             } else if (!strcmp(short_name, "i") || !strcmp(long_name, "input")) {
