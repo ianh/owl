@@ -37,8 +37,8 @@ Patterns can be combined in the following ways to match longer sequences:
 | `(a)` | The same thing as `a`. | `(a)` is the same as `a` |
 | `a b` | `a` followed by `b`. | `a ''` is the same as `a` |
 | `a \| b` | Either `a` or `b`. | `a \| a` is the same as `a` |
-| `a?` | Either `a` or nothing. | `a?` is the same as `a | ''` |
-| `a*` | Any number of `a` (including no `a`). | `(a* b*)*` is the same as `(a | b)*` |
+| `a?` | Either `a` or nothing. | `a?` is the same as `a \| ''` |
+| `a*` | Any number of `a` (including no `a`). | `(a* b*)*` is the same as `(a \| b)*` |
 | `a+` | One or more `a`. | `a+` is the same as `a a*` |
 
 Concatenation `a b` binds more tightly than choice `|`, so `a b | c` is the same as `(a b) | c`.
