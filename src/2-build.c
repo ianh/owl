@@ -21,7 +21,7 @@ struct context {
 };
 
 // Limit nesting depth to avoid stack overflow.
-#define MAX_EXPRESSION_NESTING 3000
+#define MAX_EXPRESSION_NESTING 1000
 
 struct boundary_states;
 static void build_body_automaton(struct context *ctx,
