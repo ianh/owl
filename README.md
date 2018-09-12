@@ -41,6 +41,8 @@ $ make
 
 Run `make install` to copy the `owl` tool into `/usr/local/bin/owl`.
 
+On Windows, [MSYS2](http://www.msys2.org/) is the supported way to build `owl`.  In the MSYS shell, run `pacman -S make gcc git` to install the proper dependencies before running the commands above.  To install, use `make PREFIX=/usr install` (which copies to `/usr/bin/owl` instead).
+
 Owl has two modes of operation&mdash;**interpreter mode** and **compilation mode**.
 
 In **interpreter mode**, Owl reads your grammar file, then parses standard input on the fly, producing a visual representation of the parse tree as soon as you hit `^D`:
