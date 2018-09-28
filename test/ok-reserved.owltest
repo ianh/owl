@@ -1,0 +1,5 @@
+x
+---
+# Reserved slot names are OK to use as rule names or choice names.
+struct = range@x
+range = 'x' : enum

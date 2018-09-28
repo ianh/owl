@@ -571,6 +571,33 @@ static uint32_t add_slot(struct context *ctx, struct rule *rule,
  const char *slot_name, size_t slot_name_length, uint32_t referenced_rule_index,
  struct source_range range, const char *error_reason)
 {
+    static const char * const reserved[] = {
+        // By the C standard.
+        "auto", "else", "long", "switch", "break", "enum", "register",
+        "typedef", "case", "extern", "return", "union", "char", "float",
+        "short", "unsigned", "const", "for", "signed", "void", "continue",
+        "goto", "sizeof", "volatile", "default", "if", "static", "while", "do",
+        "int", "struct", "double", 0,
+
+        // By Owl itself.
+        "range", "type",
+    };
+    bool c_keyword = true;
+    for (int i = 0; i < sizeof(reserved) / sizeof(reserved[0]); ++i) {
+        if (reserved[i] == 0) {
+            c_keyword = false;
+            continue;
+        }
+        if (strncmp(reserved[i], slot_name, slot_name_length))
+            continue;
+        if (reserved[i][slot_name_length] != '\0')
+            continue;
+        errorf("the name '%s' is a reserved %s and cannot be used to refer to "
+         "a rule or token", reserved[i], c_keyword ? "C keyword" :
+         "field name");
+        error.ranges[0] = range;
+        exit_with_error();
+    }
     uint32_t slot_index = 0;
     for (; slot_index < rule->number_of_slots; ++slot_index) {
         struct slot *slot = &rule->slots[slot_index];

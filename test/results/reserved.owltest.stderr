@@ -1,0 +1,6 @@
+error: the name 'struct' is a reserved C keyword and cannot be used to refer to 
+a rule or token
+
+  y = struct
+      ~~~~~~
+

@@ -1,0 +1,6 @@
+error: the name 'range' is a reserved field name and cannot be used to refer to 
+a rule or token
+
+  a = range
+      ~~~~~
+
