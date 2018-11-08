@@ -276,7 +276,9 @@ void build(struct grammar *grammar, struct owl_tree *tree,
     }
 
     // Add whitespace tokens.
+    bool specified_whitespace = false;
     while (!g.whitespace.empty) {
+        specified_whitespace = true;
         struct parsed_whitespace w = parsed_whitespace_get(g.whitespace);
         check_version(version, WHITESPACE, w.range);
         while (!w.string.empty) {
@@ -310,6 +312,20 @@ void build(struct grammar *grammar, struct owl_tree *tree,
             }
         }
         g.whitespace = owl_next(g.whitespace);
+    }
+
+    // Use default whitespace if none is specified.
+    if (!specified_whitespace) {
+        struct token tokens[] = {
+            { .string = " ", .length = 1, .type = TOKEN_WHITESPACE },
+            { .string = "\t", .length = 1, .type = TOKEN_WHITESPACE },
+            { .string = "\n", .length = 1, .type = TOKEN_WHITESPACE },
+            { .string = "\r", .length = 1, .type = TOKEN_WHITESPACE },
+        };
+        grammar->whitespace_tokens = grow_array(grammar->whitespace_tokens,
+         &grammar->whitespace_tokens_allocated_bytes, sizeof(tokens));
+        memcpy(grammar->whitespace_tokens, tokens, sizeof(tokens));
+        grammar->number_of_whitespace_tokens = sizeof(tokens)/sizeof(tokens[0]);
     }
 
     // Finally, add any comment tokens to the grammar.
