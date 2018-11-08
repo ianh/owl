@@ -3,6 +3,7 @@
 #define EVALUATE_MACROS_AND_STRINGIFY(...) #__VA_ARGS__
 #define TOKEN_T %%token-type
 #define STATE_T %%state-type
+#define READ_WHITESPACE read_whitespace
 #define READ_KEYWORD_TOKEN read_keyword_token
 #define READ_CUSTOM_TOKEN %%read-custom-token
 #define NUMBER_TOKEN_DATA NUMBER_TOKEN_DATA
@@ -50,8 +51,13 @@
 #include <stdio.h>
 #include <string.h>
 
-static void generate_keyword_reader(struct generator *gen,
- struct generator_output *out);
+struct generated_token {
+    struct token token;
+    struct generated_token *prefix;
+};
+
+static void generate_keyword_reader(struct generated_token *tokens,
+ uint32_t number_of_tokens, struct generator_output *out);
 
 static void generate_action_table(struct generator *gen,
  struct generator_output *out);
@@ -780,6 +786,7 @@ void generate(struct generator *gen)
         output_line(out, "#define IF_STRING_TOKEN(...) if (0) { /* no string tokens */  }");
     else
         output_line(out, "#define IF_STRING_TOKEN(cond, ...) if (cond) __VA_ARGS__");
+    output_line(out, "static size_t read_whitespace(const char *text, void *info);");
     output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info);");
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = gen->grammar->rules[i];
@@ -1176,7 +1183,37 @@ void generate(struct generator *gen)
     output_line(out, "    return true;");
     output_line(out, "}");
     generate_action_table(gen, out);
-    generate_keyword_reader(gen, out);
+    output_line(out, "static size_t read_whitespace(const char *text, void *info) {");
+    struct generated_token *tokens = malloc(sizeof(struct generated_token) *
+     gen->grammar->number_of_whitespace_tokens);
+    if (!tokens) {
+        fputs("critical error: out of memory\n", stderr);
+        exit(-1);
+    }
+    for (uint32_t i = 0; i < gen->grammar->number_of_whitespace_tokens; ++i)
+        tokens[i].token = gen->grammar->whitespace_tokens[i];
+    generate_keyword_reader(tokens, gen->grammar->number_of_whitespace_tokens,
+     out);
+    free(tokens);
+    output_line(out, "}");
+    output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info) {");
+    uint32_t number_of_tokens = gen->combined->number_of_keyword_tokens +
+     gen->grammar->number_of_comment_tokens;
+    tokens = malloc(sizeof(struct generated_token) * (size_t)number_of_tokens);
+    if (!tokens) {
+        fputs("critical error: out of memory\n", stderr);
+        exit(-1);
+    }
+    uint32_t i = 0;
+    for (; i < gen->combined->number_of_keyword_tokens; ++i)
+        tokens[i].token = gen->combined->tokens[i];
+    for (uint32_t j = 0; j < gen->grammar->number_of_comment_tokens; ++j)
+        tokens[i + j].token = gen->grammar->comment_tokens[j];
+    qsort(tokens, number_of_tokens, sizeof(struct generated_token),
+     compare_tokens);
+    generate_keyword_reader(tokens, number_of_tokens, out);
+    free(tokens);
+    output_line(out, "}");
     output_line(out, "static uint32_t rule_lookup(uint32_t parent, uint32_t slot, void *context) {");
     output_line(out, "    switch (parent) {");
     for (uint32_t i = 0; i < gen->grammar->number_of_rules; ++i) {
@@ -1270,11 +1307,6 @@ void generate(struct generator *gen)
     output_destroy(out);
 }
 
-struct generated_token {
-    struct token token;
-    struct generated_token *prefix;
-};
-
 static void generate_keyword(struct generator_output *out, struct token keyword,
  size_t indentation)
 {
@@ -1282,40 +1314,29 @@ static void generate_keyword(struct generator_output *out, struct token keyword,
         abort();
     set_unsigned_number_substitution(out, "token-length",
      (uint32_t)keyword.length);
-    output_indentation(out, indentation);
-    if (keyword.type == TOKEN_END)
-        output_line(out, "*end_token = true;");
-    else
-        output_line(out, "*end_token = false;");
-    output_indentation(out, indentation);
-    if (keyword.type == TOKEN_START_LINE_COMMENT)
-        output_line(out, "*token = %%comment-token;");
-    else {
-        set_unsigned_number_substitution(out, "token-index", keyword.symbol);
-        output_line(out, "*token = %%token-index;");
+    if (keyword.type != TOKEN_WHITESPACE) {
+        output_indentation(out, indentation);
+        if (keyword.type == TOKEN_END)
+            output_line(out, "*end_token = true;");
+        else
+            output_line(out, "*end_token = false;");
+        output_indentation(out, indentation);
+        if (keyword.type == TOKEN_START_LINE_COMMENT)
+            output_line(out, "*token = %%comment-token;");
+        else {
+            set_unsigned_number_substitution(out, "token-index",
+             keyword.symbol);
+            output_line(out, "*token = %%token-index;");
+        }
     }
     output_indentation(out, indentation);
     output_line(out, "return %%token-length;");
 }
 
-static void generate_keyword_reader(struct generator *gen,
- struct generator_output *out) {
-    output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info) {");
+static void generate_keyword_reader(struct generated_token *tokens,
+ uint32_t number_of_tokens, struct generator_output *out) {
     output_line(out, "    switch (text[0]) {");
-    uint32_t n = gen->combined->number_of_keyword_tokens +
-     gen->grammar->number_of_comment_tokens;
-    struct generated_token *tokens = malloc(sizeof(struct generated_token) *
-     (size_t)n);
-    if (!tokens) {
-        fputs("critical error: out of memory\n", stderr);
-        exit(-1);
-    }
-    uint32_t i = 0;
-    for (; i < gen->combined->number_of_keyword_tokens; ++i)
-        tokens[i].token = gen->combined->tokens[i];
-    for (uint32_t j = 0; j < gen->grammar->number_of_comment_tokens; ++j)
-        tokens[i + j].token = gen->grammar->comment_tokens[j];
-    qsort(tokens, n, sizeof(struct generated_token), compare_tokens);
+    uint32_t n = number_of_tokens;
     size_t shared_length = 0;
     struct generated_token *prefix = 0;
     for (uint32_t i = 0; i < n; ++i) {
@@ -1402,11 +1423,9 @@ static void generate_keyword_reader(struct generator *gen,
             shared_length--;
         }
     }
-    free(tokens);
     output_line(out, "    default:");
     output_line(out, "        return 0;");
     output_line(out, "    }");
-    output_line(out, "}");
 }
 
 static void generate_reachability_mask_check(struct generator *gen,
