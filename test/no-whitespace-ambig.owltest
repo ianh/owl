@@ -1,0 +1,4 @@
+---
+.whitespace
+x = y y
+y = 'a' | 'a' 'a'

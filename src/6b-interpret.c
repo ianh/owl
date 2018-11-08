@@ -297,6 +297,24 @@ static void output_ambiguity_path(struct interpreter *interpreter,
 void output_ambiguity(struct interpreter *interpreter,
  struct ambiguity *ambiguity, FILE *output)
 {
+    // Find a suitable whitespace token.
+    struct token whitespace_token = {0};
+    uint32_t number_of_whitespace_tokens =
+     interpreter->grammar->number_of_whitespace_tokens;
+    // Look for a ' ' token.
+    uint32_t token_index = find_token(interpreter->grammar->whitespace_tokens,
+     number_of_whitespace_tokens, " ", 1, TOKEN_DONT_CARE, 0);
+    if (token_index < number_of_whitespace_tokens)
+        whitespace_token = interpreter->grammar->whitespace_tokens[token_index];
+    else if (number_of_whitespace_tokens > 0)
+        whitespace_token = interpreter->grammar->whitespace_tokens[0];
+    else {
+        errorf("no whitespace specified - ambiguities may be inaccurate");
+        error.level = WARNING;
+        print_error();
+        error = (struct error){0};
+    }
+
     struct label *token_labels = calloc(ambiguity->number_of_tokens * 2 + 1,
      sizeof(struct label));
     struct combined_grammar *combined = interpreter->combined;
@@ -378,8 +396,8 @@ void output_ambiguity(struct interpreter *interpreter,
             token_labels[i * 2].length = length;
         }
         token_labels[i * 2 + 1] = (struct label){
-            .text = " ",
-            .length = 1,
+            .text = whitespace_token.string,
+            .length = whitespace_token.length,
             .start = i * 4 + 2,
             .end = i * 4 + 3,
         };

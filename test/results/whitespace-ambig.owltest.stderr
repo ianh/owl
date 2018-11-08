@@ -1,16 +1,16 @@
 error: this grammar is ambiguous
 
-. a a a 
+. axaxax
 
   can be parsed in two different ways: as
 
-. a a a 
+. axaxax
   y-- y 
   x---- 
 
   or as
 
-. a a a 
+. axaxax
   y y-- 
   x---- 
 
