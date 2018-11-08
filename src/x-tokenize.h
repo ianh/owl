@@ -18,6 +18,10 @@
 #define TOKENIZE_BODY(...) __VA_ARGS__
 #endif
 
+#ifndef READ_WHITESPACE
+#define READ_WHITESPACE(...) (0)
+#endif
+
 #ifndef READ_KEYWORD_TOKEN
 #define READ_KEYWORD_TOKEN(...) (0)
 #endif
@@ -203,9 +207,11 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
         char c = text[offset];
         if (c == '\0')
             break;
-        if (char_is_whitespace(c)) {
-            whitespace++;
-            offset++;
+        size_t whitespace_length = READ_WHITESPACE(text + offset,
+         tokenizer->info);
+        if (whitespace_length > 0) {
+            whitespace += whitespace_length;
+            offset += whitespace_length;
             continue;
         }
         TOKEN_T token = -1;

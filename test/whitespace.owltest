@@ -1,5 +1,4 @@
-xbxxaxxxxxaaxxxb
----
+xbxxaxxxxxaaxxxb---
 .whitespace 'x'
 file = elem*
 elem = 'a' | 'b'

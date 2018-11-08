@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdio.h>
 
+#define READ_WHITESPACE read_whitespace
 #define READ_KEYWORD_TOKEN read_keyword_token
 #define READ_CUSTOM_TOKEN read_custom_token
 
@@ -35,6 +36,7 @@
  if ((((struct tokenizer_info *)tokenizer->info)->identifier_symbol \
  != SYMBOL_EPSILON) && (cond)) __VA_ARGS__
 
+static size_t read_whitespace(const char *text, void *info);
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
  const char *text, void *info);
 static bool read_custom_token(uint32_t *token, size_t *token_length,
@@ -924,6 +926,19 @@ static void destroy_parse_tree(struct interpret_node *tree)
         free(tree);
         tree = next;
     }
+}
+
+static size_t read_whitespace(const char *text, void *info)
+{
+    struct grammar *grammar = ((struct tokenizer_info *)info)->context->grammar;
+    size_t max_len = 0;
+    for (uint32_t i = 0; i < grammar->number_of_whitespace_tokens; ++i) {
+        struct token token = grammar->whitespace_tokens[i];
+        if (token.length > max_len && !strncmp((const char *)text, token.string,
+         token.length))
+            max_len = token.length;
+    }
+    return max_len;
 }
 
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
