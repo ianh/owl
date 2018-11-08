@@ -1,0 +1,6 @@
+a foo
+a bar
+---
+.whitespace ' ' '\t'
+program = (line? '\n')*
+line = 'a' identifier
