@@ -42,6 +42,10 @@ struct grammar {
     uint32_t comment_tokens_allocated_bytes;
     uint32_t number_of_comment_tokens;
 
+    struct token *whitespace_tokens;
+    uint32_t whitespace_tokens_allocated_bytes;
+    uint32_t number_of_whitespace_tokens;
+
     // This is the starting "root" rule's index.
     uint32_t root_rule;
 };
@@ -217,6 +221,9 @@ enum token_type {
 
     // A token can also start a line comment.
     TOKEN_START_LINE_COMMENT,
+
+    // ...or be treated as whitespace.
+    TOKEN_WHITESPACE,
 
     // The TOKEN_DONT_CARE option is used to search for tokens of any type.
     TOKEN_DONT_CARE,

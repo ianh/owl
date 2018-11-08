@@ -1,0 +1,7 @@
+error: specifying whitespace is unsupported in versions before owl.v3
+
+  #using owl.v2
+         ~~~~~~
+  .whitespace 'x'
+  ~~~~~~~~~~~~~~~
+

@@ -18,10 +18,11 @@ static FILE *fopen_or_error(const char *filename, const char *mode);
 static char *read_string(FILE *file);
 static void write_to_output(const char *string, size_t len);
 
-static const char *version_string = "owl.v2";
+static const char *version_string = "owl.v3";
 static const char *compatible_versions[] = {
     "owl.v1",
     "owl.v2",
+    "owl.v3",
 };
 
 int main(int argc, char *argv[])

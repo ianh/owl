@@ -1,0 +1,16 @@
+error: this grammar is ambiguous
+
+. a a a 
+
+  can be parsed in two different ways: as
+
+. a a a 
+  y-- y 
+  x---- 
+
+  or as
+
+. a a a 
+  y y-- 
+  x---- 
+

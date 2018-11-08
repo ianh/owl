@@ -1,0 +1,7 @@
+error: this whitespace was specified twice
+
+  .whitespace 'x'
+              ~~~
+  .whitespace 'x'
+              ~~~
+

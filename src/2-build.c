@@ -49,6 +49,7 @@ static uint32_t find_rule(struct context *ctx, const char *name, size_t len);
 
 enum version_capability {
     CUSTOM_TOKENS,
+    WHITESPACE,
 };
 static void check_version(struct grammar_version version,
  enum version_capability capability, struct source_range range);
@@ -272,6 +273,43 @@ void build(struct grammar *grammar, struct owl_tree *tree,
                  strlen("operand"), rule_index, (struct source_range){0}, buf);
             }
         }
+    }
+
+    // Add whitespace tokens.
+    while (!g.whitespace.empty) {
+        struct parsed_whitespace w = parsed_whitespace_get(g.whitespace);
+        check_version(version, WHITESPACE, w.range);
+        while (!w.string.empty) {
+            struct parsed_string s = parsed_string_get(w.string);
+            if (s.length == 0) {
+                error.ranges[0] = s.range;
+                exit_with_errorf("whitespace can't be empty");
+            }
+            w.string = owl_next(w.string);
+            uint32_t token_index = find_token(grammar->whitespace_tokens,
+             grammar->number_of_whitespace_tokens, s.string, s.length,
+             TOKEN_WHITESPACE, &s.range);
+            if (token_index >= grammar->number_of_whitespace_tokens) {
+                if (token_index == UINT32_MAX)
+                    abort();
+                grammar->number_of_whitespace_tokens = token_index + 1;
+                grammar->whitespace_tokens =
+                 grow_array(grammar->whitespace_tokens,
+                 &grammar->whitespace_tokens_allocated_bytes,
+                 sizeof(struct token) * grammar->number_of_whitespace_tokens);
+                grammar->whitespace_tokens[token_index] = (struct token){
+                    .string = s.string,
+                    .length = s.length,
+                    .type = TOKEN_WHITESPACE,
+                    .range = s.range
+                };
+            } else {
+                error.ranges[0] = grammar->whitespace_tokens[token_index].range;
+                error.ranges[1] = s.range;
+                exit_with_errorf("this whitespace was specified twice");
+            }
+        }
+        g.whitespace = owl_next(g.whitespace);
     }
 
     // Finally, add any comment tokens to the grammar.
@@ -800,12 +838,24 @@ static uint32_t find_rule(struct context *ctx, const char *name, size_t len)
 static void check_version(struct grammar_version version,
  enum version_capability capability, struct source_range range)
 {
-    assert(capability == CUSTOM_TOKENS);
-    if (!strcmp(version.string, "owl.v1")) {
-        error.ranges[0] = range;
-        error.ranges[1] = version.range;
-        exit_with_errorf("custom tokens are unsupported in versions before "
-         "owl.v2");
+    switch (capability) {
+    case CUSTOM_TOKENS:
+        if (!strcmp(version.string, "owl.v1")) {
+            error.ranges[0] = range;
+            error.ranges[1] = version.range;
+            exit_with_errorf("custom tokens are unsupported in versions before "
+             "owl.v2");
+        }
+        break;
+    case WHITESPACE:
+        if (!strcmp(version.string, "owl.v1") || !strcmp(version.string,
+         "owl.v2")) {
+            error.ranges[0] = range;
+            error.ranges[1] = version.range;
+            exit_with_errorf("specifying whitespace is unsupported in versions "
+             "before owl.v3");
+        }
+        break;
     }
 }
 
