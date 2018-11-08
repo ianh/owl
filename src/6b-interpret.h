@@ -15,6 +15,7 @@ struct interpreter {
     struct deterministic_grammar *deterministic;
 
     struct terminal_info terminal_info;
+    struct grammar_version version;
 };
 
 // `text` is a zero-terminated string.

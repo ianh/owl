@@ -47,10 +47,6 @@ static bool add_token_rule(struct context *ctx, enum rule_token_type type,
  uint32_t *index, struct parsed_identifier ident);
 static uint32_t find_rule(struct context *ctx, const char *name, size_t len);
 
-enum version_capability {
-    CUSTOM_TOKENS,
-    WHITESPACE,
-};
 static void check_version(struct grammar_version version,
  enum version_capability capability, struct source_range range);
 
@@ -853,26 +849,38 @@ static uint32_t find_rule(struct context *ctx, const char *name, size_t len)
     return UINT32_MAX;
 }
 
-static void check_version(struct grammar_version version,
- enum version_capability capability, struct source_range range)
+bool version_capable(struct grammar_version version,
+ enum version_capability capability)
 {
     switch (capability) {
     case CUSTOM_TOKENS:
-        if (!strcmp(version.string, "owl.v1")) {
-            error.ranges[0] = range;
-            error.ranges[1] = version.range;
-            exit_with_errorf("custom tokens are unsupported in versions before "
-             "owl.v2");
-        }
+        return strcmp(version.string, "owl.v1") != 0;
+    case WHITESPACE:
+    case SINGLE_CHAR_ESCAPES:
+        return strcmp(version.string, "owl.v1") != 0 &&
+         strcmp(version.string, "owl.v2") != 0;
+    default:
+        return false;
+    }
+}
+
+static void check_version(struct grammar_version version,
+ enum version_capability capability, struct source_range range)
+{
+    if (version_capable(version, capability))
+        return;
+    error.ranges[0] = range;
+    error.ranges[1] = version.range;
+    switch (capability) {
+    case CUSTOM_TOKENS:
+        exit_with_errorf("custom tokens are unsupported in versions before "
+         "owl.v2");
         break;
     case WHITESPACE:
-        if (!strcmp(version.string, "owl.v1") || !strcmp(version.string,
-         "owl.v2")) {
-            error.ranges[0] = range;
-            error.ranges[1] = version.range;
-            exit_with_errorf("specifying whitespace is unsupported in versions "
-             "before owl.v3");
-        }
+        exit_with_errorf("specifying whitespace is unsupported in versions "
+         "before owl.v3");
+        break;
+    default:
         break;
     }
 }

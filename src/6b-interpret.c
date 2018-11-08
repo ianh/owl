@@ -19,6 +19,10 @@
 #define ALLOW_DASHES_IN_IDENTIFIERS(info) \
  (((struct tokenizer_info *)info)->allow_dashes_in_identifiers)
 
+#define ESCAPE_CHAR(c, info) \
+ (((struct tokenizer_info *)info)->single_char_escapes ? \
+  ESCAPE_CHAR_SINGLE(c, info) : (c))
+
 #define IDENTIFIER_TOKEN \
  (((struct tokenizer_info *)tokenizer->info)->identifier_symbol)
 #define NUMBER_TOKEN (((struct tokenizer_info *)tokenizer->info)->number_symbol)
@@ -56,6 +60,7 @@ struct tokenizer_info {
     symbol_id number_symbol;
     symbol_id string_symbol;
     bool allow_dashes_in_identifiers;
+    bool single_char_escapes;
 };
 
 struct interpret_node;
@@ -586,6 +591,8 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
         .string_symbol = token_symbol(combined, grammar, RULE_TOKEN_STRING),
         .allow_dashes_in_identifiers =
          SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(combined),
+        .single_char_escapes = version_capable(interpreter->version,
+         SINGLE_CHAR_ESCAPES),
     };
     struct owl_default_tokenizer tokenizer = {
         .text = text,

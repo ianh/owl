@@ -10,6 +10,7 @@ struct generator {
     struct grammar *grammar;
     struct combined_grammar *combined;
     struct deterministic_grammar *deterministic;
+    struct grammar_version version;
 };
 
 void generate(struct generator *);

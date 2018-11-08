@@ -274,6 +274,7 @@ int main(int argc, char *argv[])
             .grammar = &grammar,
             .combined = &combined,
             .terminal_info = get_terminal_info(STDERR_FILENO),
+            .version = version,
         };
         output_ambiguity(&interpreter, &ambiguity, stderr);
         return 3;
@@ -288,6 +289,7 @@ int main(int argc, char *argv[])
             .grammar = &grammar,
             .combined = &combined,
             .deterministic = &deterministic,
+            .version = version,
         };
         generate(&generator);
     } else {
@@ -304,6 +306,7 @@ int main(int argc, char *argv[])
             .combined = &combined,
             .deterministic = &deterministic,
             .terminal_info = get_terminal_info(output_fileno),
+            .version = version,
         };
         error_in_string = input_string;
         interpret(&interpreter, input_string, output_file);

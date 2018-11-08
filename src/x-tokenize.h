@@ -65,6 +65,10 @@
 #define ALLOCATE_STRING(n, info) malloc(n)
 #endif
 
+#ifndef ESCAPE_CHAR
+#define ESCAPE_CHAR(c, info) (c)
+#endif
+
 #ifndef ALLOW_DASHES_IN_IDENTIFIERS
 #define ALLOW_DASHES_IN_IDENTIFIERS(...) false
 #endif
@@ -73,6 +77,14 @@
 #define SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(combined) \
  (find_token((combined)->tokens, (combined)->number_of_keyword_tokens, "-", 1, \
   TOKEN_DONT_CARE, 0) >= (combined)->number_of_keyword_tokens)
+
+// Single-character string escapes.
+#define ESCAPE_CHAR_SINGLE(c, info) \
+ ((c) == 'b' ? '\b' : \
+  (c) == 'f' ? '\f' : \
+  (c) == 'n' ? '\n' : \
+  (c) == 'r' ? '\r' : \
+  (c) == 't' ? '\t' : (c))
 
 #if !defined(IDENTIFIER_TOKEN) || !defined(NUMBER_TOKEN) || \
  !defined(STRING_TOKEN) || !defined(BRACKET_SYMBOL_TOKEN) || \
@@ -322,7 +334,8 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
                 for (size_t i = 0; i < content_length; ++i) {
                     if (text[content_offset + i] == '\\')
                         i++;
-                    unescaped[j++] = text[content_offset + i];
+                    unescaped[j++] = ESCAPE_CHAR(text[content_offset + i],
+                     tokenizer->info);
                 }
                 string = unescaped;
             }

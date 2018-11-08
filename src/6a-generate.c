@@ -1,6 +1,7 @@
 // This stuff has to appear before any other #includes to avoid unwanted macro
 // expansion from standard headers (e.g., memset -> __builtin___memset_chk).
 #define EVALUATE_MACROS_AND_STRINGIFY(...) #__VA_ARGS__
+#define STRINGIFY(...) EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__)
 #define TOKEN_T %%token-type
 #define STATE_T %%state-type
 #define READ_WHITESPACE read_whitespace
@@ -17,6 +18,7 @@
 #define IF_NUMBER_TOKEN IF_NUMBER_TOKEN
 #define IF_STRING_TOKEN IF_STRING_TOKEN
 #define IF_IDENTIFIER_TOKEN IF_IDENTIFIER_TOKEN
+#define ESCAPE_CHAR ESCAPE_CHAR
 #define IDENTIFIER_TOKEN %%identifier-token
 #define NUMBER_TOKEN %%number-token
 #define STRING_TOKEN %%string-token
@@ -717,6 +719,12 @@ void generate(struct generator *gen)
     output_line(out, "    return parsed_%%root-rule_get(owl_tree_root_ref(tree));");
     output_line(out, "}");
 
+    if (version_capable(gen->version, SINGLE_CHAR_ESCAPES)) {
+        set_literal_substitution(out, "escape-char-single",
+         STRINGIFY(ESCAPE_CHAR_SINGLE(c, info)));
+        output_line(out, "#define ESCAPE_CHAR(c, info) %%escape-char-single");
+    } else
+        output_line(out, "#define ESCAPE_CHAR(c, info) (c)");
     set_unsigned_number_substitution(out, "identifier-token", 0xffffffff);
     set_unsigned_number_substitution(out, "number-token", 0xffffffff);
     set_unsigned_number_substitution(out, "string-token", 0xffffffff);
@@ -1820,7 +1828,6 @@ retry:
     output_line(out, "    return entry;");
     output_line(out, "}");
     output_line(out, "static struct action_table_entry action_table_lookup(%%state-type nfa_state, %%state-type dfa_state, %%token-type token) {");
-#define STRINGIFY(...) EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__)
     set_literal_substitution(out, "action-table-entry-hash-1",
      STRINGIFY(ACTION_TABLE_ENTRY_HASH_1(nfa_state, dfa_state, token)));
     set_literal_substitution(out, "action-table-entry-hash-2",
