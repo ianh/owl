@@ -1260,13 +1260,14 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
         bool end_token = false;
         bool custom_token = false;
         bool comment = false;
+        bool custom_whitespace = false;
         bool has_escapes = false;
         size_t token_length = read_keyword_token(&token, &end_token, text + offset, tokenizer->info);
         if (token_length > 0) {
             is_token = true;
             if (token == 4294967295U) comment = true;
         }
-        if (IGNORE_TOKEN_READ(&token, &token_length, text + offset, &custom_data, tokenizer->info)) {
+        if (IGNORE_TOKEN_READ(&token, &token_length, text + offset, &custom_whitespace, &custom_data, tokenizer->info)) {
             is_token = true;
             custom_token = true;
             end_token = false;
@@ -1281,6 +1282,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
                 is_token = true;
                 end_token = false;
                 comment = false;
+                custom_whitespace = false;
                 token = 4294967295U;
             }
         }
@@ -1292,6 +1294,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
                     is_token = true;
                     end_token = false;
                     comment = false;
+                    custom_whitespace = false;
                     token = 25;
                     break;
                 }
@@ -1311,10 +1314,16 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
                 is_token = true;
                 end_token = false;
                 comment = false;
+                custom_whitespace = false;
                 token = 24;
             }
         }
-        ) if (comment) {
+        ) if (custom_whitespace) {
+            whitespace += token_length;
+            offset += token_length;
+            continue;
+        }
+        else if (comment) {
             while (text[offset] != '\0' && text[offset] != '\n') {
                 whitespace++;
                 offset++;
