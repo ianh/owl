@@ -1,4 +1,4 @@
-#using owl.v2
+#using owl.v3
 
 # The strings here are just examples; the real tokenizing code is in main.c.
 .token hex-color '#fff' '#CC9966'

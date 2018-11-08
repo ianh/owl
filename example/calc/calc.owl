@@ -1,4 +1,4 @@
-#using owl.v1
+#using owl.v3
 command =
     identifier '=' expression : assign
     expression : evaluate
