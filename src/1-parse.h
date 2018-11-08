@@ -1129,6 +1129,7 @@ struct parsed_grammar owl_tree_get_parsed_grammar(struct owl_tree *tree) {
 #define NUMBER_TOKEN_DATA(...)
 #define IF_NUMBER_TOKEN(...) if (0) { /* no number tokens */  }
 #define IF_STRING_TOKEN(cond, ...) if (cond) __VA_ARGS__
+static size_t read_whitespace(const char *text, void *info);
 static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *text, void *info);
 static void write_identifier_token(size_t offset, size_t length, void *info) {
     struct owl_tree *tree = info;
@@ -1245,9 +1246,10 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
     while (number_of_tokens < 4096) {
         char c = text[offset];
         if (c == '\0') break;
-        if (char_is_whitespace(c)) {
-            whitespace++;
-            offset++;
+        size_t whitespace_length = read_whitespace(text + offset, tokenizer->info);
+        if (whitespace_length > 0) {
+            whitespace += whitespace_length;
+            offset += whitespace_length;
             continue;
         }
         uint32_t token = -1;
@@ -3124,6 +3126,20 @@ static size_t build_parse_tree(struct owl_default_tokenizer *tokenizer, struct o
     free(state_stack);
     free_token_runs(&run);
     return construct_finish(&construct_state, offset);
+}
+static size_t read_whitespace(const char *text, void *info) {
+    switch (text[0]) {
+    case 32:
+        return 1;
+    case 9:
+        return 1;
+    case 10:
+        return 1;
+    case 13:
+        return 1;
+    default:
+        return 0;
+    }
 }
 static size_t read_keyword_token(uint32_t *token, bool *end_token, const char *text, void *info) {
     switch (text[0]) {
