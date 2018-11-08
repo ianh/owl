@@ -283,6 +283,8 @@ function update()
                 nextIdentifierStyle = 168;
             } else if (identifierText == ".line-comment-token")
                 format[lastIdentifierIndex].code = 214;
+            else if (identifierText == ".whitespace")
+                format[lastIdentifierIndex].code = 214;
             else if (identifierText == ".operators")
                 format[lastIdentifierIndex].code = 97;
             else if (identifierText == "postfix" || identifierText == "prefix" ||
