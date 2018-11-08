@@ -1,4 +1,4 @@
 ---
 .whitespace
 x = y y
-y = 'a' | 'a' 'a'
+y = 'a' | 'a' 'a' | 'aa'
