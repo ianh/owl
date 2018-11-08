@@ -1122,6 +1122,7 @@ struct parsed_grammar owl_tree_get_parsed_grammar(struct owl_tree *tree) {
     check_for_error(tree);
     return parsed_grammar_get(owl_tree_root_ref(tree));
 }
+#define ESCAPE_CHAR(c, info) ((c) == 'b' ? '\b' : (c) == 'f' ? '\f' : (c) == 'n' ? '\n' : (c) == 'r' ? '\r' : (c) == 't' ? '\t' : (c))
 #define IGNORE_TOKEN_WRITE(...)
 #define IGNORE_TOKEN_READ(...) (0)
 #define CUSTOM_TOKEN_DATA(...)
@@ -1354,7 +1355,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenize
                 i < content_length;
                 ++i) {
                     if (text[content_offset + i] == '\\') i++;
-                    unescaped[j++] = text[content_offset + i];
+                    unescaped[j++] = ESCAPE_CHAR(text[content_offset + i], tokenizer->info);
                 }
                 string = unescaped;
             }

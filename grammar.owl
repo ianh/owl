@@ -1,4 +1,4 @@
-#using owl.v2
+#using owl.v3
 
 # This is the grammar for Owl itself.
 # Compile with `owl -c grammar.owl -o src/1-parse.h`.
