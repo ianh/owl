@@ -355,6 +355,7 @@ void generate(struct generator *gen)
             set_unsigned_number_substitution(out, "index", i);
             output_line(out, "    OWL_TOKEN_%%name = %%index,");
         }
+        output_line(out, "    OWL_WHITESPACE = -1,");
         output_line(out, "};");
         output_line(out, "struct owl_token {");
         output_line(out, "    enum owl_token_type type;");
@@ -739,7 +740,7 @@ void generate(struct generator *gen)
     if (has_custom_tokens) {
         output_line(out, "#define CUSTOM_TOKEN_DATA(identifier) uint64_t identifier = 0");
         set_literal_substitution(out, "read-custom-token", "read_custom_token");
-        output_line(out, "static bool read_custom_token(uint32_t *token, size_t *token_length, const char *text, uint64_t *data, void *info) {");
+        output_line(out, "static bool read_custom_token(uint32_t *token, size_t *token_length, const char *text, bool *whitespace, uint64_t *data, void *info) {");
         output_line(out, "    struct owl_tree *tree = info;");
         output_line(out, "    if (!tree->custom_tokenize)");
         output_line(out, "        return false;");
@@ -748,6 +749,7 @@ void generate(struct generator *gen)
         output_line(out, "        return false;");
         output_line(out, "    *token = t.type;");
         output_line(out, "    *token_length = t.length;");
+        output_line(out, "    *whitespace = (t.type == OWL_WHITESPACE);");
         output_line(out, "    *data = t.data.integer;");
         output_line(out, "    return true;");
         output_line(out, "}");

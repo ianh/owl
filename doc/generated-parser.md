@@ -342,7 +342,7 @@ struct owl_token {
 };
 ```
 
-A return value of `owl_token_no_match` (or any value with the `length` field set to zero) indicates no match.  Otherwise, the `length` field indicates how long the match is, and `type` indicates which type of token it is.  Each user-defined token type (like `.token digit`) corresponds to a value in the `owl_token_type` enum (like `OWL_TOKEN_DIGIT`).
+A return value of `owl_token_no_match` (or any value with the `length` field set to zero) indicates no match.  Otherwise, the `length` field indicates how long the match is, and `type` indicates which type of token it is.  Each user-defined token type (like `.token digit`) corresponds to a value in the `owl_token_type` enum (like `OWL_TOKEN_DIGIT`).  The `OWL_WHITESPACE` enum value will discard the token, treating it as whitespace.
 
 If there's a conflict between a user-defined token match and another token match, the longest match will be chosen, with ties going to keywords first, then user-defined token types, then other token types (like `identifier` and so on).
 

@@ -233,6 +233,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
         bool end_token = false;
         bool custom_token = false;
         bool comment = false;
+        bool custom_whitespace = false;
         bool has_escapes = false;
         size_t token_length = READ_KEYWORD_TOKEN(&token, &end_token,
          text + offset, tokenizer->info);
@@ -242,7 +243,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
                 comment = true;
         }
         if (READ_CUSTOM_TOKEN(&token, &token_length, text + offset,
-         &custom_data, tokenizer->info)) {
+         &custom_whitespace, &custom_data, tokenizer->info)) {
             is_token = true;
             custom_token = true;
             end_token = false;
@@ -259,6 +260,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
                 is_token = true;
                 end_token = false;
                 comment = false;
+                custom_whitespace = false;
                 token = NUMBER_TOKEN;
             }
         }) else IF_STRING_TOKEN(c == '\'' || c == '"', {
@@ -270,6 +272,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
                     is_token = true;
                     end_token = false;
                     comment = false;
+                    custom_whitespace = false;
                     token = STRING_TOKEN;
                     break;
                 }
@@ -292,10 +295,15 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
                 is_token = true;
                 end_token = false;
                 comment = false;
+                custom_whitespace = false;
                 token = IDENTIFIER_TOKEN;
             }
         })
-        if (comment) {
+        if (custom_whitespace) {
+            whitespace += token_length;
+            offset += token_length;
+            continue;
+        } else if (comment) {
             while (text[offset] != '\0' && text[offset] != '\n') {
                 whitespace++;
                 offset++;

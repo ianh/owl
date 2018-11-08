@@ -44,7 +44,7 @@ static size_t read_whitespace(const char *text, void *info);
 static size_t read_keyword_token(uint32_t *token, bool *end_token,
  const char *text, void *info);
 static bool read_custom_token(uint32_t *token, size_t *token_length,
- const char *text, void **data, void *info);
+ const char *text, bool *whitespace, void **data, void *info);
 static void write_identifier_token(size_t offset, size_t length, void *info);
 static void write_string_token(size_t offset, size_t length,
  const char *string, size_t string_length, bool has_escapes, void *info);
@@ -999,7 +999,7 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token,
 }
 
 static bool read_custom_token(uint32_t *token, size_t *token_length,
- const char *text, void **data, void *info)
+ const char *text, bool *whitespace, void **data, void *info)
 {
     struct interpret_context *ctx = ((struct tokenizer_info *)info)->context;
     struct combined_grammar *combined = ctx->combined;
@@ -1026,6 +1026,7 @@ static bool read_custom_token(uint32_t *token, size_t *token_length,
             matched = true;
         }
     }
+    *whitespace = false;
     return matched;
 }
 
