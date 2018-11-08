@@ -328,7 +328,7 @@ struct owl_tree *tree = owl_tree_create_with_options(options);
 // ...
 ```
 
-Each time Owl's tokenizer steps forward, it calls the tokenize function (if it's not `NULL`), passing the remaining zero-terminated input as `string`.  The tokenize function then returns an `owl_token` struct representing details about the match:
+Each time Owl's tokenizer steps forward, it calls the tokenize function (if it's not `NULL`), passing the remaining zero-terminated input as `string` and the `tokenize_info` field provided in `owl_tree_options` as `info`.  The tokenize function then returns an `owl_token` struct representing details about the match:
 
 ```C
 struct owl_token {
