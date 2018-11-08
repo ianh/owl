@@ -708,6 +708,8 @@ static const char *token_type_string(enum token_type type)
         return "an end";
     case TOKEN_START_LINE_COMMENT:
         return "a comment";
+    case TOKEN_WHITESPACE:
+        return "a whitespace";
     default:
         return "";
     }

@@ -1,0 +1,4 @@
+---
+.whitespace 'x'
+.line-comment-token 'x'
+a = 'y'

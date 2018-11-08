@@ -61,12 +61,24 @@ void combine(struct combined_grammar *result, struct grammar *grammar)
             renames_for_rule[i][j].from = token.symbol;
             renames_for_rule[i][j].to = index;
 
-            // We call `find_token` on comment_tokens so an error is produced if
-            // a token is used both as a comment token and as a normal token.
+            // We call `find_token` on comment tokens and whitespace tokens so
+            // an error is produced if a token appears as more than one
+            // different type.
             find_token(grammar->comment_tokens,
              grammar->number_of_comment_tokens, token.string, token.length,
              token.type, &token.range);
+            find_token(grammar->whitespace_tokens,
+             grammar->number_of_whitespace_tokens, token.string, token.length,
+             token.type, &token.range);
         }
+    }
+    for (uint32_t i = 0; i < grammar->number_of_comment_tokens; ++i) {
+        // We also need to check whether any whitespace token appears as a
+        // comment token.
+        struct token token = grammar->comment_tokens[i];
+        find_token(grammar->whitespace_tokens,
+         grammar->number_of_whitespace_tokens, token.string, token.length,
+         token.type, &token.range);
     }
     result->number_of_keyword_tokens = result->number_of_tokens;
 
