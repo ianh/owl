@@ -14,7 +14,7 @@ Each pattern is made up of *atomic patterns*, which match individual tokens:
 | --- | --- |
 | `'keyword'` | A keyword is a literal sequence of characters; this keyword would match the token `keyword`.  The keyword string can contain any character. |
 | `'a;ksdf\'aklsdjf'` | This keyword would match the token `a;ksdf'aklsdjf`. |
-| `string` | A string begins with a `'` or `"`, then continues to the next matching `'` or `"`.  Characters escaped with `\` are used as-is, and don't end the string.  For example, `"\""` is the string for `"` (and `"\n"` is the same as `"n"`). |
+| `string` | A string begins with a `'` or `"`, then continues to the next matching `'` or `"`.  Any character can be escaped with `\` so that it doesn't end the string.  For example, `"\""` is the string for `"`.  Escaping the characters `b`, `f`, `n`, `r`, or `t` will produce the backspace, form-feed, newline, carriage return, and tab characters, respectively. |
 | `number` | A number begins with a digit (0-9) or a decimal point (`.`) followed by a digit.  Once the beginning of the number is matched, the rest of the number is read using `strtod()`.  Note that `number` doesn't match a leading `-` to avoid ambiguity with the `-` operator: you should add negation at a higher level in your grammar. |
 | `identifier` | An identifier begins with a letter or an underscore `_`, then continues with letters, underscores, and digits (0-9).  Dashes are also allowed as long as you don't have a `-` keyword anywhere in your grammar. |
 
