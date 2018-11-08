@@ -158,6 +158,34 @@ A *line comment token* will cause the rest of the line on which it appears to be
 .line-comment-token '//'
 ```
 
+## configuring whitespace
+
+Use `.whitespace` to specify strings that should be treated as whitespace.  The longest matching whitespace string is removed from the input before any other tokens are recognized.  Using `.whitespace` will override the default whitespace characters (space, tab, newline, and carriage return).
+
+For example,
+
+
+```
+.whitespace ' ' '\t'
+```
+
+specifies spaces and tabs, preventing newlines or carriage returns from being considered whitespace.
+
+Since they're no longer considered whitespace, newlines can now be used as a normal keyword:
+
+```
+lines = (line? '\n')*
+line = ...
+```
+
+An empty list will disable built-in whitespace recognition altogether:
+
+```
+.whitespace
+```
+
+Note: no whitespace means no way to reliably separate tokens from one another.  This means ambiguity errors may not be presented correctly.
+
 ## <a id="user-defined-tokens">user-defined tokens</a>
 
 To define your own type of token, use `.token`:
