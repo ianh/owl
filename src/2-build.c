@@ -908,5 +908,6 @@ void grammar_destroy(struct grammar *grammar)
     }
     free(grammar->rules);
     free(grammar->comment_tokens);
+    free(grammar->whitespace_tokens);
     memset(grammar, 0, sizeof(*grammar));
 }
