@@ -1,0 +1,3 @@
+. a         ->b         
+  rule:ident  rule:ident
+  rule:arrow------------

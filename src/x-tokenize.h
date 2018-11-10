@@ -155,6 +155,11 @@ static bool char_continues_identifier(char c, void *info)
     return char_is_numeric(c) || char_starts_identifier(c);
 }
 
+static bool char_ends_identifier(char c)
+{
+    return c != '-';
+}
+
 static bool encode_length(struct owl_token_run *run, uint16_t *lengths_size,
  size_t length)
 {
@@ -290,6 +295,8 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
             while (char_continues_identifier(text[identifier_offset],
              tokenizer->info))
                 identifier_offset++;
+            while (!char_ends_identifier(text[identifier_offset - 1]))
+                identifier_offset--;
             if (identifier_offset - offset > token_length) {
                 token_length = identifier_offset - offset;
                 is_token = true;
