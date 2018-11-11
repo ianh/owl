@@ -247,7 +247,7 @@ value =
 
 # Here's Owl's own grammar parsing itself:
 
-grammar = (rule | comment-token | custom-token)*
+grammar = (rule | comment-token | custom-token | whitespace)*
 rule = identifier '=' body
 body = expr | (expr ':' identifier)+ operators*
 operators = '.operators' fixity operator+
@@ -277,9 +277,10 @@ expr =
 comment-token = '.line-comment-token' string | comment-token-v1
 comment-token-v1 = 'line-comment-token' string
 custom-token = '.token' identifier string*
+whitespace = '.whitespace' string*
 
 .line-comment-token '#'`,"input":
-`grammar = (rule | comment-token | custom-token)*
+`grammar = (rule | comment-token | custom-token | whitespace)*
 rule = identifier '=' body
 body = expr | (expr ':' identifier)+ operators*
 operators = '.operators' fixity operator+
@@ -309,6 +310,7 @@ expr =
 comment-token = '.line-comment-token' string | comment-token-v1
 comment-token-v1 = 'line-comment-token' string
 custom-token = '.token' identifier string*
+whitespace = '.whitespace' string*
 
 .line-comment-token '#'
 `},
