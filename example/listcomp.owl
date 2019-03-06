@@ -1,0 +1,26 @@
+#using owl.v3
+
+# This is the grammar from:
+# http://www.rntz.net/post/2018-07-10-parsing-list-comprehensions.html
+
+listcomp = '[' expr '|' clause (',' clause)* ']'
+clause = expr | pat '<-' expr
+
+# Define enough of `pat` and `expr` to write (x, Left 2) and (x, Left (2+3)),
+# the examples from the above post.
+
+pat =
+    [ '(' pat (',' pat)* ')' ] : tuple
+    identifier : ident
+    number : number
+  .operators infix left
+    '' : application
+
+expr =
+    [ '(' expr (',' expr)* ')' ] : tuple
+    identifier : ident
+    number : number
+  .operators infix left
+    '' : application
+  .operators infix left
+    '+' : plus
