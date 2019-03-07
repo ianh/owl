@@ -44,6 +44,19 @@ Patterns can be combined in the following ways to match longer sequences:
 
 Concatenation `a b` binds more tightly than choice `|`, so `a b | c` is the same as `(a b) | c`.
 
+Curly brackets match explicitly-numbered repetition:
+
+| combined pattern | what it matches | notes |
+| --- | --- | --- |
+| `a{3}` | Exactly three `a` in a row. | `a{1}` is the same as `a` |
+| `a{3,5}` | Between three and five `a`. | `a{0,1}` is the same as `a?` |
+| `a{3+}` | Three or more `a` in a row. | `a{1+}` is the same as `a+` |
+| `a{}` | Any number of `a`. | `a{}` is the same as `a{0+}` and `a*` |
+| `a{b}` | A list of `a` separated by `b`. | `a{b}` is the same as `(a (b a)*)?` |
+| `a{b, 1+}` | A list of one or more `a` separated by `b`. | `a{b, 1+}` is the same as `a (b a)*` |
+
+The delimiter syntax `a{b}` is useful for lists: `expr{','}` represents a list of `expr` matches separated by commas.  Optional trailing delimiters must be written out by hand: e.g., `(expr{',', 1+} ','?)?`.
+
 Guard brackets enclose a pattern in begin and end keywords:
 
 | combined pattern | what it matches |
