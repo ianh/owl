@@ -621,10 +621,10 @@ static void build_body_expression(struct context *ctx,
             if (i >= min) {
                 automaton_add_transition(automaton, entry, b.exit,
                  SYMBOL_EPSILON);
-                if (infinite) {
-                    automaton_add_transition(automaton, inner.exit, entry,
-                     SYMBOL_EPSILON);
-                }
+            }
+            if (infinite && i == max - 1) {
+                automaton_add_transition(automaton, inner.exit, entry,
+                 SYMBOL_EPSILON);
             }
         }
         automaton_add_transition(automaton, inner.exit, b.exit, SYMBOL_EPSILON);
