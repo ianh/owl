@@ -10,6 +10,7 @@
 
 struct context {
     struct grammar *grammar;
+    struct grammar_version version;
     struct owl_tree *tree;
 
     uint32_t rule_index;
@@ -55,6 +56,7 @@ void build(struct grammar *grammar, struct owl_tree *tree,
 {
     struct context context = {
         .grammar = grammar,
+        .version = version,
         .tree = tree,
     };
     struct parsed_grammar g = owl_tree_get_parsed_grammar(tree);
@@ -833,6 +835,8 @@ static bool add_token_rule(struct context *ctx, enum rule_token_type type,
     *index = add_rule(ctx, name, len);
     if (*index == UINT32_MAX)
         return false;
+    if (type == RULE_TOKEN_INTEGER)
+        check_version(ctx->version, INTEGER_TOKENS, ident.range);
     ctx->grammar->rules[*index]->is_token = true;
     ctx->grammar->rules[*index]->token_type = type;
     return true;
@@ -861,6 +865,10 @@ bool version_capable(struct grammar_version version,
     case SINGLE_CHAR_ESCAPES:
         return strcmp(version.string, "owl.v1") != 0 &&
          strcmp(version.string, "owl.v2") != 0;
+    case INTEGER_TOKENS:
+        return strcmp(version.string, "owl.v1") != 0 &&
+         strcmp(version.string, "owl.v2") != 0 &&
+         strcmp(version.string, "owl.v3") != 0;
     default:
         return false;
     }
@@ -877,6 +885,10 @@ static void check_version(struct grammar_version version,
     case CUSTOM_TOKENS:
         exit_with_errorf("custom tokens are unsupported in versions before "
          "owl.v2");
+        break;
+    case INTEGER_TOKENS:
+        exit_with_errorf("integer tokens are unsupported in versions before "
+         "owl.v4");
         break;
     case WHITESPACE:
         exit_with_errorf("specifying whitespace is unsupported in versions "

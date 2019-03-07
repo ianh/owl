@@ -253,9 +253,10 @@ uint32_t find_token(struct token *tokens, uint32_t number_of_tokens,
 
 // This function tests for capabilities based on the current version.
 enum version_capability {
-	CUSTOM_TOKENS,
-	WHITESPACE,
-	SINGLE_CHAR_ESCAPES,
+    CUSTOM_TOKENS,
+    INTEGER_TOKENS,
+    WHITESPACE,
+    SINGLE_CHAR_ESCAPES,
 };
 bool version_capable(struct grammar_version version,
  enum version_capability capability);
