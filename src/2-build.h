@@ -56,6 +56,7 @@ struct slot;
 
 enum rule_token_type {
     RULE_TOKEN_IDENTIFIER,
+    RULE_TOKEN_INTEGER,
     RULE_TOKEN_NUMBER,
     RULE_TOKEN_STRING,
     RULE_TOKEN_CUSTOM,

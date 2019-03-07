@@ -253,13 +253,18 @@ struct parsed_list list = owl_tree_get_parsed_list(tree);
 
 ### token data
 
-The `identifier`, `number`, and `string` tokens record data about their match like rules do.  This data can also be unpacked using `parsed_identifier_get`, `parsed_number_get`, or `parsed_string_get`.
+The `identifier`, `integer`, `number`, and `string` tokens record data about their match like rules do.  This data can also be unpacked using `parsed_identifier_get`, `parsed_integer_get`, `parsed_number_get`, or `parsed_string_get`.
 
 ```C
 struct parsed_identifier {
     struct source_range range;
     const char *identifier;
     size_t length;
+};
+
+struct parsed_integer {
+    struct source_range range;
+    uint64_t integer;
 };
 
 struct parsed_number {
@@ -275,6 +280,7 @@ struct parsed_string {
 };
 
 struct parsed_identifier parsed_identifier_get(struct owl_ref);
+struct parsed_integer parsed_integer_get(struct owl_ref);
 struct parsed_number parsed_number_get(struct owl_ref);
 struct parsed_string parsed_string_get(struct owl_ref);
 ```
@@ -283,7 +289,7 @@ If `has_escapes` is true, the string data is owned by the `owl_tree`—otherwise
 
 ## <a id="user-defined-tokens">user-defined tokens</a>
 
-If you need more than the built-in `identifier`, `number`, and `string` token types, you can define [your own token types](grammar-reference.md#user-defined-tokens) using `.token`.
+If you need more than the built-in `identifier`, `integer`, `number`, and `string` token types, you can define [your own token types](grammar-reference.md#user-defined-tokens) using `.token`.
 
 If a grammar has any of these user-defined tokens, `owl_tree_create_with_options` accepts two extra parameters in its `owl_tree_options` struct:
 
@@ -378,7 +384,8 @@ Any data returned via the `data` field in `owl_token` will appear in the `parsed
 | `owl_tree_print` | An `owl_tree *` to print to stdout (typically for debugging purposes).  Must not be `NULL`. | None. |
 | `owl_tree_root_ref` | An `owl_tree *`. | The ref corresponding to the root match. |
 | `parsed_identifier_get` | An `owl_ref` corresponding to an identifier match. | A `parsed_identifier` struct corresponding to the identifier match. |
+| `parsed_integer_get` | An `owl_ref` corresponding to an integer match. | A `parsed_integer` struct corresponding to the integer match. |
 | `parsed_number_get` | An `owl_ref` corresponding to a number match. | A `parsed_number` struct corresponding to the number match. |
-| `parsed_string_get` | An `owl_ref` corresponding to a string match. | A `parsed_string` struct corresponding to the identifier match. |
+| `parsed_string_get` | An `owl_ref` corresponding to a string match. | A `parsed_string` struct corresponding to the string match. |
 | `parsed_RULE_get` | An `owl_ref` corresponding to a match for `RULE`. | A `parsed_RULE` struct corresponding to the ref's match. |
 | `parsed_TOKEN_get` | An `owl_ref` corresponding to a match for the user-defined token `TOKEN`. | A `parsed_TOKEN` struct corresponding to the ref's match. |

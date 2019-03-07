@@ -13,6 +13,7 @@
 
 #define WRITE_NUMBER_TOKEN write_number_token
 #define WRITE_IDENTIFIER_TOKEN write_identifier_token
+#define WRITE_INTEGER_TOKEN write_integer_token
 #define WRITE_STRING_TOKEN write_string_token
 #define WRITE_CUSTOM_TOKEN write_custom_token
 
@@ -25,6 +26,7 @@
 
 #define IDENTIFIER_TOKEN \
  (((struct tokenizer_info *)tokenizer->info)->identifier_symbol)
+#define INTEGER_TOKEN (((struct tokenizer_info *)tokenizer->info)->integer_symbol)
 #define NUMBER_TOKEN (((struct tokenizer_info *)tokenizer->info)->number_symbol)
 #define STRING_TOKEN (((struct tokenizer_info *)tokenizer->info)->string_symbol)
 #define BRACKET_SYMBOL_TOKEN 0xffffffff
@@ -32,6 +34,9 @@
 
 #define IF_NUMBER_TOKEN(cond, ...) \
  if ((((struct tokenizer_info *)tokenizer->info)->number_symbol \
+ != SYMBOL_EPSILON) && (cond)) __VA_ARGS__
+#define IF_INTEGER_TOKEN(cond, ...) \
+ if ((((struct tokenizer_info *)tokenizer->info)->integer_symbol \
  != SYMBOL_EPSILON) && (cond)) __VA_ARGS__
 #define IF_STRING_TOKEN(cond, ...) \
  if ((((struct tokenizer_info *)tokenizer->info)->string_symbol \
@@ -46,6 +51,8 @@ static size_t read_keyword_token(uint32_t *token, bool *end_token,
 static bool read_custom_token(uint32_t *token, size_t *token_length,
  const char *text, bool *whitespace, void **data, void *info);
 static void write_identifier_token(size_t offset, size_t length, void *info);
+static void write_integer_token(size_t offset, size_t length, uint64_t integer,
+ void *info);
 static void write_string_token(size_t offset, size_t length,
  const char *string, size_t string_length, bool has_escapes, void *info);
 static void write_number_token(size_t offset, size_t length, double number,
@@ -57,6 +64,7 @@ struct interpret_context;
 struct tokenizer_info {
     struct interpret_context *context;
     symbol_id identifier_symbol;
+    symbol_id integer_symbol;
     symbol_id number_symbol;
     symbol_id string_symbol;
     bool allow_dashes_in_identifiers;
@@ -147,6 +155,7 @@ struct interpret_context {
 enum interpret_node_type {
     NODE_RULE,
     NODE_IDENTIFIER_TOKEN,
+    NODE_INTEGER_TOKEN,
     NODE_NUMBER_TOKEN,
     NODE_STRING_TOKEN,
     NODE_CUSTOM_TOKEN,
@@ -186,6 +195,7 @@ struct interpret_node {
             const char *name;
             size_t length;
         } identifier;
+        uint64_t integer;
         double number;
         struct {
             const char *string;
@@ -320,6 +330,10 @@ void output_ambiguity(struct interpreter *interpreter,
         error = (struct error){0};
     }
 
+    // Used to determine whether numbers should be shown as '1.0' or just '1'.
+    bool has_integers = token_symbol(interpreter->combined,
+     interpreter->grammar, RULE_TOKEN_INTEGER) != SYMBOL_EPSILON;
+
     struct label *token_labels = calloc(ambiguity->number_of_tokens * 2 + 1,
      sizeof(struct label));
     struct combined_grammar *combined = interpreter->combined;
@@ -358,10 +372,17 @@ void output_ambiguity(struct interpreter *interpreter,
                     identifier_iterator++;
                     break;
                 }
+                case RULE_TOKEN_INTEGER:
                 case RULE_TOKEN_NUMBER:
-                    length = snprintf(0, 0, "%u", number_iterator + 1);
-                    text = realloc(text, length + 1);
-                    sprintf(text, "%u", number_iterator + 1);
+                    if (rule->token_type == RULE_TOKEN_NUMBER && has_integers) {
+                        length = snprintf(0, 0, "%u.0", number_iterator + 1);
+                        text = realloc(text, length + 1);
+                        sprintf(text, "%u.0", number_iterator + 1);
+                    } else {
+                        length = snprintf(0, 0, "%u", number_iterator + 1);
+                        text = realloc(text, length + 1);
+                        sprintf(text, "%u", number_iterator + 1);
+                    }
                     number_iterator++;
                     break;
                 case RULE_TOKEN_STRING: {
@@ -587,6 +608,7 @@ void interpret(struct interpreter *interpreter, const char *text, FILE *output)
     struct tokenizer_info info = {
         .identifier_symbol = token_symbol(combined, grammar,
          RULE_TOKEN_IDENTIFIER),
+        .integer_symbol = token_symbol(combined, grammar, RULE_TOKEN_INTEGER),
         .number_symbol = token_symbol(combined, grammar, RULE_TOKEN_NUMBER),
         .string_symbol = token_symbol(combined, grammar, RULE_TOKEN_STRING),
         .allow_dashes_in_identifiers =
@@ -1038,6 +1060,17 @@ static void write_identifier_token(size_t offset, size_t length, void *info)
     node->type = NODE_IDENTIFIER_TOKEN;
     node->identifier.name = ctx->tokenizer->text + offset;
     node->identifier.length = length;
+    ctx->tokens = node;
+}
+
+static void write_integer_token(size_t offset, size_t length, uint64_t integer,
+ void *info)
+{
+    struct interpret_context *ctx = ((struct tokenizer_info *)info)->context;
+    struct interpret_node *node = calloc(1, sizeof(struct interpret_node));
+    node->next_sibling = ctx->tokens;
+    node->type = NODE_INTEGER_TOKEN;
+    node->integer = integer;
     ctx->tokens = node;
 }
 

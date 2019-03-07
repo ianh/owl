@@ -34,6 +34,10 @@
 #define NUMBER_TOKEN_DATA(name) double name = 0
 #endif
 
+#ifndef INTEGER_TOKEN_DATA
+#define INTEGER_TOKEN_DATA(name) uint64_t name = 0
+#endif
+
 #ifndef CUSTOM_TOKEN_DATA
 #define CUSTOM_TOKEN_DATA(...) do { } while (0)
 #endif
@@ -47,12 +51,18 @@
 #ifndef IF_IDENTIFIER_TOKEN
 #define IF_IDENTIFIER_TOKEN(cond, ...) if (cond) __VA_ARGS__
 #endif
+#ifndef IF_INTEGER_TOKEN
+#define IF_INTEGER_TOKEN(cond, ...) if (cond) __VA_ARGS__
+#endif
 
 #ifndef WRITE_NUMBER_TOKEN
 #define WRITE_NUMBER_TOKEN(...)
 #endif
 #ifndef WRITE_IDENTIFIER_TOKEN
 #define WRITE_IDENTIFIER_TOKEN(...)
+#endif
+#ifndef WRITE_INTEGER_TOKEN
+#define WRITE_INTEGER_TOKEN(...)
 #endif
 #ifndef WRITE_STRING_TOKEN
 #define WRITE_STRING_TOKEN(...)
@@ -86,9 +96,9 @@
   (c) == 'r' ? '\r' : \
   (c) == 't' ? '\t' : (c))
 
-#if !defined(IDENTIFIER_TOKEN) || !defined(NUMBER_TOKEN) || \
- !defined(STRING_TOKEN) || !defined(BRACKET_SYMBOL_TOKEN) || \
- !defined(COMMENT_TOKEN)
+#if !defined(IDENTIFIER_TOKEN) || !defined(INTEGER_TOKEN) || \
+ !defined(NUMBER_TOKEN) || !defined(STRING_TOKEN) || \
+ !defined(BRACKET_SYMBOL_TOKEN) || !defined(COMMENT_TOKEN)
 #error The built-in tokenizer needs definitions of basic tokens to work.
 #endif
 
@@ -233,6 +243,7 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
         }
         TOKEN_T token = -1;
         CUSTOM_TOKEN_DATA(custom_data);
+        INTEGER_TOKEN_DATA(integer);
         NUMBER_TOKEN_DATA(number);
         bool is_token = false;
         bool end_token = false;
@@ -254,6 +265,30 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
             end_token = false;
             comment = false;
         }
+        IF_INTEGER_TOKEN(char_is_numeric(c), {
+            // Integer.
+            size_t integer_offset = offset;
+            integer = 0;
+            bool overflow = false;
+            while (char_is_numeric(text[integer_offset])) {
+                uint64_t last = integer;
+                integer *= 10;
+                integer += text[integer_offset] - '0';
+                if (integer < last) {
+                    overflow = true;
+                    break;
+                }
+                integer_offset++;
+            }
+            if (!overflow && integer_offset - offset > token_length) {
+                token_length = integer_offset - offset;
+                is_token = true;
+                end_token = false;
+                comment = false;
+                custom_whitespace = false;
+                token = INTEGER_TOKEN;
+            }
+        })
         IF_NUMBER_TOKEN(char_is_numeric(c) ||
          (c == '.' && char_is_numeric(text[offset + 1])), {
             // Number.
@@ -328,6 +363,8 @@ static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
             break;
         if (token == IDENTIFIER_TOKEN) {
             WRITE_IDENTIFIER_TOKEN(offset, token_length, tokenizer->info);
+        } else if (token == INTEGER_TOKEN) {
+            WRITE_INTEGER_TOKEN(offset, token_length, integer, tokenizer->info);
         } else if (token == NUMBER_TOKEN) {
             WRITE_NUMBER_TOKEN(offset, token_length, number, tokenizer->info);
         } else if (token == STRING_TOKEN) {

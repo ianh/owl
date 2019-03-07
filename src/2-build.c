@@ -435,6 +435,7 @@ static void build_body_expression(struct context *ctx,
         uint32_t rule_index = find_rule(ctx, rule_name, rule_name_length);
         if (rule_index == UINT32_MAX) {
             if (!add_token_rule(ctx, RULE_TOKEN_IDENTIFIER, &rule_index, ident)
+             && !add_token_rule(ctx, RULE_TOKEN_INTEGER, &rule_index, ident)
              && !add_token_rule(ctx, RULE_TOKEN_NUMBER, &rule_index, ident)
              && !add_token_rule(ctx, RULE_TOKEN_STRING, &rule_index, ident)) {
                 errorf("unknown rule or token");
@@ -821,6 +822,7 @@ static bool add_token_rule(struct context *ctx, enum rule_token_type type,
     const char *name;
     switch (type) {
     case RULE_TOKEN_IDENTIFIER: name = "identifier"; break;
+    case RULE_TOKEN_INTEGER: name = "integer"; break;
     case RULE_TOKEN_NUMBER: name = "number"; break;
     case RULE_TOKEN_STRING: name = "string"; break;
     default: return false;

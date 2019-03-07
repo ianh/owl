@@ -97,7 +97,7 @@ Rules in owl are written like regular expressions with a few extra features.  He
 number-list = number (',' number)*
 ```
 
-Note that Owl operates on tokens (like `','` and `number`), not individual characters like a regular expression would.  Owl comes with the built-in token classes `number`, `identifier`, and `string`; keywords `'like'` `'this'` match their literal text.
+Note that Owl operates on tokens (like `','` and `number`), not individual characters like a regular expression would.  Owl comes with the built-in token classes `number`, `identifier`, `integer`, and `string`; keywords `'like'` `'this'` match their literal text.
 
 To create a parse tree, you can write rules that refer to each other:
 

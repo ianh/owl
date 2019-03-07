@@ -11,6 +11,7 @@
 #define CUSTOM_TOKEN_DATA CUSTOM_TOKEN_DATA
 #define WRITE_NUMBER_TOKEN %%write-number-token
 #define WRITE_IDENTIFIER_TOKEN %%write-identifier-token
+#define WRITE_INTEGER_TOKEN %%write-integer-token
 #define WRITE_STRING_TOKEN %%write-string-token
 #define WRITE_CUSTOM_TOKEN %%write-custom-token
 #define ALLOCATE_STRING allocate_string_contents
@@ -18,8 +19,10 @@
 #define IF_NUMBER_TOKEN IF_NUMBER_TOKEN
 #define IF_STRING_TOKEN IF_STRING_TOKEN
 #define IF_IDENTIFIER_TOKEN IF_IDENTIFIER_TOKEN
+#define IF_INTEGER_TOKEN IF_INTEGER_TOKEN
 #define ESCAPE_CHAR ESCAPE_CHAR
 #define IDENTIFIER_TOKEN %%identifier-token
+#define INTEGER_TOKEN %%integer-token
 #define NUMBER_TOKEN %%number-token
 #define STRING_TOKEN %%string-token
 #define BRACKET_SYMBOL_TOKEN %%bracket-symbol-token
@@ -316,6 +319,9 @@ void generate(struct generator *gen)
                 output_line(out, "    const char *identifier;");
                 output_line(out, "    size_t length;");
                 break;
+            case RULE_TOKEN_INTEGER:
+                output_line(out, "    uint64_t integer;");
+                break;
             case RULE_TOKEN_NUMBER:
                 output_line(out, "    double number;");
                 break;
@@ -374,6 +380,7 @@ void generate(struct generator *gen)
     output_line(out, "#ifdef OWL_PARSER_IMPLEMENTATION");
     output_line(out, "// Code implementing the parser.  This might get a bit messy!");
     output_line(out, "#include <assert.h>");
+    output_line(out, "#include <inttypes.h>");
     output_line(out, "#include <stdio.h>");
     output_line(out, "#include <stdlib.h>");
     output_line(out, "#include <string.h>");
@@ -489,6 +496,9 @@ void generate(struct generator *gen)
             case RULE_TOKEN_IDENTIFIER:
                 output_line(out, "        .identifier = ref._tree->string + start_location,");
                 output_line(out, "        .length = end_location - start_location,");
+                break;
+            case RULE_TOKEN_INTEGER:
+                output_line(out, "        .integer = read_tree(&token_offset, ref._tree),");
                 break;
             case RULE_TOKEN_NUMBER:
                 output_line(out, "        .number = (union { double n; uint64_t v; }){ .v = read_tree(&token_offset, ref._tree) }.n,");
@@ -658,6 +668,9 @@ void generate(struct generator *gen)
             case RULE_TOKEN_IDENTIFIER:
                 output_line(out, "        printf(\" - %.*s\", (int)it.length, it.identifier);");
                 break;
+            case RULE_TOKEN_INTEGER:
+                output_line(out, "        printf(\" - %\" PRIu64, it.integer);");
+                break;
             case RULE_TOKEN_NUMBER:
                 output_line(out, "        printf(\" - %f\", it.number);");
                 break;
@@ -727,12 +740,14 @@ void generate(struct generator *gen)
     } else
         output_line(out, "#define ESCAPE_CHAR(c, info) (c)");
     set_unsigned_number_substitution(out, "identifier-token", 0xffffffff);
+    set_unsigned_number_substitution(out, "integer-token", 0xffffffff);
     set_unsigned_number_substitution(out, "number-token", 0xffffffff);
     set_unsigned_number_substitution(out, "string-token", 0xffffffff);
     set_unsigned_number_substitution(out, "bracket-symbol-token", 0xffffffff);
     set_unsigned_number_substitution(out, "comment-token", 0xffffffff);
     output_line(out, "#define IGNORE_TOKEN_WRITE(...)");
     set_literal_substitution(out, "write-identifier-token", "IGNORE_TOKEN_WRITE");
+    set_literal_substitution(out, "write-integer-token", "IGNORE_TOKEN_WRITE");
     set_literal_substitution(out, "write-number-token", "IGNORE_TOKEN_WRITE");
     set_literal_substitution(out, "write-string-token", "IGNORE_TOKEN_WRITE");
     set_literal_substitution(out, "write-custom-token", "IGNORE_TOKEN_WRITE");
@@ -758,6 +773,7 @@ void generate(struct generator *gen)
         output_line(out, "#define CUSTOM_TOKEN_DATA(...)");
     }
     bool has_identifier_token = false;
+    bool has_integer_token = false;
     bool has_number_token = false;
     bool has_string_token = false;
     for (uint32_t i = gen->combined->number_of_keyword_tokens;
@@ -768,6 +784,10 @@ void generate(struct generator *gen)
         case RULE_TOKEN_IDENTIFIER:
             set_unsigned_number_substitution(out, "identifier-token", i);
             has_identifier_token = true;
+            break;
+        case RULE_TOKEN_INTEGER:
+            set_unsigned_number_substitution(out, "integer-token", i);
+            has_integer_token = true;
             break;
         case RULE_TOKEN_NUMBER:
             set_unsigned_number_substitution(out, "number-token", i);
@@ -785,6 +805,13 @@ void generate(struct generator *gen)
         output_line(out, "#define IF_IDENTIFIER_TOKEN(...) if (0) { /* no identifier tokens */  }");
     else
         output_line(out, "#define IF_IDENTIFIER_TOKEN(cond, ...) if (cond) __VA_ARGS__");
+    if (!has_integer_token) {
+        output_line(out, "#define INTEGER_TOKEN_DATA(...)");
+        output_line(out, "#define IF_INTEGER_TOKEN(...) if (0) { /* no integer tokens */  }");
+    } else {
+        output_line(out, "#define INTEGER_TOKEN_DATA(name) uint64_t name");
+        output_line(out, "#define IF_INTEGER_TOKEN(cond, ...) if (cond) __VA_ARGS__");
+    }
     if (!has_number_token) {
         output_line(out, "#define NUMBER_TOKEN_DATA(...)");
         output_line(out, "#define IF_NUMBER_TOKEN(...) if (0) { /* no number tokens */  }");
@@ -808,6 +835,11 @@ void generate(struct generator *gen)
         case RULE_TOKEN_IDENTIFIER:
             set_literal_substitution(out, "write-identifier-token", "write_identifier_token");
             output_line(out, "static void write_identifier_token(size_t offset, size_t length, void *info) {");
+            output_line(out, "    struct owl_tree *tree = info;");
+            break;
+        case RULE_TOKEN_INTEGER:
+            set_literal_substitution(out, "write-integer-token", "write_integer_token");
+            output_line(out, "static void write_integer_token(size_t offset, size_t length, uint64_t integer, void *info) {");
             output_line(out, "    struct owl_tree *tree = info;");
             break;
         case RULE_TOKEN_NUMBER:
@@ -834,6 +866,9 @@ void generate(struct generator *gen)
         switch (rule->token_type) {
         case RULE_TOKEN_IDENTIFIER:
             // We don't need to do anything else.
+            break;
+        case RULE_TOKEN_INTEGER:
+            output_line(out, "    write_tree(tree, integer);");
             break;
         case RULE_TOKEN_NUMBER:
             output_line(out, "    union { double n; uint64_t v; } u = { .n = number };");
