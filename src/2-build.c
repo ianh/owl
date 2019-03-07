@@ -591,6 +591,12 @@ static void build_body_expression(struct context *ctx,
                 break;
             case PARSED_RANGE:
                 max = parsed_integer_get(repetition.end).integer;
+                if (max < min) {
+                   error.ranges[0] = parsed_integer_get(repetition.begin).range;
+                   error.ranges[1] = parsed_integer_get(repetition.end).range;
+                   exit_with_errorf("the maximum number of repetitions must "
+                    "be greater than the minimum");
+                }
                 infinite = false;
                 break;
             case PARSED_AT_LEAST:
