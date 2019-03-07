@@ -1,4 +1,4 @@
-#using owl.v3
+#using owl.v4
 
 program = stmt-list
 stmt-list = stmt*
@@ -25,9 +25,9 @@ expr =
     'false' : false
     identifier : variable
     [ '(' expr ')' ] : parens
-    [ '[' (table-entry (',' table-entry)* ','?)? ']' ] : table
+    [ '[' (table-entry{',', 1+} ','?)? ']' ] : table
   .operators postfix
-    [ '(' (expr (',' expr)*)? ')' ] : call
+    [ '(' expr{','} ')' ] : call
     [ '[' expr ']' ] : lookup
     '.' identifier : field
   .operators prefix
@@ -52,6 +52,6 @@ expr =
   .operators infix left
     '||' : or
 parameter-list =
-    [ '(' (identifier (',' identifier)*)? ')' ]
+    [ '(' identifier{','} ')' ]
 
 .line-comment-token '#'
