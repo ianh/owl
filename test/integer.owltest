@@ -1,0 +1,14 @@
+0
+1
+.1
+10000.0
+23e17
+18446744073709551615
+18446744073709551616
+239485790283745098273409587209348759082374590827345293480193249
+---
+# large numbers become `number`s when they overflow the limits of an int64
+x = y*
+y =
+ number : num
+ integer : int

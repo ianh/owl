@@ -1,0 +1,7 @@
+error: integer tokens are unsupported in versions before owl.v4
+
+  #using owl.v3
+         ~~~~~~
+  x = integer
+      ~~~~~~~
+
