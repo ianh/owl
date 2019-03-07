@@ -575,6 +575,61 @@ static void build_body_expression(struct context *ctx,
         connect_expression(ctx, automaton, expr.operand, b);
         automaton_add_transition(automaton, b.entry, b.exit, SYMBOL_EPSILON);
         break;
+    case PARSED_REPETITION: {
+        check_version(ctx->version, EXPLICIT_REPETITION, expr.range);
+        uint64_t min = 0;
+        uint64_t max = 1;
+        bool infinite = true;
+        if (!expr.repetition.empty) {
+            struct parsed_repetition repetition;
+            repetition = parsed_repetition_get(expr.repetition);
+            min = parsed_integer_get(repetition.begin).integer;
+            switch (repetition.type) {
+            case PARSED_EXACT:
+                max = min;
+                infinite = false;
+                break;
+            case PARSED_RANGE:
+                max = parsed_integer_get(repetition.end).integer;
+                infinite = false;
+                break;
+            case PARSED_AT_LEAST:
+                max = min + 1;
+                break;
+            default:
+                abort();
+            }
+        }
+        if (infinite && max < 2 && !expr.expr.empty) {
+            // For expressions like list-item{','}, we need at least one loop
+            // iteration with i > 0 in order to match delimiters.
+            max = 2;
+        }
+        struct boundary_states inner = { .entry = ctx->next_state++ };
+        automaton_add_transition(automaton, b.entry, inner.entry,
+         SYMBOL_EPSILON);
+        for (uint64_t i = 0; i < max; ++i) {
+            state_id entry = inner.entry;
+            if (i > 0 && !expr.expr.empty) {
+                inner.exit = ctx->next_state++;
+                build_body_expression(ctx, automaton, expr.expr, inner);
+                inner.entry = inner.exit;
+            }
+            inner.exit = ctx->next_state++;
+            build_body_expression(ctx, automaton, expr.operand, inner);
+            inner.entry = inner.exit;
+            if (i >= min) {
+                automaton_add_transition(automaton, entry, b.exit,
+                 SYMBOL_EPSILON);
+                if (infinite) {
+                    automaton_add_transition(automaton, inner.exit, entry,
+                     SYMBOL_EPSILON);
+                }
+            }
+        }
+        automaton_add_transition(automaton, inner.exit, b.exit, SYMBOL_EPSILON);
+        break;
+    }
     default:
         abort();
     }
@@ -866,6 +921,7 @@ bool version_capable(struct grammar_version version,
         return strcmp(version.string, "owl.v1") != 0 &&
          strcmp(version.string, "owl.v2") != 0;
     case INTEGER_TOKENS:
+    case EXPLICIT_REPETITION:
         return strcmp(version.string, "owl.v1") != 0 &&
          strcmp(version.string, "owl.v2") != 0 &&
          strcmp(version.string, "owl.v3") != 0;
@@ -889,6 +945,10 @@ static void check_version(struct grammar_version version,
     case INTEGER_TOKENS:
         exit_with_errorf("integer tokens are unsupported in versions before "
          "owl.v4");
+        break;
+    case EXPLICIT_REPETITION:
+        exit_with_errorf("explicit repetition is unsupported in versions "
+         "before owl.v4");
         break;
     case WHITESPACE:
         exit_with_errorf("specifying whitespace is unsupported in versions "

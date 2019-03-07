@@ -1,0 +1,21 @@
+. x .
+. x x .
+. x x x .
+. x x x x .
+. x x x x x .
+. x x x x x x .
+. .
+. y, y, y .
+. z z z z z .
+. z z z z .
+. w z w z w .
+---
+lines = ('.' line '.')*
+line =
+ 'x'{1} : one
+ 'x'{2, 4} : two-to-four
+ 'x'{5+} : five-plus
+ 'y'{','} : list
+ 'z'{'z', 1+} : odd
+ 'z' 'z'{'z', 1+} : even
+ 'w'{'z', 3} : exactly-three

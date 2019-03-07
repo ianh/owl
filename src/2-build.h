@@ -255,8 +255,9 @@ uint32_t find_token(struct token *tokens, uint32_t number_of_tokens,
 enum version_capability {
     CUSTOM_TOKENS,
     INTEGER_TOKENS,
-    WHITESPACE,
+    EXPLICIT_REPETITION,
     SINGLE_CHAR_ESCAPES,
+    WHITESPACE,
 };
 bool version_capable(struct grammar_version version,
  enum version_capability capability);

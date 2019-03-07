@@ -1,0 +1,32 @@
+. . x        .
+    line:one  
+
+. . x x              .
+    line:two-to-four  
+
+. . x x x            .
+    line:two-to-four  
+
+. . x x x x          .
+    line:two-to-four  
+
+. . x x x x x      .
+    line:five-plus  
+
+. . x x x x x x    .
+    line:five-plus  
+
+. .          .
+   line:list  
+
+. . y, y, y   .
+    line:list  
+
+. . z z z z z .
+    line:odd-  
+
+. . z z z z   .
+    line:even  
+
+. . w z w z w          .
+    line:exactly-three  
