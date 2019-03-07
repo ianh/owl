@@ -276,6 +276,8 @@ function update()
          (code > 0x39 && code < 0x40) || (code > 0x5a && code < 0x61) ||
          (code > 0x7a && code < 0x7f)) // something that looks like a symbol
             style = 68;
+        else if (code >= 0x30 && code <= 0x39) // numerals, used in explicit repetitions
+            style = 68;
         if (inIdentifier && !stillInIdentifier) {
             // match against identifier keywords
             if (identifierText == ".token") {
