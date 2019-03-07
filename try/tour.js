@@ -270,10 +270,15 @@ expr =
   '*' : zero-or-more
   '+' : one-or-more
   '?' : optional
+  [ '{' (repetition | expr (',' repetition)?)? '}' ] : repetition
  .operators infix flat
   '' : concatenation
  .operators infix flat
   '|' : choice
+repetition =
+  integer@begin : exact
+  integer@begin '+' : at-least
+  integer@begin ',' integer@end : range
 comment-token = '.line-comment-token' string | comment-token-v1
 comment-token-v1 = 'line-comment-token' string
 custom-token = '.token' identifier string*
@@ -303,10 +308,15 @@ expr =
   '*' : zero-or-more
   '+' : one-or-more
   '?' : optional
+  [ '{' (repetition | expr (',' repetition)?)? '}' ] : repetition
  .operators infix flat
   '' : concatenation
  .operators infix flat
   '|' : choice
+repetition =
+  integer@begin : exact
+  integer@begin '+' : at-least
+  integer@begin ',' integer@end : range
 comment-token = '.line-comment-token' string | comment-token-v1
 comment-token-v1 = 'line-comment-token' string
 custom-token = '.token' identifier string*
