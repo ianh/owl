@@ -1531,13 +1531,9 @@ static int compare_action_table_bucket_groups(const void *aa, const void *bb)
 }
 
 // 0xe5aa55e5 is just an arbitrary 32-bit prime number.
-#define ACTION_TABLE_ENTRY_HASH_1(target_nfa_state, dfa_state, dfa_symbol) \
+#define ACTION_TABLE_ENTRY_HASH(target_nfa_state, dfa_state, dfa_symbol) \
  ((((((0xe5aa55e5 ^ (target_nfa_state)) * 0xe5aa55e5) ^ (dfa_state)) * \
  0xe5aa55e5) ^ (dfa_symbol)) * 0xe5aa55e5)
-
-#define ACTION_TABLE_ENTRY_HASH_2(target_nfa_state, dfa_state, dfa_symbol) \
- ((((((0xf2579761 ^ (target_nfa_state)) * 0xf2579761) ^ (dfa_state)) * \
- 0xf2579761) ^ (dfa_symbol)) * 0xf2579761)
 
 static uint32_t log2u(uint32_t n)
 {
@@ -1704,16 +1700,20 @@ static void generate_action_table(struct generator *gen,
      compare_action_table_bucket_groups);
 
     // Size the table to a power of two.
-    uint32_t table_size = 128;
+    uint32_t table_size_bits = 7;
+    uint32_t table_size = 1 << table_size_bits;
     uint32_t total_entries = d->action_map.number_of_entries +
      d->bracket_action_map.number_of_entries;
     uint32_t divisor = 1;
     // FIXME: Figure out the actual math for the size of this table.
     while (table_size <= total_entries / divisor) {
         table_size *= 2;
+        table_size_bits += 1;
         divisor += 1;
     }
     uint32_t table_mask = table_size - 1;
+    // Use the top bits of the hash for a secondary hash value.
+    uint32_t hash2_shift = 32 - table_size_bits;
 
     // This array maps old NFA states to new NFA states.
     state_id *nfa_states = malloc((max_nfa_state + 1) * sizeof(state_id));
@@ -1738,10 +1738,10 @@ static void generate_action_table(struct generator *gen,
             uint32_t j = 0;
             for (; j < group.length; ++j) {
                 struct action_table_bucket *bucket = &buckets[group.index + j];
-                uint32_t k1 = ACTION_TABLE_ENTRY_HASH_1(nfa_state,
-                 bucket->dfa_state, bucket->dfa_symbol) & table_mask;
-                uint32_t k2 = ACTION_TABLE_ENTRY_HASH_2(nfa_state,
-                 bucket->dfa_state, bucket->dfa_symbol) & table_mask;
+                uint32_t h = ACTION_TABLE_ENTRY_HASH(nfa_state,
+                 bucket->dfa_state, bucket->dfa_symbol);
+                uint32_t k1 = h & table_mask;
+                uint32_t k2 = h >> hash2_shift;
                 uint32_t k = bucket_sizes[k1] <= bucket_sizes[k2] ? k1 : k2;
                 bucket->table_index = k;
                 bucket->next = table_buckets[k];
@@ -1865,13 +1865,12 @@ retry:
     output_line(out, "    return entry;");
     output_line(out, "}");
     output_line(out, "static struct action_table_entry action_table_lookup(%%state-type nfa_state, %%state-type dfa_state, %%token-type token) {");
-    set_literal_substitution(out, "action-table-entry-hash-1",
-     STRINGIFY(ACTION_TABLE_ENTRY_HASH_1(nfa_state, dfa_state, token)));
-    set_literal_substitution(out, "action-table-entry-hash-2",
-     STRINGIFY(ACTION_TABLE_ENTRY_HASH_2(nfa_state, dfa_state, token)));
+    set_literal_substitution(out, "action-table-entry-hash", STRINGIFY(ACTION_TABLE_ENTRY_HASH(nfa_state, dfa_state, token)));
     set_unsigned_number_substitution(out, "action-table-mask", table_mask);
-    output_line(out, "    uint32_t index1 = %%action-table-entry-hash-1 & %%action-table-mask;");
-    output_line(out, "    uint32_t index2 = %%action-table-entry-hash-2 & %%action-table-mask;");
+    set_unsigned_number_substitution(out, "action-table-hash2-shift", hash2_shift);
+    output_line(out, "    uint32_t hash = %%action-table-entry-hash;");
+    output_line(out, "    uint32_t index1 = hash & %%action-table-mask;");
+    output_line(out, "    uint32_t index2 = hash >> %%action-table-hash2-shift;");
     output_line(out, "    struct action_table_key key = encode_key(nfa_state, dfa_state, token);");
     output_line(out, "    uint32_t j = 0;");
     output_line(out, "    const uint8_t *entry = 0;");
