@@ -27,6 +27,7 @@
 #define STRING_TOKEN %%string-token
 #define BRACKET_SYMBOL_TOKEN %%bracket-symbol-token
 #define COMMENT_TOKEN %%comment-token
+#define OWL_DONT_INLINE OWL_DONT_INLINE
 #define TOKENIZE_BODY(...) static const char *tokenizer_source = EVALUATE_MACROS_AND_STRINGIFY(__VA_ARGS__);
 #include "x-tokenize.h"
 #define FINISHED_NODE_T size_t
@@ -384,6 +385,13 @@ void generate(struct generator *gen)
     output_line(out, "#include <stdio.h>");
     output_line(out, "#include <stdlib.h>");
     output_line(out, "#include <string.h>");
+
+    output_line(out, "#if defined(__clang__) || defined(__GNUC__)");
+    output_line(out, "#define OWL_DONT_INLINE __attribute__((noinline))");
+    output_line(out, "#else");
+    output_line(out, "#define OWL_DONT_INLINE");
+    output_line(out, "#endif");
+
     output_line(out, "");
     output_line(out, "struct owl_tree {");
     output_line(out, "    const char *string;");

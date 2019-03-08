@@ -97,6 +97,14 @@
 #error The built-in tokenizer needs definitions of basic tokens to work.
 #endif
 
+#ifndef OWL_DONT_INLINE
+#if defined(__clang__) || defined(__GNUC__)
+#define OWL_DONT_INLINE __attribute__((noinline))
+#else
+#define OWL_DONT_INLINE
+#endif
+#endif
+
 #define TOKEN_RUN_LENGTH 4096
 
 TOKENIZE_BODY
@@ -214,8 +222,10 @@ static size_t decode_token_length(struct owl_token_run *run,
     return length;
 }
 
-static bool owl_default_tokenizer_advance(struct owl_default_tokenizer
- *tokenizer, struct owl_token_run **previous_run)
+// Not inlining this function improves performance (clang-1000.11.45.5 at -O3).
+static bool OWL_DONT_INLINE
+owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
+ struct owl_token_run **previous_run)
 {
     struct owl_token_run *run = malloc(sizeof(struct owl_token_run));
     if (!run)

@@ -247,6 +247,11 @@ struct parsed_integer parsed_integer_get(struct owl_ref);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__clang__) || defined(__GNUC__)
+#define OWL_DONT_INLINE __attribute__((noinline))
+#else
+#define OWL_DONT_INLINE
+#endif
 
 struct owl_tree {
     const char *string;
@@ -1393,7 +1398,7 @@ static size_t decode_token_length(struct owl_token_run *run, uint16_t *length_of
     *string_offset -= whitespace + length;
     return length;
 }
-static bool owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer, struct owl_token_run **previous_run) {
+static bool OWL_DONT_INLINE owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer, struct owl_token_run **previous_run) {
     struct owl_token_run *run = malloc(sizeof(struct owl_token_run));
     if (!run) return false;
     uint16_t number_of_tokens = 0;
