@@ -36,4 +36,8 @@ void combine(struct combined_grammar *result, struct grammar *grammar);
 
 void combined_grammar_destroy(struct combined_grammar *grammar);
 
+#define SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(combined) \
+ (find_token((combined)->tokens, (combined)->number_of_keyword_tokens, "-", 1, \
+  TOKEN_DONT_CARE, 0) >= (combined)->number_of_keyword_tokens)
+
 #endif

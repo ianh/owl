@@ -83,11 +83,6 @@
 #define ALLOW_DASHES_IN_IDENTIFIERS(...) false
 #endif
 
-// FIXME: I'm not sure where to put this "function".
-#define SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(combined) \
- (find_token((combined)->tokens, (combined)->number_of_keyword_tokens, "-", 1, \
-  TOKEN_DONT_CARE, 0) >= (combined)->number_of_keyword_tokens)
-
 // Single-character string escapes.
 #define ESCAPE_CHAR_SINGLE(c, info) \
  ((c) == 'b' ? '\b' : \
