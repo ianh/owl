@@ -28,6 +28,8 @@ static const char *compatible_versions[] = {
 
 int main(int argc, char *argv[])
 {
+    // This useless-looking call to memset is important for the Try Owl web
+    // tool, which re-runs main repeatedly without clearing static variables.
     memset(&error, 0, sizeof(error));
 
     // Parse arguments.
