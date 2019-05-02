@@ -81,5 +81,5 @@ static uint64_t decode_hex(const char *chs)
 static bool is_hex(char c)
 {
     return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') ||
-     ('A' <= c && c <= 'Z');
+     ('A' <= c && c <= 'F');
 }
