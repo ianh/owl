@@ -1,5 +1,5 @@
-#ifndef _FNV_H_
-#define _FNV_H_
+#ifndef FNV_H
+#define FNV_H
 
 // This is the 32-bit FNV-1a hash diffusion algorithm.
 // http://www.isthe.com/chongo/tech/comp/fnv/index.html

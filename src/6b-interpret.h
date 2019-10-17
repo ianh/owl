@@ -1,5 +1,5 @@
-#ifndef _6B_INTERPRET_H_
-#define _6B_INTERPRET_H_
+#ifndef INTERPRET_H
+#define INTERPRET_H
 
 #include "4-check-for-ambiguity.h"
 #include "5-determinize.h"

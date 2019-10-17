@@ -1,5 +1,5 @@
-#ifndef _6B_INTERPRET_OUTPUT_H_
-#define _6B_INTERPRET_OUTPUT_H_
+#ifndef INTERPRET_OUTPUT_H
+#define INTERPRET_OUTPUT_H
 
 #include <stdbool.h>
 #include <stddef.h>

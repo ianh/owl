@@ -1,5 +1,5 @@
-#ifndef _5_DETERMINIZE_H_
-#define _5_DETERMINIZE_H_
+#ifndef DETERMINIZE_H
+#define DETERMINIZE_H
 
 #include "3-combine.h"
 #include "bitset.h"

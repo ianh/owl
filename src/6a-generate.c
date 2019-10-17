@@ -169,8 +169,8 @@ void generate(struct generator *gen)
     output_line(out, "//   #define OWL_PARSER_IMPLEMENTATION");
     output_line(out, "//   #include \"owl-parser.h\"");
     output_line(out, "");
-    output_line(out, "#ifndef _OWL_PARSER_H_");
-    output_line(out, "#define _OWL_PARSER_H_");
+    output_line(out, "#ifndef OWL_PARSER_H");
+    output_line(out, "#define OWL_PARSER_H");
     output_line(out, "");
     output_line(out, "#include <stdbool.h>");
     output_line(out, "#include <stddef.h>");

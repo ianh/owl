@@ -1,5 +1,5 @@
-#ifndef _TERMINAL_H_
-#define _TERMINAL_H_
+#ifndef TERMINAL_H
+#define TERMINAL_H
 
 #include <stdbool.h>
 

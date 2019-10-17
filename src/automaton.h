@@ -1,5 +1,5 @@
-#ifndef _AUTOMATON_H_
-#define _AUTOMATON_H_
+#ifndef AUTOMATON_H
+#define AUTOMATON_H
 
 #include "state-array.h"
 

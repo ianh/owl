@@ -1,5 +1,5 @@
-#ifndef _ERROR_H_
-#define _ERROR_H_
+#ifndef ERROR_H
+#define ERROR_H
 
 #include "1-parse.h"
 #include <stdlib.h>

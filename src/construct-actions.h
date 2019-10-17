@@ -1,5 +1,5 @@
-#ifndef _CONSTRUCT_ACTIONS_H_
-#define _CONSTRUCT_ACTIONS_H_
+#ifndef CONSTRUCT_ACTIONS_H
+#define CONSTRUCT_ACTIONS_H
 
 // These are the parse tree construction actions in order.  See 3-combine.c and
 // x-construct-parse-tree.h for how these are used.

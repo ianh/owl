@@ -1,5 +1,5 @@
-#ifndef _STATE_ARRAY_H_
-#define _STATE_ARRAY_H_
+#ifndef STATE_ARRAY_H
+#define STATE_ARRAY_H
 
 #include "grow-array.h"
 #include <stdint.h>

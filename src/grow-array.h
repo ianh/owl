@@ -1,5 +1,5 @@
-#ifndef _GROW_ARRAY_H_
-#define _GROW_ARRAY_H_
+#ifndef GROW_ARRAY_H
+#define GROW_ARRAY_H
 
 #include <stdint.h>
 #include <stdlib.h>

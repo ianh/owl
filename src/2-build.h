@@ -1,5 +1,5 @@
-#ifndef _2_BUILD_H_
-#define _2_BUILD_H_
+#ifndef BUILD_H
+#define BUILD_H
 
 #include "1-parse.h"
 #include "automaton.h"

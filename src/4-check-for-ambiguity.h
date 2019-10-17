@@ -1,5 +1,5 @@
-#ifndef _4_CHECK_FOR_AMBIGUITY_H_
-#define _4_CHECK_FOR_AMBIGUITY_H_
+#ifndef CHECK_FOR_AMBIGUITY_H
+#define CHECK_FOR_AMBIGUITY_H
 
 #include "3-combine.h"
 

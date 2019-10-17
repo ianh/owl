@@ -6,8 +6,8 @@
 //   #define OWL_PARSER_IMPLEMENTATION
 //   #include "owl-parser.h"
 
-#ifndef _OWL_PARSER_H_
-#define _OWL_PARSER_H_
+#ifndef OWL_PARSER_H
+#define OWL_PARSER_H
 
 #include <stdbool.h>
 #include <stddef.h>

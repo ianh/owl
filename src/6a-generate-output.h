@@ -1,5 +1,5 @@
-#ifndef _6A_GENERATE_OUTPUT_H_
-#define _6A_GENERATE_OUTPUT_H_
+#ifndef GENERATE_OUTPUT_H
+#define GENERATE_OUTPUT_H
 
 #include <stddef.h>
 #include <stdint.h>

@@ -1,5 +1,5 @@
-#ifndef _3_COMBINE_H_
-#define _3_COMBINE_H_
+#ifndef COMBINE_H
+#define COMBINE_H
 
 #include "2-build.h"
 

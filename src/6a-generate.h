@@ -1,5 +1,5 @@
-#ifndef _6A_GENERATE_H_
-#define _6A_GENERATE_H_
+#ifndef GENERATE_H
+#define GENERATE_H
 
 #include "5-determinize.h"
 #include <stdlib.h>
