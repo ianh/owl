@@ -391,5 +391,8 @@ static char *read_string(FILE *file)
 
 static void write_to_output(const char *string, size_t len)
 {
-    fwrite(string, len, 1, output_file);
+    if (len > 0 && fwrite(string, len, 1, output_file) != 1) {
+        fputs("critical error: write to output file failed\n", stderr);
+        exit(-1);
+    }
 }
