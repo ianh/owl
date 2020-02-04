@@ -39,6 +39,7 @@ int main(int argc, char *argv[])
     char *grammar_string = 0;
     // May be different if the grammar is in "test format".
     char *grammar_string_to_free = 0;
+    char *prefix_string = 0;
     char *input_string = 0;
     bool compile = false;
     bool test_format = false;
@@ -47,6 +48,7 @@ int main(int argc, char *argv[])
         INPUT_FILE_PARAMETER,
         OUTPUT_FILE_PARAMETER,
         GRAMMAR_TEXT_PARAMETER,
+        PREFIX_PARAMETER,
     } parameter_state = NO_PARAMETER;
     for (int i = 1; i < argc; ++i) {
         const char *short_name = "";
@@ -78,6 +80,11 @@ int main(int argc, char *argv[])
                 if (grammar_string)
                     exit_with_errorf("owl only supports one grammar at a time");
                 parameter_state = GRAMMAR_TEXT_PARAMETER;
+            } else if (!strcmp(short_name, "p") ||
+             !strcmp(long_name, "prefix")) {
+                if (prefix_string)
+                    exit_with_errorf("multiple prefixes specified on the command line");
+                parameter_state = PREFIX_PARAMETER;
             } else if (!strcmp(short_name, "T") ||
              !strcmp(long_name, "test-format"))
                 test_format = true;
@@ -133,6 +140,16 @@ int main(int argc, char *argv[])
             memcpy(grammar_string, argv[i], len + 1);
             parameter_state = NO_PARAMETER;
             break;
+        case PREFIX_PARAMETER:
+            if (short_name[0] || long_name[0]) {
+                errorf("missing prefix");
+                print_error();
+                needs_help = true;
+                break;
+            }
+            prefix_string = argv[i];
+            parameter_state = NO_PARAMETER;
+            break;
         }
         }
         if (needs_help)
@@ -149,6 +166,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, " -o file     --output file      write to file instead of standard output\n");
         fprintf(stderr, " -c          --compile          output a C header file instead of parsing input\n");
         fprintf(stderr, " -g grammar  --grammar grammar  specify the grammar text on the command line\n");
+        fprintf(stderr, " -p prefix   --prefix prefix    output prefix_ instead of owl_ and parsed_\n");
         fprintf(stderr, " -T          --test-format      use test format with combined input and grammar\n");
         fprintf(stderr, " -C          --color            force 256-color parse tree output\n");
         fprintf(stderr, " -V          --version          print version info and exit\n");
@@ -293,6 +311,7 @@ int main(int argc, char *argv[])
             .combined = &combined,
             .deterministic = &deterministic,
             .version = version,
+            .prefix = prefix_string,
         };
         generate(&generator);
     } else {
