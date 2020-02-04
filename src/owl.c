@@ -155,6 +155,30 @@ int main(int argc, char *argv[])
         if (needs_help)
             break;
     }
+    switch (parameter_state) {
+    case INPUT_FILE_PARAMETER:
+        errorf("missing input filename");
+        print_error();
+        needs_help = true;
+        break;
+    case OUTPUT_FILE_PARAMETER:
+        errorf("missing output filename");
+        print_error();
+        needs_help = true;
+        break;
+    case GRAMMAR_TEXT_PARAMETER:
+        errorf("missing grammar text");
+        print_error();
+        needs_help = true;
+        break;
+    case PREFIX_PARAMETER:
+        errorf("missing prefix");
+        print_error();
+        needs_help = true;
+        break;
+    case NO_PARAMETER:
+        break;
+    }
     if (!needs_help && !grammar_string) {
         errorf("missing grammar");
         print_error();
