@@ -367,6 +367,16 @@ struct parsed_digit {
 
 Any data returned via the `data` field in `owl_token` will appear in the `parsed_...` struct automatically.
 
+## custom prefix
+
+The `-p` option specifies a custom prefix for the names in the generated parser code.
+
+```console
+$ owl -c grammar.owl -p asdf -o parser.h
+```
+
+Instead of `owl_ref` and `parsed_integer_get`, `parser.h` will use names like `asdf_ref` and `asdf_integer_get`.
+
 ## function index
 
 `ROOT` is the root rule name.  `RULE` ranges over all rules.
