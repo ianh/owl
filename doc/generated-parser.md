@@ -369,7 +369,7 @@ Any data returned via the `data` field in `owl_token` will appear in the `parsed
 
 ## custom prefix
 
-The `-p` option specifies a custom prefix for the names in the generated parser code.
+The `-p` option specifies a custom prefix for names in the generated parser code.
 
 ```console
 $ owl -c grammar.owl -p asdf -o parser.h
