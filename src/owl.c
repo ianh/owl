@@ -6,6 +6,7 @@
 #include "6b-interpret.h"
 #include "alloc.h"
 #include "terminal.h"
+#include "test.h"
 #include <stdio.h>
 #include <string.h>
 #ifndef NOT_UNIX
@@ -34,8 +35,8 @@ int main(int argc, char *argv[])
 
     // Parse arguments.
     bool needs_help = false;
-    const char *input_filename = 0;
-    const char *output_filename = 0;
+    char *input_filename = 0;
+    char *output_filename = 0;
     char *grammar_string = 0;
     // May be different if the grammar is in "test format".
     char *grammar_string_to_free = 0;
@@ -230,7 +231,7 @@ int main(int argc, char *argv[])
     };
     if (strncmp(grammar_string, "#using ", using_length)) {
         compatible_version = true;
-        if (compile) {
+        if (compile && !test_format) {
             errorf("compiling a grammar without a version string");
             error.level = WARNING;
             print_error();
@@ -329,6 +330,19 @@ int main(int argc, char *argv[])
     determinize(&combined, &deterministic);
 
     if (compile) {
+#ifndef NOT_UNIX
+        struct test_compilation test;
+        // If -T is specified, test the code generator.
+        if (test_format) {
+            if (!output_filename) {
+                exit_with_errorf("-T -c must include -o -- an executable will "
+                 "be written to the output path");
+            }
+            test.executable_filename = output_filename;
+            fclose(output_file);
+            begin_test_compilation(&test);
+        }
+#endif
         struct generator generator = {
             .output = write_to_output,
             .grammar = &grammar,
@@ -338,6 +352,10 @@ int main(int argc, char *argv[])
             .prefix = prefix_string,
         };
         generate(&generator);
+#ifndef NOT_UNIX
+        if (test_format)
+            finish_test_compilation(&test, input_string);
+#endif
     } else {
         if (!input_string) {
             FILE *input_file = stdin;
