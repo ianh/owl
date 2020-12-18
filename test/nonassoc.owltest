@@ -1,0 +1,5 @@
+---expr =
+  identifier : ident
+ .operators infix nonassoc
+  '==' : eq
+  '<' : lt

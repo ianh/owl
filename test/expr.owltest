@@ -1,0 +1,12 @@
+---expr =
+  [ '(' expr ')' ] : parens
+  identifier : ident
+  number : literal
+ .operators prefix
+  '-' : negative
+ .operators infix left
+  '*' : times
+  '/' : divided-by
+ .operators infix left
+  '+' : plus
+  '-' : minus

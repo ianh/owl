@@ -1,0 +1,14 @@
+---# a grammar for json values
+
+value =
+ [ '{' (string ':' value (',' string ':' value)*)? '}' ] : object
+ [ '[' (value (',' value)*)? ']' ] : array
+ string : string
+ json-number : number
+ 'true' : true
+ 'false' : false
+ 'null' : null
+
+json-number =
+ '-' number : negative
+  number : positive

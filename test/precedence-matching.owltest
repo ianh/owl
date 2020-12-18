@@ -1,0 +1,8 @@
+---# this grammar should not be ambiguous
+expr =
+    number : num
+  .operators infix flat
+    '-' : sub1
+    '-' '-' : sub2
+  .operators prefix
+    '-' : neg

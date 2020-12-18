@@ -1,0 +1,5 @@
+---a = 
+  b@identifier : b
+ .operators prefix
+  identifier : c
+b = "b"

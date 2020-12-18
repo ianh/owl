@@ -1,0 +1,39 @@
+---program = decl*
+decl =
+ 'class' identifier [ '{' class-body '}' ] : class
+ 'function' identifier [ '(' ((param ',')* param)? ')' ] [ '{' stmt* '}' ] : function
+class-body = class-decl*
+class-decl =
+  'method' identifier [ '(' ((param ',')* param)? ')' ] [ '{' stmt* '}' ] : method
+  'ivar' identifier : ivar
+param = identifier
+stmt =
+  expr [ '(' ((expr ',')* expr)? ')' ] : call
+  'var' identifier ('=' expr)? : var
+  identifier '=' expr : assignment
+  'if' expr@if-expr [ '{' stmt@if-stmt* '}' ]
+   ('else' [ '{' stmt@else-stmt* '}' ])? : if
+  'while' expr [ '{' stmt* '}' ] : while
+expr =
+  identifier : ident
+  number : num
+  string : string
+  'true' : true
+  'false' : false
+  [ '(' expr ')' ] : parens
+ .operators postfix
+  [ '(' ((expr ',')* expr)? ')' ] : call
+ .operators prefix
+  '-' : negate
+ .operators infix flat 
+  '*' : times
+  '/' : divide
+ .operators infix flat
+  '+' : plus
+  '-' : minus
+ .operators infix nonassoc
+  '==' : eq
+  '>=' : ge
+  '<=' : le
+  '>' : gt
+  '<' : lt

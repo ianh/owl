@@ -1,0 +1,4 @@
+---a = 'x' 'y' 'z' : a
+ .operators prefix
+  b : b
+b = ''

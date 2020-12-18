@@ -1,0 +1,8 @@
+---program = stmt*
+stmt =
+ expr : expr
+ 'if' expr 'then' expr : if
+expr =
+ identifier : ident
+ identifier '(' identifier ')' : function
+ '(' identifier ')' : parens

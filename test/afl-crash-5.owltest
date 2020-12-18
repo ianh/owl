@@ -1,0 +1,6 @@
+---expr =
+  identifier : ident
+ .operators postfix
+  'x'+:a
+ .operators postfix
+  'x'+:b
