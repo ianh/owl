@@ -30,9 +30,8 @@ install: owl
 	$(INSTALL) -m 557 owl $(PREFIX)/bin/owl
 
 test: owl
-	sh -c 'cd test; for i in *.owl; do ../owl -i /dev/null "$$i" > "results/$$i.stdout" 2> "results/$$i.stderr"; done;:'
 	sh -c 'cd test; for i in *.owltest; do ../owl -T "$$i" > "results/$$i.stdout" 2> "results/$$i.stderr"; done;:'
-	bash test/compile-valid.sh
+	sh -c 'TMP=`mktemp`; cd test; for i in *.owltest; do ../owl -T -c -o "$$TMP" "$$i" > "results/$$i.cc-stdout" 2> "results/$$i.cc-stderr"; done; rm "$$TMP";:'
 	git diff --stat --exit-code test/results
 	@echo "All tests passed."
 
