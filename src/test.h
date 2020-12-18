@@ -11,6 +11,7 @@ struct test_compilation {
     FILE *file;
     pid_t child;
     char *args[MAX_ARGS];
+    char *program;
 };
 
 void begin_test_compilation(struct test_compilation *t);

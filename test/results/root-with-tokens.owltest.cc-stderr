@@ -1,3 +1,2 @@
 parse error: more input needed
-error: '/var/folders/z9/dlgp6ct57455mv0ctpbvwtb80000gn/T/tmp.ib54sF72' exited 
-with status 255
+error: 'test executable' exited with status 255

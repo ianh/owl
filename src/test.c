@@ -19,6 +19,7 @@ void begin_test_compilation(struct test_compilation *t)
     t->args[4] = "-o";
     t->args[5] = t->executable_filename;
     t->args[6] = 0;
+    t->program = t->args[0];
     spawn_child(t);
     fprintf(t->file, "#define OWL_PARSER_IMPLEMENTATION\n");
 }
@@ -37,6 +38,7 @@ void finish_test_compilation(struct test_compilation *t, char *input_string)
 
     t->args[0] = t->executable_filename;
     t->args[1] = 0;
+    t->program = "test executable";
     spawn_child(t);
     fprintf(t->file, "%s", input_string);
     fclose(t->file);
@@ -55,7 +57,7 @@ static void spawn_child(struct test_compilation *t)
         dup2(fd[0], STDIN_FILENO);
         close(fd[0]);
         execvp(t->args[0], t->args);
-        exit_with_errorf("couldn't invoke '%s' - %s", t->args[0], strerror(errno));
+        exit_with_errorf("couldn't invoke '%s' - %s", t->program, strerror(errno));
         exit(1);
     } else {
         t->file = fdopen(fd[1], "w");
@@ -72,10 +74,10 @@ static void wait_for_child(struct test_compilation *t)
             exit_with_errorf("wait() failed - %s", strerror(errno));
     }
     if (!WIFEXITED(status)) {
-        exit_with_errorf("'%s' didn't exit normally", t->args[0]);
+        exit_with_errorf("'%s' didn't exit normally", t->program);
         exit(1);
     } else if (WEXITSTATUS(status) != 0) {
-        exit_with_errorf("'%s' exited with status %d", t->args[0],
+        exit_with_errorf("'%s' exited with status %d", t->program,
          WEXITSTATUS(status));
         exit(WEXITSTATUS(status));
     }
