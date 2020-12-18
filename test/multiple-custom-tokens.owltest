@@ -1,0 +1,5 @@
+---
+.token foo
+.token bar
+
+program = 'f'*
