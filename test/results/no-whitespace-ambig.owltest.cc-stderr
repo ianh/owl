@@ -1,0 +1,17 @@
+warning: no whitespace specified - ambiguities may be inaccurate
+error: this grammar is ambiguous
+
+. aaa
+
+  can be parsed in two different ways: as
+
+. aa a
+  y- y
+  x---
+
+  or as
+
+. a aa
+  y y-
+  x---
+

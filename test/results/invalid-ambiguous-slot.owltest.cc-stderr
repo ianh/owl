@@ -1,0 +1,8 @@
+error: in the rule 'a', the name 'identifier' could refer to two different rules
+
+    b@identifier : b
+    ~~~~~~~~~~~~    
+  ...
+    identifier : c
+    ~~~~~~~~~~    
+

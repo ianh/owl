@@ -1,0 +1,22 @@
+error: this grammar is ambiguous
+
+. function a ( ) { 1 - 2 } 
+
+  can be parsed in two different ways: as
+
+. function a ( ) { 1            - 2            } 
+  |                |            | expr:literal   
+  |                expr:literal expr:negate---   
+  |                stmt-------- stmt----------   
+  decl:function--------------------------------- 
+  program--------------------------------------- 
+
+  or as
+
+. function a ( ) { 1            - 2            } 
+  |                expr:literal   expr:literal   
+  |                expr:minus-----------------   
+  |                stmt-----------------------   
+  decl:function--------------------------------- 
+  program--------------------------------------- 
+

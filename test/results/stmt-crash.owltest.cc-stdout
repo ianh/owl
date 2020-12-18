@@ -1,0 +1,7 @@
+input (0 - 11)
+  stmt : IF (0 - 11)
+    expr (3 - 4)
+      identifier - a (3 - 4)
+    stmt : EXPR (7 - 9)
+      expr (7 - 8)
+        identifier - a (7 - 8)

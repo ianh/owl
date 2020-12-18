@@ -1,0 +1,7 @@
+error: token 'x' can't be used as both a whitespace and a comment keyword
+
+  .whitespace 'x'
+              ~~~
+  .line-comment-token 'x'
+                      ~~~
+

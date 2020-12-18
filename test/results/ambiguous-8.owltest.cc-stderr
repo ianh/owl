@@ -1,0 +1,22 @@
+error: this grammar is ambiguous
+
+. a = ( "a" ( ) ) 
+
+  can be parsed in two different ways: as
+
+. a = ( "a"          (  ) ) 
+  |   | expr:literal  b     
+  |   expr:parens---------- 
+  |   body----------------- 
+  rule--------------------- 
+  grammar------------------ 
+
+  or as
+
+. a = ( "a"          (    ) ) 
+  |   | expr:literal  b b     
+  |   expr:parens------------ 
+  |   body------------------- 
+  rule----------------------- 
+  grammar-------------------- 
+

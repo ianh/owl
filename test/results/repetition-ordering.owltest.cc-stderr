@@ -1,0 +1,5 @@
+error: the maximum number of repetitions must be greater than the minimum
+
+  x = 'x'{3,2}
+          ~ ~ 
+

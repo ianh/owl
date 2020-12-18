@@ -1,0 +1,17 @@
+error: this grammar is ambiguous
+
+. 
+
+  can be parsed in two different ways: as
+
+.    
+  b b
+  a--
+
+  or as
+
+.    
+  | c
+  b b
+  a--
+

@@ -1,0 +1,5 @@
+program (0 - 12)
+  line (0 - 5)
+    identifier - foo (2 - 5)
+  line (6 - 11)
+    identifier - bar (8 - 11)

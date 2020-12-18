@@ -1,0 +1,5 @@
+rule : ARROW (0 - 4)
+  rule@left : IDENT (0 - 1)
+    identifier - a (0 - 1)
+  rule@right : IDENT (3 - 4)
+    identifier - b (3 - 4)

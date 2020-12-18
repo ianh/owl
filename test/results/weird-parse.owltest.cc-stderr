@@ -1,0 +1,18 @@
+error: this grammar is ambiguous
+
+. 0 0 
+
+  can be parsed in two different ways: as
+
+.                                                                        0 0  ..
+  b:loooooooooooong b:loooooooooooong b:loooooooooooong b:loooooooooooong       
+  e-------------------------------------------------------------------------    
+ .. 
+
+  or as
+
+.                                                                        0 0  ..
+  b:loooooooooooong b:loooooooooooong b:loooooooooooong b:loooooooooooong       
+  e-------------------------------------------------------------------------    
+ .. 
+

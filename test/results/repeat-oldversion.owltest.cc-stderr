@@ -1,0 +1,7 @@
+error: explicit repetition is unsupported in versions before owl.v4
+
+  #using owl.v3
+         ~~~~~~
+  x = 'x'{3+}
+      ~~~~~~~
+

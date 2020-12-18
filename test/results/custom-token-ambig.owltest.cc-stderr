@@ -1,0 +1,15 @@
+error: this grammar is ambiguous
+
+. 1 2342 1.0j other other 
+
+  can be parsed in two different ways: as
+
+. 1 2342 1.0j other other 
+  input------------------ 
+
+  or as
+
+. 1 2342 1.0j other other  
+  |                      x 
+  input------------------- 
+

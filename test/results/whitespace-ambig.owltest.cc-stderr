@@ -1,0 +1,16 @@
+error: this grammar is ambiguous
+
+. axaxax
+
+  can be parsed in two different ways: as
+
+. axaxax
+  y-- y 
+  x---- 
+
+  or as
+
+. axaxax
+  y y-- 
+  x---- 
+
