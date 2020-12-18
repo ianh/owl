@@ -498,7 +498,7 @@ void generate(struct generator *gen)
             output_line(out, "            .%%referenced-slot.empty = true,");
         }
         if (rule->number_of_slots == 0)
-            output_line(out, "        0");
+            output_line(out, "            {0}");
         output_line(out, "        };");
         output_line(out, "    }");
         output_line(out, "    size_t offset = ref._offset;");
@@ -1852,7 +1852,7 @@ retry:
         output_string(out, "{");
         struct action_table_bucket *bucket = table_buckets[i];
         if (!bucket)
-            output_string(out, "0");
+            output_string(out, "{0}");
         for (; bucket; bucket = bucket->next) {
             output_string(out, "{");
             memset(bytes, 0, key_bytes + value_bytes);
