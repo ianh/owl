@@ -32,7 +32,7 @@ install: owl
 test: owl
 	sh -c 'cd test; for i in *.owl; do ../owl -i /dev/null "$$i" > "results/$$i.stdout" 2> "results/$$i.stderr"; done;:'
 	sh -c 'cd test; for i in *.owltest; do ../owl -T "$$i" > "results/$$i.stdout" 2> "results/$$i.stderr"; done;:'
-	test/compile-valid.sh
+	bash test/compile-valid.sh
 	git diff --stat --exit-code test/results
 	@echo "All tests passed."
 
