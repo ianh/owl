@@ -14,12 +14,17 @@ void begin_test_compilation(struct test_compilation *t)
     t->args[0] = getenv("CC");
     if (!t->args[0])
         t->args[0] = "cc";
-    t->args[1] = "-x";
-    t->args[2] = "c";
-    t->args[3] = "-";
-    t->args[4] = "-o";
-    t->args[5] = t->executable_filename;
-    t->args[6] = 0;
+    int i = 1;
+    t->args[i++] = "-pedantic";
+    t->args[i++] = "-Wall";
+    t->args[i++] = "-Wno-missing-braces";
+    t->args[i++] = "-Wno-overlength-strings";
+    t->args[i++] = "-x";
+    t->args[i++] = "c";
+    t->args[i++] = "-";
+    t->args[i++] = "-o";
+    t->args[i++] = t->executable_filename;
+    t->args[i++] = 0;
     t->program = t->args[0];
     spawn_child(t);
     fprintf(t->file, "#define OWL_PARSER_IMPLEMENTATION\n");
