@@ -4,6 +4,7 @@
 #include "error.h"
 #include <errno.h>
 #include <string.h>
+#include <sys/wait.h>
 
 static void spawn_child(struct test_compilation *t);
 static void wait_for_child(struct test_compilation *t);
