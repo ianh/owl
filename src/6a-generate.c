@@ -427,12 +427,14 @@ void generate(struct generator *gen)
     output_line(out, "    size_t root_offset;");
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = gen->grammar->rules[i];
-        if (!rule->is_token)
+        if (!rule->is_token || rule->token_type == RULE_TOKEN_CUSTOM)
             continue;
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
         output_line(out, "    size_t next_%%rule_token_offset;");
     }
+    if (has_custom_tokens)
+        output_line(out, "    size_t next_custom_token_offset;");
     output_line(out, "};");
 
     set_literal_substitution(out, "token-type", "uint32_t");
@@ -606,8 +608,12 @@ void generate(struct generator *gen)
         if (!rule->is_token)
             continue;
         set_unsigned_number_substitution(out, "rule-index", i);
-        set_substitution(out, "rule", rule->name, rule->name_length,
-         LOWERCASE_WITH_UNDERSCORES);
+        if (rule->token_type == RULE_TOKEN_CUSTOM)
+            set_literal_substitution(out, "rule", "custom");
+        else {
+            set_substitution(out, "rule", rule->name, rule->name_length,
+             LOWERCASE_WITH_UNDERSCORES);
+        }
         output_line(out, "    case %%rule-index: {");
         output_line(out, "        size_t offset = tree->next_%%rule_token_offset;");
         output_line(out, "        if (offset == 0)");
@@ -852,12 +858,20 @@ void generate(struct generator *gen)
         output_line(out, "#define IF_STRING_TOKEN(cond, ...) if (cond) __VA_ARGS__");
     output_line(out, "static size_t read_whitespace(const char *text, void *info);");
     output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info);");
+    bool has_write_custom_token = false;
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = gen->grammar->rules[i];
         if (!rule->is_token)
             continue;
-        set_substitution(out, "rule", rule->name, rule->name_length,
-         LOWERCASE_WITH_UNDERSCORES);
+        if (rule->token_type == RULE_TOKEN_CUSTOM) {
+            if (has_write_custom_token)
+                continue;
+            has_write_custom_token = true;
+            set_literal_substitution(out, "rule", "custom");
+        } else {
+            set_substitution(out, "rule", rule->name, rule->name_length,
+             LOWERCASE_WITH_UNDERSCORES);
+        }
         switch (rule->token_type) {
         case RULE_TOKEN_IDENTIFIER:
             set_literal_substitution(out, "write-identifier-token", "write_identifier_token");
