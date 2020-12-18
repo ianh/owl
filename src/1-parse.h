@@ -3520,7 +3520,7 @@ struct action_table_key {
     uint8_t bytes[3];
 };
 static inline struct action_table_key encode_key(uint32_t target_nfa_state, uint32_t dfa_state, uint32_t dfa_symbol) {
-    struct action_table_key key = {0};
+    struct action_table_key key = {{0}};
     key.bytes[0] |= (target_nfa_state >> 0) & 255;
     key.bytes[1] |= (target_nfa_state >> 8) & 3;
     key.bytes[1] |= (dfa_state << 2) & 255;

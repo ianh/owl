@@ -1887,7 +1887,7 @@ retry:
     output_line(out, "    uint8_t bytes[%%key-bytes];");
     output_line(out, "};");
     output_line(out, "static inline struct action_table_key encode_key(%%state-type target_nfa_state, %%state-type dfa_state, %%token-type dfa_symbol) {");
-    output_line(out, "    struct action_table_key key = {0};");
+    output_line(out, "    struct action_table_key key = {{0}};");
     encode_bit_range(out, target_nfa_state_range, "target_nfa_state");
     encode_bit_range(out, dfa_state_range, "dfa_state");
     encode_bit_range(out, dfa_symbol_range, "dfa_symbol");
