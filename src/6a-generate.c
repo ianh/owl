@@ -1957,9 +1957,13 @@ retry:
     output_line(out, "            size_t end = offset;");
     output_line(out, "            size_t len = 0;");
     output_line(out, "            struct action_table_entry entry = action_table_lookup(nfa_state, run->states[i], run->tokens[i]);");
-    set_unsigned_number_substitution(out, "number-of-tokens",
-     gen->combined->number_of_tokens);
-    output_line(out, "            if (run->tokens[i] < %%number-of-tokens)");
+    if (gen->combined->number_of_tokens > 0) {
+        // avoid "warning: comparison of unsigned expression < 0 is always false"
+        set_unsigned_number_substitution(out, "number-of-tokens",
+         gen->combined->number_of_tokens);
+        output_line(out, "            if (run->tokens[i] < %%number-of-tokens)");
+    } else
+        output_line(out, "            if (true)");
     output_line(out, "                len = decode_token_length(run, &length_offset, &offset);");
     output_line(out, "            else {");
     output_line(out, "                if (stack_depth >= stack_capacity) {");
