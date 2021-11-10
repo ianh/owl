@@ -336,6 +336,7 @@ int main(int argc, char *argv[])
                  "be written to the output path");
             }
             test.executable_filename = output_filename;
+            output_filename = 0;
             fclose(output_file);
             begin_test_compilation(&test);
         }
