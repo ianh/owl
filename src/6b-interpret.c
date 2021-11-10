@@ -733,7 +733,7 @@ static void fill_bracket_transitions_for_symbols(struct interpret_context *ctx)
     if (ctx->bracket_transition_for_symbol)
         return;
     struct deterministic_grammar *d = ctx->deterministic;
-    size_t len = 0;
+    size_t len = ctx->combined->number_of_tokens;
     for (uint32_t i = 0; i < d->transitions.number_of_transitions; ++i) {
         symbol_id symbol =
          d->transitions.transitions[i].deterministic_transition_symbol;
