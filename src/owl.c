@@ -352,8 +352,10 @@ int main(int argc, char *argv[])
         };
         generate(&generator);
 #ifndef NOT_UNIX
-        if (test_format)
+        if (test_format) {
             finish_test_compilation(&test, input_string);
+            output_file = 0;
+        }
 #endif
     } else {
         if (!input_string) {
