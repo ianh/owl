@@ -54,7 +54,8 @@ void finish_test_compilation(struct test_compilation *t, char *input_string)
 static void spawn_child(struct test_compilation *t)
 {
     int fd[2];
-    pipe(fd);
+    if (pipe(fd) == -1)
+        exit_with_errorf("pipe() failed - %s", strerror(errno));
     t->child = fork();
     if (t->child == -1)
         exit_with_errorf("fork() failed - %s", strerror(errno));
