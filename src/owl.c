@@ -339,6 +339,7 @@ int main(int argc, char *argv[])
             output_filename = 0;
             fclose(output_file);
             begin_test_compilation(&test);
+            output_file = test.file;
         }
 #endif
         struct generator generator = {
