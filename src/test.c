@@ -17,8 +17,10 @@ void begin_test_compilation(struct test_compilation *t)
     int i = 1;
     t->args[i++] = "-pedantic";
     t->args[i++] = "-Wall";
+    t->args[i++] = "-Wno-unknown-warning-option"; // clang needs this to avoid giving a warning about -Wno-unused-but-set-variable
     t->args[i++] = "-Wno-unused-function"; // Modern compilers all understand DCE and functions/variables
     t->args[i++] = "-Wno-unused-variable"; // that go unused for some grammars may be necessary for others
+    t->args[i++] = "-Wno-unused-but-set-variable";
     t->args[i++] = "-x";
     t->args[i++] = "c";
     t->args[i++] = "-";
