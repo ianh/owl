@@ -9,9 +9,6 @@
 #include "test.h"
 #include <stdio.h>
 #include <string.h>
-#ifndef NOT_UNIX
-#include <unistd.h>
-#endif
 
 static FILE *output_file = 0;
 static struct terminal_info get_terminal_info(int fileno);

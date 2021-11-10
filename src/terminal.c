@@ -1,12 +1,13 @@
 #include "terminal.h"
 
-#include <stdlib.h>
-
 #ifndef NOT_UNIX
+#define _XOPEN_SOURCE 700
 #include <dlfcn.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 #endif
+
+#include <stdlib.h>
 
 bool force_terminal_colors = false;
 

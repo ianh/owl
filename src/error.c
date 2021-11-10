@@ -1,10 +1,12 @@
 #include "error.h"
 
-#include "terminal.h"
-#include <string.h>
 #ifndef NOT_UNIX
+#define _XOPEN_SOURCE 700
 #include <unistd.h>
 #endif
+
+#include "terminal.h"
+#include <string.h>
 
 static int compare_source_ranges(const void *aa, const void *bb);
 struct error error = {0};

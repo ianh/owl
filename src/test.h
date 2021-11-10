@@ -2,7 +2,9 @@
 #ifndef TEST_H
 #define TEST_H
 
+#define _XOPEN_SOURCE 700
 #include <stdio.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #define MAX_ARGS 16
