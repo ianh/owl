@@ -138,7 +138,7 @@ static struct construct_node *construct_node_alloc(struct construct_state *s,
         if (!node)
             abort();
         node->slots = calloc(number_of_slots, sizeof(FINISHED_NODE_T));
-        if (!node->slots)
+        if (number_of_slots > 0 && !node->slots)
             abort();
     }
     node->rule = rule;
