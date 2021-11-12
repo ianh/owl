@@ -1673,7 +1673,7 @@ static struct construct_node *construct_node_alloc(struct construct_state *s, ui
         node = calloc(1, sizeof(struct construct_node));
         if (!node) abort();
         node->slots = calloc(number_of_slots, sizeof(size_t));
-        if (!node->slots) abort();
+        if (number_of_slots > 0 && !node->slots) abort();
     }
     node->rule = rule;
     node->number_of_slots = number_of_slots;
