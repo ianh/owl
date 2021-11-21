@@ -1,0 +1,4 @@
+1, 1.2, 0x1, 0xF, 0xff, 0xff.f
+---
+y = x{','}
+x = integer : int number : num

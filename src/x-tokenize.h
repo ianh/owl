@@ -156,6 +156,11 @@ static bool char_is_alphabetic(char c)
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
+static bool char_is_hexadecimal_alpha(char c)
+{
+    return (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
 static bool char_starts_identifier(char c)
 {
     return char_is_alphabetic(c) || c == '_';
@@ -273,12 +278,23 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
         IF_INTEGER_TOKEN(char_is_numeric(c), {
             // Integer.
             size_t integer_offset = offset;
+            uint64_t base = 10;
+            if (c == '0' && (text[offset + 1] == 'x' || text[offset + 1] == 'X') && (char_is_numeric(text[offset + 2]) || char_is_hexadecimal_alpha(text[integer_offset + 2]))) {
+                integer_offset = offset + 2;
+                base = 16;
+            }
             integer = 0;
             bool overflow = false;
-            while (char_is_numeric(text[integer_offset])) {
+            while (char_is_numeric(text[integer_offset]) || (base == 16 && char_is_hexadecimal_alpha(text[integer_offset]))) {
                 uint64_t last = integer;
-                integer *= 10;
-                integer += text[integer_offset] - '0';
+                integer *= base;
+                uint64_t ch = text[integer_offset];
+                if (ch >= '0' && ch <= '9')
+                    integer += ch - '0';
+                else if (ch >= 'a' && ch <= 'f')
+                    integer += ch - 'a' + 0xa;
+                else if (ch >= 'A' && ch <= 'F')
+                    integer += ch - 'A' + 0xA;
                 if (integer < last) {
                     overflow = true;
                     break;
