@@ -888,7 +888,8 @@ static size_t finish_token(uint32_t rule, size_t next_sibling, void *info) {
         if (offset == 0)
             abort();
         write_tree(tree, offset);
-        tree->next_identifier_token_offset = offset - read_tree(&offset, tree);
+        tree->next_identifier_token_offset = offset;
+        tree->next_identifier_token_offset -= read_tree(&offset, tree);
         break;
     }
     case 14: {
@@ -896,7 +897,8 @@ static size_t finish_token(uint32_t rule, size_t next_sibling, void *info) {
         if (offset == 0)
             abort();
         write_tree(tree, offset);
-        tree->next_string_token_offset = offset - read_tree(&offset, tree);
+        tree->next_string_token_offset = offset;
+        tree->next_string_token_offset -= read_tree(&offset, tree);
         break;
     }
     case 15: {
@@ -904,7 +906,8 @@ static size_t finish_token(uint32_t rule, size_t next_sibling, void *info) {
         if (offset == 0)
             abort();
         write_tree(tree, offset);
-        tree->next_integer_token_offset = offset - read_tree(&offset, tree);
+        tree->next_integer_token_offset = offset;
+        tree->next_integer_token_offset -= read_tree(&offset, tree);
         break;
     }
     default:

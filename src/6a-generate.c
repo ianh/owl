@@ -619,7 +619,8 @@ void generate(struct generator *gen)
         output_line(out, "        if (offset == 0)");
         output_line(out, "            abort();");
         output_line(out, "        write_tree(tree, offset);");
-        output_line(out, "        tree->next_%%rule_token_offset = offset - read_tree(&offset, tree);");
+        output_line(out, "        tree->next_%%rule_token_offset = offset;");
+        output_line(out, "        tree->next_%%rule_token_offset -= read_tree(&offset, tree);");
         output_line(out, "        break;");
         output_line(out, "    }");
     }
