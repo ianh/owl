@@ -884,30 +884,30 @@ static size_t finish_token(uint32_t rule, size_t next_sibling, void *info) {
     write_tree(tree, next_sibling ? offset - next_sibling : 0);
     switch (rule) {
     case 13: {
-        size_t offset = tree->next_identifier_token_offset;
-        if (offset == 0)
+        size_t offset13 = tree->next_identifier_token_offset;
+        if (offset13 == 0)
             abort();
-        write_tree(tree, offset);
-        tree->next_identifier_token_offset = offset;
-        tree->next_identifier_token_offset -= read_tree(&offset, tree);
+        write_tree(tree, offset13);
+        tree->next_identifier_token_offset = offset13;
+        tree->next_identifier_token_offset -= read_tree(&offset13, tree);
         break;
     }
     case 14: {
-        size_t offset = tree->next_string_token_offset;
-        if (offset == 0)
+        size_t offset14 = tree->next_string_token_offset;
+        if (offset14 == 0)
             abort();
-        write_tree(tree, offset);
-        tree->next_string_token_offset = offset;
-        tree->next_string_token_offset -= read_tree(&offset, tree);
+        write_tree(tree, offset14);
+        tree->next_string_token_offset = offset14;
+        tree->next_string_token_offset -= read_tree(&offset14, tree);
         break;
     }
     case 15: {
-        size_t offset = tree->next_integer_token_offset;
-        if (offset == 0)
+        size_t offset15 = tree->next_integer_token_offset;
+        if (offset15 == 0)
             abort();
-        write_tree(tree, offset);
-        tree->next_integer_token_offset = offset;
-        tree->next_integer_token_offset -= read_tree(&offset, tree);
+        write_tree(tree, offset15);
+        tree->next_integer_token_offset = offset15;
+        tree->next_integer_token_offset -= read_tree(&offset15, tree);
         break;
     }
     default:
