@@ -615,12 +615,12 @@ void generate(struct generator *gen)
              LOWERCASE_WITH_UNDERSCORES);
         }
         output_line(out, "    case %%rule-index: {");
-        output_line(out, "        size_t offset = tree->next_%%rule_token_offset;");
-        output_line(out, "        if (offset == 0)");
+        output_line(out, "        size_t offset%%rule-index = tree->next_%%rule_token_offset;");
+        output_line(out, "        if (offset%%rule-index == 0)");
         output_line(out, "            abort();");
-        output_line(out, "        write_tree(tree, offset);");
-        output_line(out, "        tree->next_%%rule_token_offset = offset;");
-        output_line(out, "        tree->next_%%rule_token_offset -= read_tree(&offset, tree);");
+        output_line(out, "        write_tree(tree, offset%%rule-index);");
+        output_line(out, "        tree->next_%%rule_token_offset = offset%%rule-index;");
+        output_line(out, "        tree->next_%%rule_token_offset -= read_tree(&offset%%rule-index, tree);");
         output_line(out, "        break;");
         output_line(out, "    }");
     }
