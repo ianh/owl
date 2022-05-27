@@ -520,6 +520,8 @@ void generate(struct generator *gen)
             output_line(out, "    size_t end_location = start_location + read_tree(&offset, ref._tree);");
         }
         output_line(out, "    struct %%parsed_%%rule result = {");
+        output_line(out, "        .range.start = start_location,");
+        output_line(out, "        .range.end = end_location,");
         if (rule->is_token) {
             switch (rule->token_type) {
             case RULE_TOKEN_IDENTIFIER:
@@ -541,8 +543,6 @@ void generate(struct generator *gen)
                 break;
             }
         }
-        output_line(out, "        .range.start = start_location,");
-        output_line(out, "        .range.end = end_location,");
         if (rule->number_of_choices > 0)
             output_line(out, "        .type = (enum %%parsed_type)read_tree(&offset, ref._tree),");
         output_line(out, "    };");
@@ -678,9 +678,10 @@ void generate(struct generator *gen)
         set_substitution(out, "rule", rule->name, rule->name_length,
          LOWERCASE_WITH_UNDERSCORES);
         output_line(out, "static void %%parsed_%%rule_print(struct %%prefix_tree *tree, struct %%prefix_ref ref, const char *slot_name, int indent) {");
+        output_line(out, "    int i;");
         output_line(out, "    while (!ref.empty) {");
         output_line(out, "        struct %%parsed_%%rule it = %%parsed_%%rule_get(ref);");
-        output_line(out, "        for (int i = 0; i < indent; ++i) printf(\"  \");");
+        output_line(out, "        for (i = 0; i < indent; ++i) printf(\"  \");");
         output_line(out, "        printf(\"%%rule\");");
         output_line(out, "        if (strcmp(\"%%rule\", slot_name))");
         output_line(out, "            printf(\"@%s\", slot_name);");
@@ -1930,7 +1931,8 @@ retry:
     output_line(out, "}");
     output_line(out, "static void apply_actions(struct construct_state *state, uint32_t index, size_t start, size_t end) {");
     output_line(out, "    size_t offset = end;");
-    output_line(out, "    for (uint32_t i = index; actions[i]; ++i) {");
+    output_line(out, "    uint32_t i;");
+    output_line(out, "    for (i = index; actions[i]; ++i) {");
     set_literal_substitution(out, "is-end-action", STRINGIFY(CONSTRUCT_IS_END_ACTION(actions[i])));
     output_line(out, "        if (%%is-end-action)");
     output_line(out, "            offset = start;");
@@ -1954,7 +1956,8 @@ retry:
     output_line(out, "    while (run) {");
     output_line(out, "        uint16_t length_offset = run->lengths_size - 1;");
     output_line(out, "        uint16_t n = run->number_of_tokens;");
-    output_line(out, "        for (uint16_t i = n - 1; i < n; i--) {");
+    output_line(out, "        uint16_t i;");
+    output_line(out, "        for (i = n - 1; i < n; i--) {");
     output_line(out, "            size_t end = offset;");
     output_line(out, "            size_t len = 0;");
     output_line(out, "            struct action_table_entry entry = action_table_lookup(nfa_state, run->states[i], run->tokens[i]);");

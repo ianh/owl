@@ -395,7 +395,8 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
             size_t string_length = content_length;
             if (has_escapes) {
                 // Apply escape sequences.
-                for (size_t i = 0; i < content_length; ++i) {
+                size_t i;
+                for (i = 0; i < content_length; ++i) {
                     if (text[content_offset + i] == '\\') {
                         string_length--;
                         i++;
@@ -404,7 +405,7 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
                 char *unescaped = ALLOCATE_STRING(string_length,
                  tokenizer->info);
                 size_t j = 0;
-                for (size_t i = 0; i < content_length; ++i) {
+                for (i = 0; i < content_length; ++i) {
                     if (text[content_offset + i] == '\\')
                         i++;
                     unescaped[j++] = ESCAPE_CHAR(text[content_offset + i],
@@ -451,7 +452,8 @@ static void find_token_range(struct owl_default_tokenizer *tokenizer,
     size_t last_offset = offset;
     size_t len = 0;
     uint16_t length_offset = run->lengths_size - 1;
-    for (uint16_t j = index; j < run->number_of_tokens; ++j) {
+    uint16_t j;
+    for (j = index; j < run->number_of_tokens; ++j) {
         if (run->tokens[j] == BRACKET_SYMBOL_TOKEN)
             continue;
         last_offset = offset;
