@@ -1042,7 +1042,7 @@ void generate(struct generator *gen)
         }
         output_line(out, "    %%token-type token = run->tokens[token_index];");
         output_line(out, "    switch (token) {");
-        struct bitset reachability_mask = bitset_create_empty(reachability_mask_width(gen));
+        struct bitset reachability_mask = bitset_create_empty(gen->deterministic->transitions.number_of_transitions);
         for (uint32_t j = 0; j < s.number_of_transitions; ++j) {
             struct transition t = s.transitions[j];
             if (t.symbol >= gen->combined->number_of_tokens) {
