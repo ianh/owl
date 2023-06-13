@@ -197,16 +197,14 @@ int main(int argc, char *argv[])
     }
     if (test_format) {
         size_t i = 0;
+        int dash_count = 0;
         for (; grammar_string[i]; ++i) {
-            if (grammar_string[i] != '-')
-                continue;
-            i++;
-            if (grammar_string[i] != '-')
-                continue;
-            i++;
-            if (grammar_string[i] != '-')
-                continue;
-            break;
+            if (grammar_string[i] == '-')
+                dash_count++;
+            else
+                dash_count = 0;
+            if (dash_count == 3)
+                break;
         }
         if (grammar_string[i] == '\0') {
             exit_with_errorf("a file in test format requires the string '---' "
