@@ -197,7 +197,8 @@ int main(int argc, char *argv[])
     }
     if (test_format) {
         size_t i = 0;
-        for (; grammar_string[i]; ++i) {
+		size_t len = strlen(grammar_string);
+        for (; i < len && grammar_string[i]; ++i) {
             if (grammar_string[i] != '-')
                 continue;
             i++;
@@ -208,7 +209,7 @@ int main(int argc, char *argv[])
                 continue;
             break;
         }
-        if (grammar_string[i] == '\0') {
+        if (i >= len || grammar_string[i] == '\0') {
             exit_with_errorf("a file in test format requires the string '---' "
              "to separate input from grammars");
         }
