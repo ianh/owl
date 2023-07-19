@@ -42,6 +42,10 @@
 #define CUSTOM_TOKEN_DATA(...) do { } while (0)
 #endif
 
+#ifndef STRING_TOKEN_HAS_ESCAPES
+#define STRING_TOKEN_HAS_ESCAPES(name) bool name = false
+#endif
+
 #ifndef IF_NUMBER_TOKEN
 #define IF_NUMBER_TOKEN(cond, ...) if (cond) __VA_ARGS__
 #endif
@@ -255,12 +259,12 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
         CUSTOM_TOKEN_DATA(custom_data);
         INTEGER_TOKEN_DATA(integer);
         NUMBER_TOKEN_DATA(number);
+        STRING_TOKEN_HAS_ESCAPES(has_escapes);
         bool is_token = false;
         bool end_token = false;
         bool custom_token = false;
         bool comment = false;
         bool custom_whitespace = false;
-        bool has_escapes = false;
         size_t token_length = READ_KEYWORD_TOKEN(&token, &end_token,
          text + offset, tokenizer->info);
         if (token_length > 0) {
@@ -388,7 +392,7 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
             WRITE_INTEGER_TOKEN(offset, token_length, integer, tokenizer->info);
         } else if (token == NUMBER_TOKEN) {
             WRITE_NUMBER_TOKEN(offset, token_length, number, tokenizer->info);
-        } else if (token == STRING_TOKEN) {
+        } else IF_STRING_TOKEN(token == STRING_TOKEN, {
             size_t content_offset = offset + 1;
             size_t content_length = token_length - 2;
             const char *string = text + content_offset;
@@ -415,7 +419,7 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
             }
             WRITE_STRING_TOKEN(offset, token_length, string, string_length,
              has_escapes, tokenizer->info);
-        } else if (custom_token) {
+        }) else if (custom_token) {
             WRITE_CUSTOM_TOKEN(offset, token_length, token, custom_data,
              tokenizer->info);
         }

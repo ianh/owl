@@ -9,6 +9,7 @@
 #define READ_CUSTOM_TOKEN %%read-custom-token
 #define NUMBER_TOKEN_DATA NUMBER_TOKEN_DATA
 #define CUSTOM_TOKEN_DATA CUSTOM_TOKEN_DATA
+#define STRING_TOKEN_HAS_ESCAPES STRING_TOKEN_HAS_ESCAPES
 #define WRITE_NUMBER_TOKEN %%write-number-token
 #define WRITE_IDENTIFIER_TOKEN %%write-identifier-token
 #define WRITE_INTEGER_TOKEN %%write-integer-token
@@ -854,10 +855,13 @@ void generate(struct generator *gen)
         output_line(out, "#define NUMBER_TOKEN_DATA(name) double name = 0");
         output_line(out, "#define IF_NUMBER_TOKEN(cond, ...) if (cond) __VA_ARGS__");
     }
-    if (!has_string_token)
+    if (!has_string_token) {
+        output_line(out, "#define STRING_TOKEN_HAS_ESCAPES(...)");
         output_line(out, "#define IF_STRING_TOKEN(...) if (0) { /* no string tokens */  }");
-    else
+    } else {
+        output_line(out, "#define STRING_TOKEN_HAS_ESCAPES(name) bool name = false");
         output_line(out, "#define IF_STRING_TOKEN(cond, ...) if (cond) __VA_ARGS__");
+    }
     output_line(out, "static size_t read_whitespace(const char *text, void *info);");
     output_line(out, "static size_t read_keyword_token(%%token-type *token, bool *end_token, const char *text, void *info);");
     bool has_write_custom_token = false;
@@ -931,14 +935,16 @@ void generate(struct generator *gen)
         output_line(out, "    tree->next_%%rule_token_offset = token_offset;");
         output_line(out, "}");
     }
-    output_line(out, "static void *allocate_string_contents(size_t size, void *info) {");
-    output_line(out, "    struct %%prefix_tree *tree = info;");
-    output_line(out, "    if (tree->next_offset + size > tree->parse_tree_size)");
-    output_line(out, "        grow_tree(tree, tree->next_offset + size);");
-    output_line(out, "    void *p = tree->parse_tree + tree->next_offset;");
-    output_line(out, "    tree->next_offset += size;");
-    output_line(out, "    return p;");
-    output_line(out, "}");
+    if (has_string_token) {
+        output_line(out, "static void *allocate_string_contents(size_t size, void *info) {");
+        output_line(out, "    struct %%prefix_tree *tree = info;");
+        output_line(out, "    if (tree->next_offset + size > tree->parse_tree_size)");
+        output_line(out, "        grow_tree(tree, tree->next_offset + size);");
+        output_line(out, "    void *p = tree->parse_tree + tree->next_offset;");
+        output_line(out, "    tree->next_offset += size;");
+        output_line(out, "    return p;");
+        output_line(out, "}");
+    }
     if (SHOULD_ALLOW_DASHES_IN_IDENTIFIERS(gen->combined))
         set_literal_substitution(out, "allow-dashes-in-identifiers", "true");
     else
