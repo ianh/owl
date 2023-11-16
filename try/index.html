@@ -117,7 +117,7 @@ function output(ch)
         }
     } else {
         inESC = false;
-        format.push({type: "char", code: ch});
+        format.push({type: "utf8", code: ch});
     }
 }
 function applyCSI()
@@ -354,25 +354,41 @@ function formatOutput(elem)
     var nextStyle = -1;
     var text = "";
     var linkTarget = "";
-    for (var i = 0; i < format.length; ++i) {
-        if (format[i].type == "char") {
+    var utf8 = [];
+    function processCommand(cmd) {
+        if (cmd.type == "char") {
             if (nextStyle != currentStyle) {
                 appendStyledText(elem, text, currentStyle, linkTarget);
                 currentStyle = nextStyle;
                 text = "";
             }
-            text += String.fromCharCode(format[i].code);
-        } else if (format[i].type == "style")
-            nextStyle = format[i].code;
-        else if (format[i].type == "clear-style")
+            text += String.fromCharCode(cmd.code);
+        } else if (cmd.type == "style")
+            nextStyle = cmd.code;
+        else if (cmd.type == "clear-style")
             nextStyle = -1;
-        else if (format[i].type == "link") {
+        else if (cmd.type == "link") {
             appendStyledText(elem, text, currentStyle, linkTarget);
             currentStyle = nextStyle;
             text = "";
-            linkTarget = format[i].target;
+            linkTarget = cmd.target;
         }
     }
+    function flushUTF8() {
+        var string = new TextDecoder().decode(new Uint8Array(utf8));
+        utf8 = [];
+        for (var i = 0; i < string.length; ++i)
+            processCommand({type:"char", code:string.charCodeAt(i)});
+    }
+    for (var i = 0; i < format.length; ++i) {
+        if (format[i].type == "utf8")
+            utf8.push(format[i].code);
+        else {
+            flushUTF8();
+            processCommand(format[i]);
+        }
+    }
+    flushUTF8();
     appendStyledText(elem, text, currentStyle, linkTarget);
 }
 function appendStyledText(elem, text, styleCode, linkTarget)
