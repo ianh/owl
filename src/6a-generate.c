@@ -465,7 +465,7 @@ void generate(struct generator *gen)
     output_line(out, "static bool grow_tree(struct %%prefix_tree *tree, size_t size)");
     output_line(out, "{");
     output_line(out, "    size_t n = tree->parse_tree_size;");
-    output_line(out, "    while (n < size || n < 4096)");
+    output_line(out, "    while (n < size)");
     output_line(out, "        n = (n + 1) * 3 / 2;");
     output_line(out, "    uint8_t *parse_tree = realloc(tree->parse_tree, n);");
     output_line(out, "    if (!parse_tree)");
