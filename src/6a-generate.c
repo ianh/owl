@@ -448,7 +448,7 @@ void generate(struct generator *gen)
     output_line(out, "    uint8_t *parse_tree = tree->parse_tree;");
     output_line(out, "    size_t parse_tree_size = tree->parse_tree_size;");
     output_line(out, "    size_t i = *offset;");
-    output_line(out, "    if (i + RESERVATION_AMOUNT >= parse_tree_size)");
+    output_line(out, "    if (i + RESERVATION_AMOUNT > parse_tree_size)");
     output_line(out, "        return 0;");
     output_line(out, "    uint64_t result = 0;");
     output_line(out, "    int shift_amount = 0;");
