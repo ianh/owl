@@ -410,10 +410,13 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
                  tokenizer->info);
                 size_t j = 0;
                 for (i = 0; i < content_length; ++i) {
-                    if (text[content_offset + i] == '\\')
+                    if (text[content_offset + i] == '\\' &&
+                     i + 1 < content_length) {
                         i++;
-                    unescaped[j++] = ESCAPE_CHAR(text[content_offset + i],
-                     tokenizer->info);
+                        unescaped[j++] = ESCAPE_CHAR(text[content_offset + i],
+                         tokenizer->info);
+                    } else
+                        unescaped[j++] = text[content_offset + i];
                 }
                 string = unescaped;
             }
