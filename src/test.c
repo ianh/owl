@@ -34,7 +34,7 @@ void begin_test_compilation(struct test_compilation *t)
 
 void finish_test_compilation(struct test_compilation *t, char *input_string)
 {
-    fprintf(t->file, "int main() {\n");
+    fprintf(t->file, "int main(void) {\n");
     fprintf(t->file, "    struct owl_tree *tree;\n");
     fprintf(t->file, "    tree = owl_tree_create_from_file(stdin);\n");
     fprintf(t->file, "    owl_tree_print(tree);\n");
