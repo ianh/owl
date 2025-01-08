@@ -137,6 +137,9 @@ struct owl_default_tokenizer {
 
     // The `info` pointer is passed to READ_KEYWORD_TOKEN.
     void *info;
+
+    // Communicate allocation failures to the caller.
+    bool allocation_failed;
 };
 
 static bool char_is_whitespace(char c)
@@ -241,8 +244,10 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
     if (tokenizer->text[tokenizer->offset] == '\0')
         return false;
     struct owl_token_run *run = malloc(sizeof(struct owl_token_run));
-    if (!run)
+    if (!run) {
+        tokenizer->allocation_failed = true;
         return false;
+    }
     uint16_t number_of_tokens = 0;
     uint16_t lengths_size = 0;
     const char *text = tokenizer->text;

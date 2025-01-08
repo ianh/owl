@@ -282,6 +282,9 @@ void generate(struct generator *gen)
     output_line(out, "    // The input is valid so far, but incomplete; more tokens could be added to");
     output_line(out, "    // complete it.");
     output_line(out, "    ERROR_MORE_INPUT_NEEDED,");
+    output_line(out, "");
+    output_line(out, "    // A call to a system allocator returned NULL.");
+    output_line(out, "    ERROR_ALLOCATION_FAILURE,");
     output_line(out, "};");
     output_line(out, "// Returns an error code, or ERROR_NONE if there wasn't an error.");
     output_line(out, "// The error_range parameter can be null.");
@@ -655,6 +658,9 @@ void generate(struct generator *gen)
     output_line(out, "        break;");
     output_line(out, "    case ERROR_MORE_INPUT_NEEDED:");
     output_line(out, "        fprintf(stderr, \"more input needed\\n\");");
+    output_line(out, "        break;");
+    output_line(out, "    case ERROR_ALLOCATION_FAILURE:");
+    output_line(out, "        fprintf(stderr, \"allocation failure\\n\");");
     output_line(out, "        break;");
     output_line(out, "    default:");
     output_line(out, "        break;");
@@ -1176,6 +1182,11 @@ void generate(struct generator *gen)
     output_line(out, "    }");
     output_line(out, "    struct fill_run_state top = c.stack[c.top_index];");
     output_line(out, "    free(c.stack);");
+    output_line(out, "    if (tokenizer.allocation_failed) {");
+    output_line(out, "        tree->error = ERROR_ALLOCATION_FAILURE;");
+    output_line(out, "        free_token_runs(&token_run);");
+    output_line(out, "        return;");
+    output_line(out, "    }");
     output_line(out, "    if (string[tokenizer.offset] != '\\0') {");
     output_line(out, "        tree->error = ERROR_INVALID_TOKEN;");
     output_line(out, "        estimate_next_token_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);");

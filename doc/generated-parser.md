@@ -95,6 +95,7 @@ There are a few kinds of errors that can happen while creating a tree (see the t
 | `ERROR_INVALID_TOKEN` | Part of the text didn't match any valid token. | A range that begins with the first unrecognized character. |
 | `ERROR_UNEXPECTED_TOKEN` | The parser encountered an out-of-place token that didn't fit the grammar. | The range of the unexpected token. |
 | `ERROR_MORE_INPUT_NEEDED` | The input is valid so far, but incomplete; more tokens are necessary to complete it. | A range positioned at the end of the input. |
+| `ERROR_ALLOCATION_FAILURE` | A call to a system allocator returned NULL.  Note that not all allocation failures are currently detected. | None. |
 
 To handle the error yourself, you can use `owl_tree_get_error`.  The `range` parameter is optional; if you pass a non-null pointer, it will be filled with a byte range as described in the table above.
 
