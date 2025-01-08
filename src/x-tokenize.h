@@ -109,7 +109,9 @@
 #endif
 #endif
 
-#define TOKEN_RUN_LENGTH 4096
+#ifndef OWL_TOKEN_RUN_LENGTH
+#define OWL_TOKEN_RUN_LENGTH 4096
+#endif
 
 TOKENIZE_BODY
 (
@@ -118,9 +120,9 @@ struct owl_token_run {
     struct owl_token_run *prev;
     uint16_t number_of_tokens;
     uint16_t lengths_size;
-    uint8_t lengths[TOKEN_RUN_LENGTH * 2];
-    TOKEN_T tokens[TOKEN_RUN_LENGTH];
-    STATE_T states[TOKEN_RUN_LENGTH];
+    uint8_t lengths[OWL_TOKEN_RUN_LENGTH * 2];
+    TOKEN_T tokens[OWL_TOKEN_RUN_LENGTH];
+    STATE_T states[OWL_TOKEN_RUN_LENGTH];
 };
 
 struct owl_default_tokenizer {
@@ -246,7 +248,7 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
     const char *text = tokenizer->text;
     size_t whitespace = tokenizer->whitespace;
     size_t offset = tokenizer->offset;
-    while (number_of_tokens < TOKEN_RUN_LENGTH) {
+    while (number_of_tokens < OWL_TOKEN_RUN_LENGTH) {
         char c = text[offset];
         if (c == '\0')
             break;
@@ -384,7 +386,7 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
             free(run);
             return false;
         }
-        if (end_token && number_of_tokens + 1 >= TOKEN_RUN_LENGTH)
+        if (end_token && number_of_tokens + 1 >= OWL_TOKEN_RUN_LENGTH)
             break;
         if (!encode_token_length(run, &lengths_size, token_length, whitespace))
             break;
@@ -433,7 +435,7 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
         number_of_tokens++;
         offset += token_length;
         if (end_token) {
-            assert(number_of_tokens < TOKEN_RUN_LENGTH);
+            assert(number_of_tokens < OWL_TOKEN_RUN_LENGTH);
             run->tokens[number_of_tokens] = BRACKET_SYMBOL_TOKEN;
             number_of_tokens++;
         }
