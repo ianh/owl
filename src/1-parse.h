@@ -89,6 +89,9 @@ enum owl_error {
     // The input is valid so far, but incomplete; more tokens could be added to
     // complete it.
     ERROR_MORE_INPUT_NEEDED,
+
+    // A call to a system allocator returned NULL.
+    ERROR_ALLOCATION_FAILURE,
 };
 // Returns an error code, or ERROR_NONE if there wasn't an error.
 // The error_range parameter can be null.
@@ -252,6 +255,10 @@ struct parsed_integer parsed_integer_get(struct owl_ref);
 #else
 #define OWL_DONT_INLINE
 #endif
+// This can be overridden to reduce the amount Owl allocates at once.
+#ifndef OWL_TOKEN_RUN_LENGTH
+#define OWL_TOKEN_RUN_LENGTH 4096
+#endif
 
 struct owl_tree {
     const char *string;
@@ -272,7 +279,7 @@ static inline uint64_t read_tree(size_t *offset, struct owl_tree *tree) {
     uint8_t *parse_tree = tree->parse_tree;
     size_t parse_tree_size = tree->parse_tree_size;
     size_t i = *offset;
-    if (i + RESERVATION_AMOUNT >= parse_tree_size)
+    if (i + RESERVATION_AMOUNT > parse_tree_size)
         return 0;
     uint64_t result = 0;
     int shift_amount = 0;
@@ -289,7 +296,7 @@ static inline uint64_t read_tree(size_t *offset, struct owl_tree *tree) {
 static bool grow_tree(struct owl_tree *tree, size_t size)
 {
     size_t n = tree->parse_tree_size;
-    while (n < size || n < 4096)
+    while (n < size)
         n = (n + 1) * 3 / 2;
     uint8_t *parse_tree = realloc(tree->parse_tree, n);
     if (!parse_tree)
@@ -935,6 +942,9 @@ static void check_for_error(struct owl_tree *tree) {
     case ERROR_MORE_INPUT_NEEDED:
         fprintf(stderr, "more input needed\n");
         break;
+    case ERROR_ALLOCATION_FAILURE:
+        fprintf(stderr, "allocation failure\n");
+        break;
     default:
         break;
     }
@@ -1345,9 +1355,9 @@ struct owl_token_run {
     struct owl_token_run *prev;
     uint16_t number_of_tokens;
     uint16_t lengths_size;
-    uint8_t lengths[4096 * 2];
-    uint32_t tokens[4096];
-    uint32_t states[4096];
+    uint8_t lengths[OWL_TOKEN_RUN_LENGTH * 2];
+    uint32_t tokens[OWL_TOKEN_RUN_LENGTH];
+    uint32_t states[OWL_TOKEN_RUN_LENGTH];
 };
 struct owl_default_tokenizer {
     const char *text;
@@ -1357,6 +1367,7 @@ struct owl_default_tokenizer {
     uint32_t number_token;
     uint32_t string_token;
     void *info;
+    bool allocation_failed;
 };
 static bool char_is_whitespace(char c) {
     switch (c) {
@@ -1422,14 +1433,18 @@ static size_t decode_token_length(struct owl_token_run *run, uint16_t *length_of
     return length;
 }
 static bool OWL_DONT_INLINE owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer, struct owl_token_run **previous_run) {
+    if (tokenizer->text[tokenizer->offset] == '\0') return false;
     struct owl_token_run *run = malloc(sizeof(struct owl_token_run));
-    if (!run) return false;
+    if (!run) {
+        tokenizer->allocation_failed = true;
+        return false;
+    }
     uint16_t number_of_tokens = 0;
     uint16_t lengths_size = 0;
     const char *text = tokenizer->text;
     size_t whitespace = tokenizer->whitespace;
     size_t offset = tokenizer->offset;
-    while (number_of_tokens < 4096) {
+    while (number_of_tokens < OWL_TOKEN_RUN_LENGTH) {
         char c = text[offset];
         if (c == '\0') break;
         size_t whitespace_length = read_whitespace(text + offset, tokenizer->info);
@@ -1554,7 +1569,7 @@ static bool OWL_DONT_INLINE owl_default_tokenizer_advance(struct owl_default_tok
             free(run);
             return false;
         }
-        if (end_token && number_of_tokens + 1 >= 4096) break;
+        if (end_token && number_of_tokens + 1 >= OWL_TOKEN_RUN_LENGTH) break;
         if (!encode_token_length(run, &lengths_size, token_length, whitespace)) break;
         if (token == 27) {
             write_identifier_token(offset, token_length, tokenizer->info);
@@ -1585,8 +1600,11 @@ static bool OWL_DONT_INLINE owl_default_tokenizer_advance(struct owl_default_tok
                 for (i = 0;
                 i < content_length;
                 ++i) {
-                    if (text[content_offset + i] == '\\') i++;
-                    unescaped[j++] = ESCAPE_CHAR(text[content_offset + i], tokenizer->info);
+                    if (text[content_offset + i] == '\\' && i + 1 < content_length) {
+                        i++;
+                        unescaped[j++] = ESCAPE_CHAR(text[content_offset + i], tokenizer->info);
+                    }
+                    else unescaped[j++] = text[content_offset + i];
                 }
                 string = unescaped;
             }
@@ -1600,7 +1618,7 @@ static bool OWL_DONT_INLINE owl_default_tokenizer_advance(struct owl_default_tok
         number_of_tokens++;
         offset += token_length;
         if (end_token) {
-            assert(number_of_tokens < 4096);
+            assert(number_of_tokens < OWL_TOKEN_RUN_LENGTH);
             run->tokens[number_of_tokens] = 4294967295U;
             number_of_tokens++;
         }
@@ -2972,6 +2990,11 @@ static void parse_string(struct owl_tree *tree, const char *string) {
     }
     struct fill_run_state top = c.stack[c.top_index];
     free(c.stack);
+    if (tokenizer.allocation_failed) {
+        tree->error = ERROR_ALLOCATION_FAILURE;
+        free_token_runs(&token_run);
+        return;
+    }
     if (string[tokenizer.offset] != '\0') {
         tree->error = ERROR_INVALID_TOKEN;
         estimate_next_token_range(&tokenizer, &tree->error_range.start, &tree->error_range.end);
