@@ -224,6 +224,28 @@ struct parsed_integer {
     uint64_t integer;
 };
 
+#ifdef OWL_PARSER_TYPEDEFS
+typedef enum owl_error owl_error;
+typedef struct owl_ref owl_ref;
+typedef enum parsed_type parsed_type;
+typedef struct parsed_grammar parsed_grammar;
+typedef struct parsed_rule parsed_rule;
+typedef struct parsed_body parsed_body;
+typedef struct parsed_operators parsed_operators;
+typedef struct parsed_fixity parsed_fixity;
+typedef struct parsed_assoc parsed_assoc;
+typedef struct parsed_operator parsed_operator;
+typedef struct parsed_expr parsed_expr;
+typedef struct parsed_repetition parsed_repetition;
+typedef struct parsed_comment_token parsed_comment_token;
+typedef struct parsed_comment_token_v1 parsed_comment_token_v1;
+typedef struct parsed_custom_token parsed_custom_token;
+typedef struct parsed_whitespace parsed_whitespace;
+typedef struct parsed_identifier parsed_identifier;
+typedef struct parsed_string parsed_string;
+typedef struct parsed_integer parsed_integer;
+#endif
+
 struct parsed_grammar parsed_grammar_get(struct owl_ref);
 struct parsed_rule parsed_rule_get(struct owl_ref);
 struct parsed_body parsed_body_get(struct owl_ref);
