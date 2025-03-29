@@ -366,6 +366,18 @@ void generate(struct generator *gen)
         output_line(out, "};");
     }
     output_line(out, "");
+    output_line(out, "#ifdef %%PREFIX_PARSER_TYPEDEFS");
+    output_line(out, "typedef enum %%prefix_error %%prefix_error;");
+    output_line(out, "typedef struct %%prefix_ref %%prefix_ref;");
+    output_line(out, "typedef enum %%parsed_type %%parsed_type;");
+    for (uint32_t i = 0; i < n; ++i) {
+        struct rule *rule = gen->grammar->rules[i];
+        set_substitution(out, "rule", rule->name, rule->name_length,
+         LOWERCASE_WITH_UNDERSCORES);
+        output_line(out, "typedef struct %%parsed_%%rule %%parsed_%%rule;");
+    }
+    output_line(out, "#endif");
+    output_line(out, "");
     for (uint32_t i = 0; i < n; ++i) {
         struct rule *rule = gen->grammar->rules[i];
         set_substitution(out, "rule", rule->name, rule->name_length,
