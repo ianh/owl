@@ -1719,7 +1719,7 @@ static void generate_action_table(struct generator *gen,
      d->bracket_action_map.number_of_entries,
      sizeof(struct action_table_bucket));
     struct action_table_bucket_group *groups = 0;
-    state_id max_nfa_state = 0;
+    state_id max_nfa_state = gen->combined->final_nfa_state;
     uint32_t groups_allocated_bytes = 0;
     uint32_t number_of_groups = 0;
     for (int i = 0; i < 2; ++i) {
@@ -1805,6 +1805,8 @@ static void generate_action_table(struct generator *gen,
     uint32_t saved_nfa_state = 0;
     // Start at the minimum possible bucket limit.
     uint32_t bucket_limit = (total_entries + table_size - 1) / table_size;
+    if (bucket_limit == 0)
+        bucket_limit = 1;
     // How many times should we try to randomize indexes?
 #define MAX_TRIES 1000
     uint32_t tries_left = MAX_TRIES;
