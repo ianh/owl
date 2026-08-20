@@ -280,6 +280,8 @@ static void output_ambiguity_path(struct interpreter *interpreter,
          offset);
     }
     struct interpret_node *root = construct_finish(&context.construct_state, 0);
+    if (context.construct_state.allocation_failed)
+        abort();
 
     initialize_document(&context, root, number_of_token_labels,
      PRINT_ROOT_NODE);
@@ -856,8 +858,11 @@ static struct interpret_node *build_parse_tree(struct interpret_context *ctx,
     state_array_destroy(&ctx->nfa_stack);
     follow_transition_reversed(ctx, &nfa_state, UINT32_MAX, UINT32_MAX,
      offset, offset + whitespace);
-    return construct_finish(&ctx->construct_state,
+    struct interpret_node *root = construct_finish(&ctx->construct_state,
      SIZE_MAX - ctx->next_action_offset + 1);
+    if (ctx->construct_state.allocation_failed)
+        abort();
+    return root;
 }
 
 static symbol_id token_symbol(struct combined_grammar *combined,
