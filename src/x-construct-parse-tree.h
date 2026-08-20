@@ -114,6 +114,10 @@ struct construct_state {
     struct construct_expression *expression_freelist;
 
     void *info;
+
+    // Set when an allocation fails.  Once this is set, further actions are
+    // ignored and construct_finish() returns 0 after freeing everything.
+    bool allocation_failed;
 };
 
 static struct construct_node *construct_node_alloc(struct construct_state *s,
@@ -127,19 +131,28 @@ static struct construct_node *construct_node_alloc(struct construct_state *s,
         FINISHED_NODE_T *slots = node->slots;
         if (number_of_slots > node->number_of_slots) {
             slots = realloc(slots, number_of_slots * sizeof(FINISHED_NODE_T));
-            if (!slots)
-                abort();
+            if (!slots) {
+                node->next = s->node_freelist;
+                s->node_freelist = node;
+                s->allocation_failed = true;
+                return 0;
+            }
         }
         memset(node, 0, sizeof(struct construct_node));
         memset(slots, 0, number_of_slots * sizeof(FINISHED_NODE_T));
         node->slots = slots;
     } else {
         node = calloc(1, sizeof(struct construct_node));
-        if (!node)
-            abort();
+        if (!node) {
+            s->allocation_failed = true;
+            return 0;
+        }
         node->slots = calloc(number_of_slots, sizeof(FINISHED_NODE_T));
-        if (number_of_slots > 0 && !node->slots)
-            abort();
+        if (number_of_slots > 0 && !node->slots) {
+            free(node);
+            s->allocation_failed = true;
+            return 0;
+        }
     }
     node->rule = rule;
     node->number_of_slots = number_of_slots;
@@ -156,8 +169,10 @@ static struct construct_expression *construct_expression_alloc(struct
         memset(expr, 0, sizeof(struct construct_expression));
     } else {
         expr = calloc(1, sizeof(struct construct_expression));
-        if (!expr)
-            abort();
+        if (!expr) {
+            s->allocation_failed = true;
+            return 0;
+        }
     }
     LEFT_RIGHT_OPERAND_SLOTS_LOOKUP(rule, expr->left_slot_index,
      expr->right_slot_index, expr->operand_slot_index, s->info);
@@ -202,6 +217,8 @@ static void construct_expression_reduce(struct construct_state *s,
         struct construct_node *last_operator = op;
         FINISHED_NODE_T operand = op->slots[expr->operand_slot_index];
         struct construct_node *combined_op = construct_node_alloc(s, op->rule);
+        if (!combined_op)
+            return;
         combined_op->choice_index = op->choice_index;
         combined_op->slot_index = op->slot_index;
         combined_op->fixity_associativity = op->fixity_associativity;
@@ -284,37 +301,72 @@ static void construct_begin(struct construct_state *s, size_t offset,
     uint32_t r = ROOT_RULE(s->info);
     if (type == CONSTRUCT_EXPRESSION_ROOT) {
         struct construct_expression *expr = construct_expression_alloc(s, r);
+        if (!expr)
+            return;
         expr->parent = s->current_expression;
         s->current_expression = expr;
     } else {
         struct construct_node *node = construct_node_alloc(s, r);
+        if (!node)
+            return;
         node->next = s->under_construction;
         node->end_location = offset;
         s->under_construction = node;
     }
 }
+static void construct_node_list_free(struct construct_state *s,
+ struct construct_node *node)
+{
+    while (node) {
+        struct construct_node *next = node->next;
+        construct_node_free(s, node);
+        node = next;
+    }
+}
+// Move everything still under construction to the freelists so that
+// construct_finish() can release it after an allocation failure.
+static void construct_abandon(struct construct_state *s)
+{
+    while (s->current_expression) {
+        struct construct_expression *expr = s->current_expression;
+        s->current_expression = expr->parent;
+        construct_node_list_free(s, expr->first_operator);
+        construct_node_list_free(s, expr->first_value);
+        construct_expression_free(s, expr);
+    }
+    construct_node_list_free(s, s->under_construction);
+    s->under_construction = 0;
+}
 static FINISHED_NODE_T construct_finish(struct construct_state *s,
  size_t offset)
 {
     FINISHED_NODE_T finished = 0;
-    if (s->root_type == CONSTRUCT_EXPRESSION_ROOT) {
+    if (s->allocation_failed) {
+        // Nothing to finish; just release what was built so far.
+    } else if (s->root_type == CONSTRUCT_EXPRESSION_ROOT) {
         struct construct_expression *expr = s->current_expression;
-        s->current_expression = expr->parent;
-        while (expr->first_operator)
+        while (expr->first_operator && !s->allocation_failed)
             construct_expression_reduce(s, expr);
-        struct construct_node *node = expr->first_value;
-        if (node) {
-            finished = FINISH_NODE_STRUCT(node, 0, s->info);
-            assert(node->next == 0);
-            construct_node_free(s, node);
+        if (!s->allocation_failed) {
+            s->current_expression = expr->parent;
+            struct construct_node *node = expr->first_value;
+            if (node) {
+                finished = FINISH_NODE_STRUCT(node, 0, s->info);
+                assert(node->next == 0);
+                construct_node_free(s, node);
+            }
+            construct_expression_free(s, expr);
         }
-        construct_expression_free(s, expr);
     } else {
         struct construct_node *node = s->under_construction;
         s->under_construction = node->next;
         node->start_location = offset;
         finished = FINISH_NODE_STRUCT(node, 0, s->info);
         construct_node_free(s, node);
+    }
+    if (s->allocation_failed) {
+        construct_abandon(s);
+        finished = 0;
     }
     // Clean up memory.
     while (s->node_freelist) {
@@ -334,11 +386,15 @@ static FINISHED_NODE_T construct_finish(struct construct_state *s,
 static void construct_action_apply(struct construct_state *s, uint16_t action,
  size_t offset)
 {
+    if (s->allocation_failed)
+        return;
     switch (CONSTRUCT_ACTION_GET_TYPE(action)) {
     case ACTION_END_SLOT: {
         struct construct_node *node = construct_node_alloc(s,
          RULE_LOOKUP(s->under_construction->rule,
           CONSTRUCT_ACTION_GET_SLOT(action), s->info));
+        if (!node)
+            return;
         node->next = s->under_construction;
         node->slot_index = CONSTRUCT_ACTION_GET_SLOT(action);
         node->end_location = offset;
@@ -349,6 +405,8 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
         struct construct_expression *expr = construct_expression_alloc(s,
          RULE_LOOKUP(s->under_construction->rule,
          CONSTRUCT_ACTION_GET_SLOT(action), s->info));
+        if (!expr)
+            return;
         expr->parent = s->current_expression;
         s->current_expression = expr;
         expr->slot_index = CONSTRUCT_ACTION_GET_SLOT(action);
@@ -366,9 +424,11 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
     }
     case ACTION_BEGIN_EXPRESSION_SLOT: {
         struct construct_expression *expr = s->current_expression;
-        s->current_expression = expr->parent;
-        while (expr->first_operator)
+        while (expr->first_operator && !s->allocation_failed)
             construct_expression_reduce(s, expr);
+        if (s->allocation_failed)
+            return;
+        s->current_expression = expr->parent;
         FINISHED_NODE_T *finished;
         finished = &s->under_construction->slots[expr->slot_index];
         struct construct_node *node = expr->first_value;
@@ -394,6 +454,8 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
     case ACTION_END_OPERAND: {
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = construct_node_alloc(s, expr->rule);
+        if (!node)
+            return;
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
         node->end_location = offset;
         node->rule = expr->rule;
@@ -404,6 +466,8 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
     case ACTION_END_OPERATOR: {
         struct construct_expression *expr = s->current_expression;
         struct construct_node *node = construct_node_alloc(s, expr->rule);
+        if (!node)
+            return;
         node->choice_index = CONSTRUCT_ACTION_GET_CHOICE(action);
         node->end_location = offset;
         node->rule = expr->rule;
@@ -431,8 +495,13 @@ static void construct_action_apply(struct construct_state *s, uint16_t action,
         struct construct_node *node = s->under_construction;
         node->start_location = offset;
         s->under_construction = node->next;
-        while (construct_expression_should_reduce(s, expr, node))
+        while (construct_expression_should_reduce(s, expr, node) &&
+         !s->allocation_failed)
             construct_expression_reduce(s, expr);
+        if (s->allocation_failed) {
+            construct_node_free(s, node);
+            return;
+        }
         node->next = expr->first_operator;
         expr->first_operator = node;
         if (node->fixity_associativity == CONSTRUCT_PREFIX)

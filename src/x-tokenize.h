@@ -417,6 +417,10 @@ owl_default_tokenizer_advance(struct owl_default_tokenizer *tokenizer,
                 }
                 char *unescaped = ALLOCATE_STRING(string_length,
                  tokenizer->info);
+                if (!unescaped) {
+                    tokenizer->allocation_failed = true;
+                    break;
+                }
                 size_t j = 0;
                 for (i = 0; i < content_length; ++i) {
                     if (text[content_offset + i] == '\\' &&
